@@ -800,9 +800,11 @@ static void vote_reveal_tick_cb(lv_timer_t *t)
 
     if (s_anim_tick < F_VOTE_TICKS) {
         /* Flicker — mostra nomes aleatórios */
-        int r;
+        int r = 0;
         if (s_api && s_api->random) r = s_api->random->range(0, s_game.num_players - 1);
+#ifdef KIT_SDK_STUBS
         else                        r = rand() % s_game.num_players;
+#endif
         char buf[20];
         snprintf(buf, sizeof(buf), "JOGADOR %d", r + 1);
         lv_label_set_text(s_vr_result_lbl, buf);

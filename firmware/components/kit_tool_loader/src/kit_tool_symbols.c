@@ -19,6 +19,7 @@
 #include "kit_fonts.h"
 
 #include <errno.h>
+#include <stdio.h>   /* snprintf */
 
 static const char *TAG = "KIT_TOOL_SYM";
 
@@ -92,6 +93,11 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
 
     /* --- Cor ------------------------------------------------------ */
     ESP_ELFSYM_EXPORT(lv_color_hex),
+
+    /* --- libc que o elf_loader não exporta e Tools de UI usam -------
+       (printf/puts/memcpy/memset/strlen/strcmp/malloc... já vêm do
+        elf_loader; `rand` de propósito NÃO — use ctx->api->random.) */
+    ESP_ELFSYM_EXPORT(snprintf),
 
     /* --- Fontes do KIT (dados) ---------------------------------- */
     ESP_ELFSYM_EXPORT(kit_mono_16),

@@ -11,6 +11,7 @@ Fluxo:
    - KIT_TOOL_COMMIT
 """
 
+import os
 import tempfile
 import zipfile
 import json

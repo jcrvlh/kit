@@ -52,9 +52,12 @@ do firmware + registrar aqui.
 `lv_timer_set_repeat_count`
 **Cor:** `lv_color_hex`
 **Fontes (dados):** `kit_mono_16/20/26` · `kit_sans_22/28` · `kit_display_44/72/120`
+**libc:** `snprintf` (o `elf_loader` já traz `printf` · `puts` · `memcpy` ·
+`memset` · `strlen` · `strcmp` · `strchr` · `malloc` · …).
 
-Para **entrada de toque** e o resto do hardware, use a `kit_api_table_t`
-(`ctx->api->input->register_callback`, etc.) — não o LVGL direto.
+`rand`/`srand` **não** são exportados — use `ctx->api->random`. A UI de toque
+e o resto do hardware vêm pela `kit_api_table_t`
+(`ctx->api->input->register_callback`, etc.), não pelo LVGL direto.
 
 ## Build
 
@@ -76,16 +79,25 @@ usa. Precisa dos headers do LVGL — localizados por:
 
 | Item | Verificado |
 | :--- | :--- |
-| Tabela de símbolos compila no firmware | ⏳ precisa de um build do firmware |
-| `kit-cli build --target xtensa` gera `tool.so` | ⏳ precisa do toolchain Xtensa |
-| `dlopen` da Tool no dispositivo | ❌ precisa de hardware |
+| Tabela de símbolos compila no firmware | ✅ |
+| `kit-cli build --target xtensa` gera `tool.so` | ✅ (Tarot, 64 KB) |
+| `dlopen` + relocação da Tool no dispositivo | ✅ (Tarot, 2026-09-01) |
+| Tool de UI completa roda no KIT | ✅ (Tarot: menu, tiragens, ajustes) |
 | `hello_sd` (superfície mínima) carrega no HW | ✅ (Marco 1) |
 
-Checklist ao validar em HW uma Tool de UI completa (ex.: Tarot):
+Como a Tarot foi validada:
 
-1. `kit-cli build . --target xtensa` sem erro; `xtensa-esp32s3-elf-nm -D tool.so`
-   mostra só `tool_init`/`tool_destroy` como `T`.
-2. Instalar em `/sdcard/tools/<id>/` (`tool.so` + `manifest.json`).
-3. Abrir no KIT. Se o log `KIT_TOOL_LOADER` acusar símbolo indefinido, adicionar
-   à tabela e repetir.
-4. Conferir layout, toque, timers e troca de telas.
+1. `kit-cli build . --target xtensa`; `xtensa-esp32s3-elf-nm -D tool.so` mostra
+   só `tool_init`/`tool_destroy` como `T`, e os `U` (LVGL + fontes + `snprintf`)
+   todos na tabela do firmware.
+2. `tool.so` + `manifest.json` em `/sdcard/tools/<id>/` (via Modo pen drive; o
+   `kit-cli flash` por serial ainda está quebrado — ver nota abaixo).
+3. Abrir no KIT — o log `KIT_TOOL_LOADER` mostrou `Can't find symbol rand`
+   (fallback só-nativo no código da Tool); corrigido com guarda `KIT_SDK_STUBS`.
+   `snprintf` foi para a tabela.
+4. Layout, toque, timers e troca de telas conferidos na tela.
+
+> **`kit-cli flash` (serial):** grava em `/tools/` (LittleFS) e não em
+> `/sdcard/tools/`, e o `fread()` do corpo binário assume um stdin bloqueante
+> que o VFS do UART não garante. Use o Modo pen drive até isso ser consertado
+> no `kit_comms`.
