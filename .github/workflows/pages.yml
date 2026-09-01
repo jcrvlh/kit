@@ -31,6 +31,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Versão
+        run: echo "KIT_VERSION=$(date -u +%Y.%m.%d)+${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
       - name: Compilar KIT Core (ESP-IDF v5.3, esp32s3)
         uses: espressif/esp-idf-ci-action@v1
         with:
@@ -45,7 +48,7 @@ jobs:
           cp -r web-installer/. _site/
 
           python3 - <<'PY'
-          import json, os, shutil, subprocess
+          import json, os, shutil
 
           build = "firmware/build"
           with open(f"{build}/flasher_args.json") as f:
@@ -58,13 +61,9 @@ jobs:
               parts.append({"path": name, "offset": int(offset, 16)})
           parts.sort(key=lambda p: p["offset"])
 
-          version = subprocess.check_output(
-              ["git", "describe", "--tags", "--always", "--dirty"], text=True
-          ).strip()
-
           manifest = {
               "name": "KIT",
-              "version": version,
+              "version": os.environ.get("KIT_VERSION", "dev"),
               "new_install_prompt_erase": True,
               "builds": [{"chipFamily": "ESP32-S3", "parts": parts}],
           }
