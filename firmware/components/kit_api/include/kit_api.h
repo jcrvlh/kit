@@ -108,7 +108,7 @@ typedef enum {
     KIT_SFX_COIN,          // giro de moeda no ar terminando num "ding"
     KIT_SFX_TIMER_DONE,    // alarme do fim do timer
     KIT_SFX_REVEAL,        // sorteio revelado (Primeiro, Quebra-gelo)
-    KIT_SFX_BINGO_BALL,    // chocalho das bolinhas e o número saindo
+    KIT_SFX_BINGO_BALL,    // bolinha do bingo saindo (curto e discreto, clicado em série)
 } kit_sfx_t;
 
 typedef struct {

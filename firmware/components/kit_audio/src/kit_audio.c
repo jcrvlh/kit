@@ -165,12 +165,15 @@ static void render_sfx(kit_sfx_t sfx)
         break;
 
     case KIT_SFX_BINGO_BALL: {
-        // Chocalho: ~14 estalos curtos de tom aleatório (bolinhas quicando)...
-        for (int i = 0; i < 14; i++) {
-            render_tone((uint16_t)(1200 + rnd(1400)), 12, 6000.0f);
-            render_silence((uint16_t)(8 + rnd(22)));
+        // Sutil de propósito: é clicado muitas vezes seguidas, então em vez do
+        // chocalho estridente são só 5 estalinhos baixos e curtos (bolinhas
+        // remexendo) e uma nota macia e grave saindo — nada de brilho agudo.
+        for (int i = 0; i < 5; i++) {
+            render_tone((uint16_t)(900 + rnd(500)), 9, 2600.0f);
+            render_silence((uint16_t)(14 + rnd(16)));
         }
-        render_tone(1568, 150, 11000.0f);   // ...e a bolinha saindo (G6)
+        render_tone(784, 55, 4200.0f);   // ...e a bolinha saindo (G5, suave)
+        render_tone(659, 70, 3200.0f);   // pequena queda (E5) pra "assentar"
         break;
     }
 

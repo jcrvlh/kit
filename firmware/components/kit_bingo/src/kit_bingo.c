@@ -540,7 +540,7 @@ static void start_draw(void)
     lv_label_set_text(s_letter_lbl, "");
 
     const kit_api_table_t *t = api();
-    if (t && t->audio) t->audio->sfx(KIT_SFX_BINGO_BALL);   // chocalho → número saindo
+    if (t && t->audio) t->audio->sfx(KIT_SFX_BINGO_BALL);   // estalinho discreto → número saindo
 
     s_timer = lv_timer_create(tick_cb, SHUF_TICK_MS, NULL);
 }
