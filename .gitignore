@@ -64,3 +64,8 @@ tools-sdk/examples/**/build/
 /ROADMAP.md
 /HARDWARE_STATUS.md
 /CHANGELOG.internal.md
+
+# Binários de teste nativo dos exemplos (regeneráveis via cmake/kit-cli)
+tools-sdk/examples/*/test_*
+!tools-sdk/examples/*/test_*.c
+!tools-sdk/examples/*/test_*.h
