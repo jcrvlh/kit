@@ -338,6 +338,31 @@ typedef struct {
 } kit_time_api_t;
 
 /**
+ * @brief Efeitos sonoros prontos do KIT.
+ *
+ * Sequências curtas renderizadas pela task de áudio do Runtime; respeitam a
+ * flag "Som" dos Ajustes. Espelha o enum do firmware — não reordene.
+ */
+typedef enum {
+    KIT_SFX_CLICK = 0,     /**< toque sutil — navegação, abrir um app */
+    KIT_SFX_BACK,          /**< voltar / fechar */
+    KIT_SFX_CONFIRM,       /**< confirmação positiva */
+    KIT_SFX_DICE_ROLL,     /**< "tombo" de rolagem de dados (~0,5 s) */
+    KIT_SFX_ROULETTE,      /**< catraca de roleta desacelerando (~1,4 s) */
+    KIT_SFX_COIN,          /**< giro de moeda no ar terminando num "ding" */
+    KIT_SFX_TIMER_DONE,    /**< alarme do fim do timer */
+    KIT_SFX_REVEAL,        /**< sorteio revelado */
+    KIT_SFX_BINGO_BALL,    /**< bolinha do bingo saindo (curto, clicado em série) */
+    KIT_SFX_TOOL_OPEN,     /**< abrir uma Tool — escalinha pentatônica subindo */
+    KIT_SFX_WELCOME,       /**< Introdução: abertura curta e alegre (onboarding) */
+    KIT_SFX_ONBOARD_DONE,  /**< Introdução: fanfarra de boas-vindas ao concluir */
+    KIT_SFX_TIMER_TICK,    /**< contagem regressiva: tique nos últimos 5 s */
+    KIT_SFX_LOCK,          /**< tela apagada: cadeado fechando */
+    KIT_SFX_UNLOCK,        /**< tela ligada: cadeado abrindo */
+    KIT_SFX_BOTTLE_SPIN,   /**< Garrafa: catraca de madeira desacelerando (~2,2 s) */
+} kit_sfx_t;
+
+/**
  * @brief API de Áudio (Codec ES8311, I2S + amplificador onboard).
  *
  * Requer permissão: `"audio"` no manifest.
@@ -357,6 +382,13 @@ typedef struct {
      * @return KIT_OK em caso de sucesso.
      */
     kit_err_t (*set_volume)(uint8_t percentage);
+
+    /**
+     * Toca um efeito sonoro pronto do KIT (ver @ref kit_sfx_t).
+     * @param sfx Identificador do efeito.
+     * @return KIT_OK ou KIT_ERR_NOT_SUPPORTED se áudio desabilitado.
+     */
+    kit_err_t (*sfx)(kit_sfx_t sfx);
 } kit_audio_api_t;
 
 /**
@@ -463,6 +495,18 @@ typedef struct {
  * ----------------------------------------------------------------------- */
 
 /**
+ * Marca os únicos símbolos que o objeto compartilhado da Tool exporta.
+ * A Tool é compilada com `-fvisibility=hidden`; sem isto, `tool_init` e
+ * `tool_destroy` seriam ocultados e removidos pelo `--gc-sections`.
+ * No build nativo (stubs) é vazio.
+ */
+#if defined(KIT_SDK_STUBS)
+#define KIT_TOOL_EXPORT
+#else
+#define KIT_TOOL_EXPORT __attribute__((visibility("default"), used))
+#endif
+
+/**
  * @brief Ponto de entrada da Tool — chamado pelo Runtime ao iniciar.
  *
  * A Tool deve:
@@ -477,7 +521,7 @@ typedef struct {
  * @param ctx Contexto com APIs e metadados (válido durante toda a vida da Tool).
  * @return KIT_OK em caso de sucesso, código de erro caso contrário.
  */
-kit_err_t tool_init(kit_tool_ctx_t *ctx);
+KIT_TOOL_EXPORT kit_err_t tool_init(kit_tool_ctx_t *ctx);
 
 /**
  * @brief Destrutor da Tool — chamado pelo Runtime ao encerrar.
@@ -487,7 +531,7 @@ kit_err_t tool_init(kit_tool_ctx_t *ctx);
  * Porém, timers LVGL (`lv_timer_t`) e alocações de heap devem ser
  * explicitamente liberados.
  */
-void      tool_destroy(void);
+KIT_TOOL_EXPORT void tool_destroy(void);
 
 #ifdef __cplusplus
 }
