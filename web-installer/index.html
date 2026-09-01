@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KIT · jogos, sorteios e decisões num objeto</title>
-    <meta name="description" content="O KIT é um aparelho de código aberto para jogos, sorteios e decisões em grupo. Instale o sistema num ESP32-S3 direto do navegador.">
+    <title>KIT · o aparelho da noite de jogos</title>
+    <meta name="description" content="O KIT é um aparelho de bolso com tela de toque que rola dados, sorteia times, tira no par ou ímpar, gira a garrafa e mais. Monte o seu e instale pelo navegador.">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -23,165 +23,133 @@
             <span class="brand-word">KIT</span>
         </a>
         <nav class="site-nav">
-            <a href="#instalar">Instalar</a>
-            <a href="https://jcrvlh.github.io/kit-tools/" target="_blank" rel="noopener">Catálogo</a>
+            <a href="#serve">O que faz</a>
+            <a href="#ter-um">Como ter um</a>
             <a href="https://github.com/jcrvlh/kit" target="_blank" rel="noopener">GitHub</a>
         </nav>
     </header>
 
     <main>
         <section class="hero">
-            <h1>Nem tudo precisa caber no celular.</h1>
-            <p class="lead">
-                O KIT é um aparelho de código aberto para jogos, sorteios e decisões em grupo.
-                Você põe na mesa, ele faz uma coisa e faz bem. O que faltar, você mesmo instala.
-            </p>
-            <div class="hero-cta">
-                <a class="btn btn-primary" href="#instalar">Instalar o KIT</a>
-                <a class="btn btn-ghost" href="https://github.com/jcrvlh/kit" target="_blank" rel="noopener">Ir para o GitHub</a>
+            <div class="hero-text">
+                <h1>Quem começa? Deixa com o KIT.</h1>
+                <p class="lead">
+                    Um aparelho de bolso, com tela de toque, pra rolar dado, sortear time,
+                    tirar no par ou ímpar, girar a garrafa e mais. Fica no meio da mesa e
+                    faz uma coisa de cada vez.
+                </p>
+                <div class="hero-cta">
+                    <a class="btn btn-primary" href="#ter-um">Como ter um</a>
+                    <a class="btn btn-ghost" href="https://github.com/jcrvlh/kit" target="_blank" rel="noopener">Ver no GitHub</a>
+                </div>
+            </div>
+            <div class="hero-device" aria-hidden="true">
+                <svg viewBox="0 0 200 244" class="device">
+                    <rect x="1" y="1" width="198" height="242" rx="30" fill="#1b1b1d" stroke="#2C2C2E"/>
+                    <rect x="16" y="18" width="168" height="208" rx="16" fill="#000"/>
+                    <polygon points="100,58 118,90 82,90" fill="#E9B23C"/>
+                    <text x="100" y="140" text-anchor="middle" class="device-word">VOCÊ</text>
+                    <text x="100" y="176" text-anchor="middle" class="device-word">COMEÇA</text>
+                </svg>
             </div>
         </section>
 
-        <section class="manifesto">
-            <div class="manifesto-body">
-                <p class="manifesto-lead">
-                    Por muito tempo a tecnologia seguiu uma direção clara: colocar cada vez
-                    mais coisa dentro do celular.
-                </p>
-                <p>
-                    A câmera, a música, os livros, os jogos. Praticamente qualquer ferramenta
-                    podia virar aplicativo. E funcionou. Foi uma das coisas mais convenientes
-                    que a tecnologia já fez.
-                </p>
-                <p>
-                    Só que existe um preço em juntar tudo no mesmo lugar. Quando você pega o
-                    celular para uma coisa simples, ela divide espaço com todo o resto:
-                    notificações, mensagens, notícias, redes sociais. Algumas experiências
-                    funcionam melhor quando não precisam disputar a sua atenção.
-                </p>
-                <p>
-                    Algumas coisas merecem um dispositivo próprio. Algo que você põe na mesa e
-                    que tem uma função clara.
-                </p>
-                <p>
-                    Foi daí que nasceu o KIT: um dispositivo físico, modular e de código aberto
-                    para jogos, decisões e pequenas ferramentas do dia a dia.
-                </p>
-                <p>
-                    Ele não fica limitado ao que eu criei. Quem programa pode fazer suas
-                    próprias Tools, adicionar funções novas e compartilhar com outras pessoas.
-                    E quem não programa também usa: o KIT OS instala direto do navegador numa
-                    placa de desenvolvimento. É conectar, instalar e começar a experimentar,
-                    sem escrever uma linha de código.
-                </p>
-                <p class="manifesto-close">
-                    No fim, o KIT nasceu de uma ideia simples: transformar software em objeto.
-                    Dar a uma função digital um espaço próprio, físico e compartilhável.
-                </p>
-            </div>
-        </section>
-
-        <section class="features">
-            <h2 class="section-label">Por dentro</h2>
-            <div class="feature-grid">
-                <article class="feature" data-shape="square">
-                    <h3>Modular</h3>
-                    <p>Cada função é uma Tool independente. Elas entram e saem como arquivos,
-                       isoladas umas das outras e do sistema. O firmware nunca precisa ser
-                       recompilado.</p>
-                </article>
-                <article class="feature" data-shape="circle">
-                    <h3>Feito pra mesa</h3>
-                    <p>Dispara por toque, pelo botão físico ou chacoalhando. Passa de mão em
-                       mão. Os sorteios usam o gerador de números aleatórios do próprio chip.</p>
-                </article>
-                <article class="feature" data-shape="triangle">
-                    <h3>Interface fluida</h3>
-                    <p>LVGL v9 a 60 quadros por segundo sobre AMOLED preto. Uma linguagem
-                       visual própria, com as três primitivas e tipografia monoespaçada.</p>
-                </article>
-                <article class="feature" data-shape="square">
-                    <h3>Difícil de quebrar</h3>
-                    <p>Uma imagem de fábrica fica guardada numa partição separada. As
-                       atualizações têm dois slots e voltam sozinhas se algo falha.</p>
-                </article>
-                <article class="feature" data-shape="circle">
-                    <h3>SDK completo</h3>
-                    <p>Headers em C, um simulador de desktop e a ferramenta de linha de comando
-                       <code>kit-cli</code>. Você cria e testa uma Tool no computador antes de
-                       subir pra placa.</p>
-                </article>
-                <article class="feature" data-shape="triangle">
-                    <h3>Catálogo aberto</h3>
-                    <p>Tools da comunidade chegam por Pull Request, passam por revisão e são
-                       publicadas assinadas. Instale pelo navegador hoje e por Wi-Fi em breve.</p>
-                </article>
-            </div>
-        </section>
-
-        <section class="builtins">
-            <h2 class="section-label">Já vem com</h2>
-            <ul class="builtin-list">
-                <li><strong>Dados.</strong> D4 a D100, rolagem múltipla, modificador, chacoalhar para rolar.</li>
-                <li><strong>Decisor.</strong> Cara ou coroa, sim ou não, ou dois rótulos seus, com peso e "melhor de".</li>
-                <li><strong>Garrafa.</strong> Uma a três setas girando com física de rotação.</li>
-                <li><strong>Bingo.</strong> Globo digital de 1 a 75 ou 1 a 90, com painel de chamadas.</li>
-                <li><strong>Sortear Times.</strong> De 4 a 16 pessoas em times equilibrados, revelados um a um.</li>
-                <li><strong>Timer.</strong> Cronômetro e contagem regressiva, segurando o repouso da tela.</li>
-                <li><strong>Quem Vai Primeiro.</strong> Sorteia uma característica e quem se encaixa começa.</li>
-                <li><strong>Quebra-Gelo.</strong> Perguntas leves para a roda toda responder.</li>
+        <section id="serve" class="situations">
+            <h2 class="section-label">Serve pra</h2>
+            <ul class="situation-list">
+                <li>Decidir quem começa</li>
+                <li>Dividir os times</li>
+                <li>Rolar os dados que sumiram</li>
+                <li>Cara ou coroa, sim ou não</li>
+                <li>Girar a garrafa</li>
+                <li>Cantar o bingo</li>
+                <li>Cronometrar a rodada</li>
+                <li>Puxar papo com um quebra-gelo</li>
             </ul>
         </section>
 
-        <section id="instalar" class="installer">
-            <h2 class="section-label">Instalar num ESP32 novo</h2>
-            <p class="installer-intro">
-                Grava o <strong>KIT Core</strong> e a imagem de recuperação direto pela porta
-                serial, sem instalar nada no computador. Feito para a placa
-                <a href="https://www.waveshare.com/esp32-s3-touch-amoled-1.8.htm" target="_blank" rel="noopener">Waveshare ESP32-S3-Touch-AMOLED-1.8 (V2)</a>.
+        <section class="reason">
+            <h2 class="section-label">Por que não é um app</h2>
+            <p>
+                Hoje quase tudo virou aplicativo. É prático, mas quando você pega o celular
+                pra uma coisa boba ela divide a tela com mensagem, notícia e rede social, e
+                quando vê já passou meia hora.
+            </p>
+            <p class="reason-punch">
+                O KIT faz uma coisa só. Fica no meio da mesa, todo mundo enxerga e ninguém
+                precisa desbloquear nada.
+            </p>
+        </section>
+
+        <section id="ter-um" class="how">
+            <h2 class="section-label">Como ter um KIT</h2>
+            <p class="how-intro">
+                Ainda não vendemos uma versão montada. Por enquanto você monta o seu, e é
+                mais fácil do que parece: <strong>não precisa programar nada</strong>.
             </p>
 
             <ol class="steps">
-                <li>Conecte a placa ao computador com um <strong>cabo USB-C de dados</strong>.</li>
-                <li>Clique em <strong>Instalar</strong> e escolha a porta serial da placa.</li>
-                <li>Confirme a limpeza da flash. Em cerca de um minuto o KIT abre sozinho.</li>
+                <li>
+                    <strong>Compre a placa.</strong> O KIT roda na
+                    <a href="https://www.waveshare.com/esp32-s3-touch-amoled-1.8.htm" target="_blank" rel="noopener">Waveshare ESP32-S3-Touch-AMOLED-1.8</a>.
+                    Custa menos que um jogo de tabuleiro.
+                </li>
+                <li>
+                    <strong>Ligue no computador</strong> com um cabo USB-C que transfira
+                    dados (nem todo cabo transfere).
+                </li>
+                <li>
+                    <strong>Clique no botão abaixo</strong>, escolha a placa na lista e
+                    espere. Em cerca de um minuto o KIT abre sozinho.
+                </li>
             </ol>
 
             <div class="install-box">
                 <esp-web-install-button manifest="./firmware/manifest.json">
-                    <button slot="activate" class="btn btn-primary btn-lg">Instalar o KIT</button>
+                    <button slot="activate" class="btn btn-primary btn-lg">Instalar o KIT na placa</button>
                     <span slot="unsupported" class="install-note install-note--warn">
-                        Este navegador não fala Web Serial. Use Chrome, Edge ou Opera no computador.
+                        Este navegador não consegue falar com a placa. Abra esta página no
+                        Chrome, Edge ou Opera pelo computador.
                     </span>
                     <span slot="not-allowed" class="install-note install-note--warn">
-                        A página precisa estar em HTTPS para acessar a porta serial.
+                        Abra a página por um endereço https.
                     </span>
                 </esp-web-install-button>
                 <p class="install-fineprint">
-                    A instalação apaga o conteúdo atual da flash. Wi-Fi e dados ficam prontos
-                    para configurar no primeiro boot.
+                    A instalação limpa a placa e coloca o KIT no lugar. Dá pra desfazer
+                    depois, é só instalar outra coisa.
                 </p>
             </div>
 
             <details class="troubleshoot">
-                <summary>Não aparece nenhuma porta ou deu erro</summary>
+                <summary>A placa não aparece na lista</summary>
                 <ul>
-                    <li>Troque o cabo. Muito cabo USB-C é só de carga e não tem os fios de dados.</li>
-                    <li>No Windows pode faltar o driver USB serial da placa (CH34x ou CP210x).</li>
-                    <li>Segure o botão BOOT, dê um toque no RESET e solte para forçar o modo de gravação.</li>
-                    <li>Feche o Arduino IDE, o <code>idf.py monitor</code> ou qualquer terminal que esteja usando a porta.</li>
+                    <li>Troque o cabo. Muito cabo USB-C só carrega e não transfere dados.</li>
+                    <li>No Windows, pode faltar um driver da placa (procure por CH34x ou CP210x).</li>
+                    <li>Segure o botão BOOT da placa, dê um toque no RESET e solte. Tente de novo.</li>
+                    <li>Feche outros programas que possam estar usando a placa.</li>
                 </ul>
             </details>
         </section>
 
-        <section class="already">
-            <h2 class="section-label">Já tem um KIT?</h2>
+        <section class="open-source">
+            <h2 class="section-label">Feito pra mexer</h2>
             <p>
-                Para instalar Tools num aparelho que já roda o KIT, use o
-                <a href="tools.html">instalador de Tools</a>. Ele envia arquivos
-                <code>.kit</code> pela porta serial. O
-                <a href="https://jcrvlh.github.io/kit-tools/" target="_blank" rel="noopener">catálogo</a>
-                mostra o que a comunidade já publicou.
+                O KIT é livre e de código aberto. Quem programa pode criar funções novas,
+                que a gente chama de <strong>Tools</strong>, e compartilhar com todo mundo.
+                Está tudo no GitHub.
+            </p>
+            <p>
+                <a href="https://github.com/jcrvlh/kit" target="_blank" rel="noopener">Ver o projeto no GitHub</a>
+                &nbsp;&middot;&nbsp;
+                <a href="https://jcrvlh.github.io/kit-tools/" target="_blank" rel="noopener">Catálogo de Tools</a>
+            </p>
+        </section>
+
+        <section class="already">
+            <p>
+                Já montou o seu? Instale novas Tools pelo
+                <a href="tools.html">instalador de Tools</a>.
             </p>
         </section>
     </main>
@@ -195,8 +163,6 @@
         <p>
             Software livre sob GPL-3.0 &middot;
             <a href="https://github.com/jcrvlh/kit" target="_blank" rel="noopener">Repositório</a> &middot;
-            <a href="https://github.com/jcrvlh/kit/tree/main/docs" target="_blank" rel="noopener">Documentação</a> &middot;
-            <a href="https://github.com/jcrvlh/kit/tree/main/tools-sdk" target="_blank" rel="noopener">Tools SDK</a> &middot;
             <a href="https://jcrvlh.github.io/kit-tools/" target="_blank" rel="noopener">Catálogo</a>
         </p>
         <p class="build-tag" id="build-tag"></p>

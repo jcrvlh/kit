@@ -87,40 +87,69 @@ main > section:first-child { border-top: 0; }
 }
 
 /* ---------- Hero ---------- */
-.hero { padding-top: 2rem; padding-bottom: 4rem; }
+.hero {
+    padding-top: 2.5rem;
+    padding-bottom: 4rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+    align-items: center;
+}
+@media (min-width: 48rem) {
+    .hero { grid-template-columns: 1.3fr 1fr; }
+}
 .hero h1 {
     font-family: var(--display);
-    font-size: clamp(2.2rem, 6vw, 4rem);
-    line-height: 1.05;
+    font-size: clamp(2rem, 5.5vw, 3.5rem);
+    line-height: 1.08;
     letter-spacing: -0.01em;
     color: var(--text);
 }
 .lead {
     margin-top: 1.5rem;
-    max-width: 44rem;
     font-size: 1.05rem;
     color: #cfcabd;
 }
 .hero-cta { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 2.25rem; }
 
-/* ---------- Manifesto ---------- */
-.manifesto { padding-top: 3.5rem; padding-bottom: 3.5rem; }
-.manifesto-body { max-width: 40rem; }
-.manifesto-body p { margin-bottom: 1.15rem; color: #b7b2a6; font-size: 1rem; }
-.manifesto-body p:last-child { margin-bottom: 0; }
-.manifesto-body .manifesto-lead {
+.hero-device { display: flex; justify-content: center; }
+.device { width: 100%; max-width: 15rem; height: auto; }
+.device-word {
     font-family: var(--display);
-    font-size: clamp(1.3rem, 3.6vw, 1.9rem);
-    line-height: 1.25;
-    color: var(--text);
-    margin-bottom: 1.6rem;
+    font-size: 26px;
+    letter-spacing: 1px;
+    fill: var(--yellow);
 }
-.manifesto-body .manifesto-close {
+
+/* ---------- Situations ---------- */
+.situation-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+}
+.situation-list li {
+    background: var(--bg);
+    padding: 1.15rem 1.35rem;
+    font-size: 0.98rem;
     color: var(--text);
+}
+
+/* ---------- Reason ---------- */
+.reason p { max-width: 40rem; color: #b7b2a6; margin-bottom: 1rem; }
+.reason .reason-punch {
+    color: var(--text);
+    font-size: 1.15rem;
     border-left: 3px solid var(--yellow);
     padding-left: 1rem;
-    margin-top: 1.6rem;
+    margin-bottom: 0;
 }
+
+/* ---------- How ---------- */
+.how-intro { max-width: 40rem; color: #cfcabd; }
+.how-intro strong { color: var(--text); }
 
 /* ---------- Buttons ---------- */
 .btn {
@@ -143,64 +172,17 @@ main > section:first-child { border-top: 0; }
 .btn-ghost:hover { border-color: var(--text); }
 .btn-lg { font-size: 1.05rem; padding: 1.1rem 2rem; }
 
-/* ---------- Features ---------- */
-.feature-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-    gap: 1px;
-    background: var(--line);
-    border: 1px solid var(--line);
-}
-.feature {
-    background: var(--bg);
-    padding: 1.75rem;
-    position: relative;
-}
-.feature::before {
-    content: "";
-    position: absolute;
-    top: 1.75rem; left: 1.75rem;
-    width: 14px; height: 14px;
-}
-.feature[data-shape="square"]::before { background: var(--red); }
-.feature[data-shape="circle"]::before { background: var(--blue); border-radius: 50%; }
-.feature[data-shape="triangle"]::before {
-    background: transparent;
-    width: 0; height: 0;
-    border-left: 8px solid transparent;
-    border-right: 8px solid transparent;
-    border-bottom: 14px solid var(--yellow);
-}
-.feature h3 {
-    font-family: var(--display);
-    font-size: 1.15rem;
-    color: var(--text);
-    margin: 2rem 0 0.6rem;
-}
-.feature p { font-size: 0.92rem; color: #b7b2a6; }
-
-/* ---------- Built-ins ---------- */
-.builtin-list { list-style: none; display: grid; gap: 0.1rem; }
-.builtin-list li {
-    padding: 0.85rem 0;
-    border-bottom: 1px solid var(--line);
-    font-size: 0.95rem;
-    color: #b7b2a6;
-}
-.builtin-list li:last-child { border-bottom: 0; }
-.builtin-list strong { color: var(--text); }
-
-/* ---------- Installer ---------- */
-.installer-intro { max-width: 44rem; color: #cfcabd; }
+/* ---------- Install steps ---------- */
 .steps {
     margin: 2rem 0;
-    padding-left: 1.4rem;
-    display: grid;
-    gap: 0.6rem;
-    max-width: 44rem;
+    padding-left: 1.6rem;
+    max-width: 40rem;
     color: #b7b2a6;
 }
+.steps li { margin-bottom: 0.9rem; padding-left: 0.35rem; }
+.steps li:last-child { margin-bottom: 0; }
 .steps strong { color: var(--text); }
+.steps li::marker { color: var(--yellow); font-weight: 700; }
 
 .install-box {
     background: var(--surface);
@@ -244,7 +226,12 @@ esp-web-install-button {
 .troubleshoot li { font-size: 0.9rem; color: #b7b2a6; }
 
 /* ---------- Already ---------- */
-.already p { max-width: 44rem; color: #b7b2a6; }
+.already { padding-top: 2rem; padding-bottom: 2rem; }
+.already p { max-width: 40rem; color: var(--muted); font-size: 0.92rem; }
+
+/* ---------- Open source ---------- */
+.open-source p { max-width: 40rem; color: #b7b2a6; margin-bottom: 0.9rem; }
+.open-source p:last-child { margin-bottom: 0; }
 
 /* ---------- Footer ---------- */
 .site-footer {
