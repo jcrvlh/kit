@@ -3,51 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KIT Web Installer</title>
+    <title>KIT — canivete suíço digital para noites de jogos</title>
+    <meta name="description" content="KIT é uma plataforma modular de código aberto para ESP32-S3: dados, sorteios e decisões em grupo, com Tools instaláveis em runtime. Instale o firmware direto do navegador.">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="style.css">
-    <!-- JSZip for client-side zip extraction -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script type="module" src="https://cdn.jsdelivr.net/npm/esp-web-tools@10/dist/web/install-button.js"></script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>KIT INSTALLER</h1>
-            <p class="subtitle">Instale Tools no seu KIT diretamente pelo navegador usando Web Serial.</p>
-        </header>
+    <header class="site-header">
+        <a class="brand" href="./" aria-label="KIT">
+            <svg class="brand-mark" viewBox="0 0 96 32" aria-hidden="true">
+                <rect x="2" y="6" width="20" height="20" fill="#C6472F"/>
+                <circle cx="48" cy="16" r="11" fill="#2C3CC4"/>
+                <path d="M74 4 L92 30 L56 30 Z" fill="#E9B23C"/>
+            </svg>
+            <span class="brand-word">KIT</span>
+        </a>
+        <nav class="site-nav">
+            <a href="#instalar">Instalar</a>
+            <a href="https://jcrvlh.github.io/kit-tools/">Catálogo</a>
+            <a href="https://github.com/jcrvlh/kit">GitHub</a>
+        </nav>
+    </header>
 
-        <main>
-            <section id="connection-panel" class="panel">
-                <div class="status-indicator" id="status-dot"></div>
-                <h2 id="status-text">DESCONECTADO</h2>
-                <button id="btn-connect" class="btn btn-primary">CONECTAR AO KIT</button>
-            </section>
+    <main>
+        <section class="hero">
+            <p class="kicker">Plataforma aberta · ESP32-S3 · GPL-3.0</p>
+            <h1>O canivete suíço digital<br>da noite de jogos.</h1>
+            <p class="lead">
+                Dados, moeda, garrafa, bingo, sorteio de times, cronômetro, quebra-gelo —
+                num aparelho de bolso com tela AMOLED. E o que faltar, você instala:
+                cada ferramenta é uma <strong>Tool</strong> independente, carregada em runtime,
+                sem recompilar nada.
+            </p>
+            <div class="hero-cta">
+                <a class="btn btn-primary" href="#instalar">Instalar o KIT</a>
+                <a class="btn btn-ghost" href="https://github.com/jcrvlh/kit">Ver o código</a>
+            </div>
+        </section>
 
-            <section id="upload-panel" class="panel disabled">
-                <div id="drop-zone" class="drop-zone">
-                    <p>ARRASTE UM ARQUIVO <strong>.KIT</strong> AQUI</p>
-                    <p class="small-text">Ou clique para selecionar</p>
-                    <input type="file" id="file-input" accept=".kit,.zip" style="display: none;">
-                </div>
-                
-                <div id="progress-container" class="hidden">
-                    <h3 id="progress-title">NOME DA TOOL</h3>
-                    <div class="progress-bar">
-                        <div id="progress-fill" class="progress-fill"></div>
-                    </div>
-                    <p id="progress-status">Preparando...</p>
-                </div>
-            </section>
+        <section class="features">
+            <h2 class="section-label">Por dentro</h2>
+            <div class="feature-grid">
+                <article class="feature" data-shape="square">
+                    <h3>Modular de verdade</h3>
+                    <p>O firmware é um runtime, não um pacote fechado. Tools entram e saem
+                       como arquivos <code>.kit</code>, isoladas umas das outras e do sistema.</p>
+                </article>
+                <article class="feature" data-shape="circle">
+                    <h3>Feito pra mesa</h3>
+                    <p>Dispara por toque, pelo botão físico ou <em>chacoalhando</em>.
+                       Passa de mão em mão. Sorteios com TRNG de hardware — aleatório
+                       de verdade, não pseudo.</p>
+                </article>
+                <article class="feature" data-shape="triangle">
+                    <h3>Interface fluida</h3>
+                    <p>LVGL v9 a 60 FPS sobre AMOLED preto absoluto. Linguagem visual
+                       própria, "Brutalist Bauhaus": as três primitivas, tipografia
+                       monoespaçada, uma cor por vez.</p>
+                </article>
+                <article class="feature" data-shape="square">
+                    <h3>À prova de tropeço</h3>
+                    <p>Imagem de recuperação de fábrica numa partição dedicada e
+                       atualização OTA dual-slot com rollback automático. Uma Tool que
+                       trava nunca derruba o sistema.</p>
+                </article>
+                <article class="feature" data-shape="circle">
+                    <h3>SDK completo</h3>
+                    <p>Headers C, stubs, simulador de desktop e a CLI <code>kit-cli</code>
+                       para criar, validar e empacotar Tools. Compile e teste no seu
+                       computador antes de subir pra placa.</p>
+                </article>
+                <article class="feature" data-shape="triangle">
+                    <h3>Catálogo comunitário</h3>
+                    <p>Tools de terceiros chegam por Pull Request, passam por CI e revisão,
+                       são assinadas e publicadas. Instale pelo navegador ou, em breve,
+                       por Wi-Fi no próprio aparelho.</p>
+                </article>
+            </div>
+        </section>
 
-            <section id="log-panel" class="panel">
-                <h3>LOGS DO SISTEMA</h3>
-                <div id="log-console" class="console"></div>
-            </section>
-        </main>
-    </div>
-    
-    <script src="app.js"></script>
+        <section class="builtins">
+            <h2 class="section-label">Já vem com</h2>
+            <ul class="builtin-list">
+                <li><strong>Dados</strong> — D4 a D100, rolagem múltipla, modificador, chacoalhar pra rolar</li>
+                <li><strong>Decisor</strong> — cara ou coroa, sim/não ou dois rótulos custom, com peso e "melhor de"</li>
+                <li><strong>Garrafa</strong> — 1 a 3 setas girando com física de rotação</li>
+                <li><strong>Bingo</strong> — globo digital 1–75 (B/I/N/G/O) ou 1–90, com painel de chamadas</li>
+                <li><strong>Sortear Times</strong> — 4 a 16 pessoas em times equilibrados, revelados um a um</li>
+                <li><strong>Timer</strong> — cronômetro e contagem regressiva, segura o repouso da tela</li>
+                <li><strong>Quem Vai Primeiro</strong> — sorteia uma característica; quem se encaixa começa</li>
+                <li><strong>Quebra-Gelo</strong> — ~95 perguntas leves pra roda responder</li>
+            </ul>
+        </section>
+
+        <section id="instalar" class="installer">
+            <h2 class="section-label">Instalar num ESP32 novo</h2>
+            <p class="installer-intro">
+                Grava o <strong>KIT Core</strong> e a imagem de recuperação direto pela porta
+                serial, sem instalar nada. Feito para a placa
+                <a href="https://www.waveshare.com/esp32-s3-touch-amoled-1.8.htm">Waveshare ESP32-S3-Touch-AMOLED-1.8 (V2)</a>.
+            </p>
+
+            <ol class="steps">
+                <li>Conecte a placa ao computador com um <strong>cabo USB-C de dados</strong>.</li>
+                <li>Clique em <strong>Instalar</strong> e escolha a porta serial da placa.</li>
+                <li>Confirme a limpeza da flash. Em ~1 minuto o KIT abre sozinho.</li>
+            </ol>
+
+            <div class="install-box">
+                <esp-web-install-button manifest="./firmware/manifest.json">
+                    <button slot="activate" class="btn btn-primary btn-lg">Instalar o KIT</button>
+                    <span slot="unsupported" class="install-note install-note--warn">
+                        Este navegador não fala Web Serial. Use <strong>Chrome</strong>,
+                        <strong>Edge</strong> ou <strong>Opera</strong> no desktop.
+                    </span>
+                    <span slot="not-allowed" class="install-note install-note--warn">
+                        A página precisa estar em HTTPS para acessar a porta serial.
+                    </span>
+                </esp-web-install-button>
+                <p class="install-fineprint">
+                    A instalação apaga o conteúdo atual da flash. Wi-Fi e dados ficam
+                    prontos para configurar no primeiro boot.
+                </p>
+            </div>
+
+            <details class="troubleshoot">
+                <summary>Não aparece nenhuma porta / deu erro</summary>
+                <ul>
+                    <li>Troque o cabo — muitos cabos USB-C são só de carga, sem dados.</li>
+                    <li>No Windows, pode ser preciso o driver USB-serial (CH34x / CP210x) conforme a placa.</li>
+                    <li>Segure <strong>BOOT</strong> e dê um toque em <strong>RESET</strong> para forçar o modo de gravação, depois tente de novo.</li>
+                    <li>Feche o Arduino IDE, <code>idf.py monitor</code> ou qualquer terminal que esteja usando a porta.</li>
+                </ul>
+            </details>
+        </section>
+
+        <section class="already">
+            <h2 class="section-label">Já tem um KIT?</h2>
+            <p>
+                Para instalar Tools num aparelho que já roda o KIT, use o
+                <a href="tools.html">instalador de Tools</a> — ele envia arquivos
+                <code>.kit</code> pela serial. O <a href="https://jcrvlh.github.io/kit-tools/">catálogo</a>
+                lista o que a comunidade publicou.
+            </p>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <svg class="brand-mark" viewBox="0 0 96 32" aria-hidden="true">
+            <rect x="2" y="6" width="20" height="20" fill="#C6472F"/>
+            <circle cx="48" cy="16" r="11" fill="#2C3CC4"/>
+            <path d="M74 4 L92 30 L56 30 Z" fill="#E9B23C"/>
+        </svg>
+        <p>
+            Software livre sob GPL-3.0 &middot;
+            <a href="https://github.com/jcrvlh/kit">Repositório</a> &middot;
+            <a href="https://github.com/jcrvlh/kit/tree/main/docs">Documentação</a> &middot;
+            <a href="https://github.com/jcrvlh/kit/tree/main/tools-sdk">Tools SDK</a> &middot;
+            <a href="https://jcrvlh.github.io/kit-tools/">Catálogo</a>
+        </p>
+        <p class="build-tag" id="build-tag"></p>
+    </footer>
+
+    <script src="flash.js"></script>
 </body>
 </html>

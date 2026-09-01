@@ -1,6 +1,7 @@
-name: Web Installer
+name: Site
 
-# Publica o portal WebSerial (web-installer/) no GitHub Pages.
+# Compila o KIT Core e publica o site (web-installer/) no GitHub Pages,
+# com o firmware embutido para gravação via navegador (ESP Web Tools).
 # Requer: Settings > Pages > Source = "GitHub Actions".
 
 on:
@@ -8,6 +9,7 @@ on:
     branches: [main]
     paths:
       - 'web-installer/**'
+      - 'firmware/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -21,18 +23,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Compilar KIT Core (ESP-IDF v5.3, esp32s3)
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.3
+          target: esp32s3
+          path: firmware
+
+      - name: Montar site + firmware para o ESP Web Tools
+        run: |
+          set -euo pipefail
+          mkdir -p _site/firmware
+          cp -r web-installer/. _site/
+
+          python3 - <<'PY'
+          import json, os, shutil, subprocess
+
+          build = "firmware/build"
+          with open(f"{build}/flasher_args.json") as f:
+              flasher = json.load(f)
+
+          parts = []
+          for offset, relpath in flasher["flash_files"].items():
+              name = os.path.basename(relpath)
+              shutil.copy(f"{build}/{relpath}", f"_site/firmware/{name}")
+              parts.append({"path": name, "offset": int(offset, 16)})
+          parts.sort(key=lambda p: p["offset"])
+
+          version = subprocess.check_output(
+              ["git", "describe", "--tags", "--always", "--dirty"], text=True
+          ).strip()
+
+          manifest = {
+              "name": "KIT",
+              "version": version,
+              "new_install_prompt_erase": True,
+              "builds": [{"chipFamily": "ESP32-S3", "parts": parts}],
+          }
+          with open("_site/firmware/manifest.json", "w") as f:
+              json.dump(manifest, f, indent=2)
+          print(json.dumps(manifest, indent=2))
+          PY
+
       - uses: actions/configure-pages@v5
         with:
           enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web-installer
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4
