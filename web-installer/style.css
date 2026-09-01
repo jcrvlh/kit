@@ -113,12 +113,11 @@ main > section:first-child { border-top: 0; }
 .hero-cta { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 2.25rem; }
 
 .hero-device { display: flex; justify-content: center; }
-.device { width: 100%; max-width: 15rem; height: auto; }
-.device-word {
-    font-family: var(--display);
-    font-size: 26px;
-    letter-spacing: 1px;
-    fill: var(--yellow);
+.hero-device img {
+    width: 100%;
+    max-width: 24rem;
+    height: auto;
+    display: block;
 }
 
 /* ---------- Situations ---------- */
