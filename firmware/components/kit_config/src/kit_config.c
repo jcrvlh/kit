@@ -11,23 +11,27 @@ static const char *NVS_NAMESPACE = "kit_sys";
 #define KEY_SCR_SLEEP    "scr_sleep_s"
 #define KEY_PWR_OFF      "pwr_off_s"
 #define KEY_SOUND        "sound_en"
+#define KEY_VOLUME       "volume"
 
 // Padrões
 #define DEF_BRIGHTNESS   80
 #define DEF_SCR_SLEEP    120     // 2 min
 #define DEF_PWR_OFF      0       // nunca
 #define DEF_SOUND        1       // ligado
+#define DEF_VOLUME       80
 
 static struct {
     uint8_t  brightness;
     uint32_t screen_sleep_s;
     uint32_t auto_poweroff_s;
     uint8_t  sound_enabled;
+    uint8_t  volume;
 } s_cache = {
     .brightness      = DEF_BRIGHTNESS,
     .screen_sleep_s  = DEF_SCR_SLEEP,
     .auto_poweroff_s = DEF_PWR_OFF,
     .sound_enabled   = DEF_SOUND,
+    .volume          = DEF_VOLUME,
 };
 
 kit_err_t kit_config_get_u8(const char *key, uint8_t *out_val, uint8_t default_val)
@@ -96,11 +100,16 @@ kit_err_t kit_config_init(void)
     kit_config_get_u32(KEY_PWR_OFF,   &s_cache.auto_poweroff_s, DEF_PWR_OFF);
     kit_config_get_u8(KEY_SOUND, &s_cache.sound_enabled, DEF_SOUND);
 
-    ESP_LOGI(TAG, "Config: brilho=%d%%, repouso=%lus, desliga=%lus, som=%s",
+    uint8_t vol;
+    kit_config_get_u8(KEY_VOLUME, &vol, DEF_VOLUME);
+    s_cache.volume = vol > 100 ? 100 : vol;
+
+    ESP_LOGI(TAG, "Config: brilho=%d%%, repouso=%lus, desliga=%lus, som=%s, volume=%d%%",
              s_cache.brightness,
              (unsigned long)s_cache.screen_sleep_s,
              (unsigned long)s_cache.auto_poweroff_s,
-             s_cache.sound_enabled ? "on" : "off");
+             s_cache.sound_enabled ? "on" : "off",
+             s_cache.volume);
     return KIT_OK;
 }
 
@@ -141,4 +150,14 @@ void kit_config_set_sound_enabled(bool enabled)
     if (v == s_cache.sound_enabled) return;
     s_cache.sound_enabled = v;
     kit_config_set_u8(KEY_SOUND, v);
+}
+
+uint8_t kit_config_get_volume(void) { return s_cache.volume; }
+
+void kit_config_set_volume(uint8_t percent)
+{
+    if (percent > 100) percent = 100;
+    if (percent == s_cache.volume) return;
+    s_cache.volume = percent;
+    kit_config_set_u8(KEY_VOLUME, percent);
 }

@@ -192,6 +192,9 @@ static void draw_tick_cb(lv_timer_t *t)
         if (api() && api()->random) i = (int)api()->random->range(0, TRAITS_N - 1);
         else                        i = rand() % TRAITS_N;
         lv_label_set_text(s_phrase, TRAITS[i]);
+        // Tique curtinho e baixo subindo de tom — "dando corda" até a revelação.
+        const kit_api_table_t *a = api();
+        if (a && a->audio) a->audio->beep((uint16_t)(1200 + s_tick * 80), 9);
         return;
     }
 

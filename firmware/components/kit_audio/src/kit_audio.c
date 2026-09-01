@@ -186,7 +186,12 @@ static void audio_task(void *arg)
     while (1) {
         if (xQueueReceive(s_beep_queue, &req, portMAX_DELAY) == pdTRUE) {
             if (req.sfx < 0) {
-                render_tone(req.freq_hz, req.duration_ms, AUDIO_AMP_FULL);
+                // Bipes muito curtos (<= 14 ms) são "ticks" de textura — saem
+                // mais baixos pra não estourar quando disparados em rajada
+                // (catraca da Garrafa, animação de sorteio).
+                float amp = (req.duration_ms <= 14) ? AUDIO_AMP_FULL * 0.34f
+                                                    : AUDIO_AMP_FULL;
+                render_tone(req.freq_hz, req.duration_ms, amp);
             } else {
                 render_sfx((kit_sfx_t)req.sfx);
             }
@@ -312,6 +317,7 @@ kit_err_t kit_audio_init(void)
         ESP_LOGE(TAG, "Falha ao abrir dispositivo de reprodução (código %d)", oret);
         return KIT_FAIL;
     }
+    s_volume = kit_config_get_volume();   // volume salvo (kit_config_init roda antes)
     int vret = esp_codec_dev_set_out_vol(s_speaker, s_volume);
     if (vret != ESP_CODEC_DEV_OK) {
         ESP_LOGW(TAG, "esp_codec_dev_set_out_vol retornou %d", vret);
@@ -384,8 +390,9 @@ kit_err_t kit_audio_selftest_impl(void)
 kit_err_t kit_audio_set_volume_impl(uint8_t percentage)
 {
     if (percentage > 100) percentage = 100;
+    if (percentage == s_volume) return KIT_OK;
     s_volume = percentage;
-    ESP_LOGI(TAG, "Volume do áudio ajustado para %d%%", percentage);
+    ESP_LOGD(TAG, "Volume do áudio ajustado para %d%%", percentage);
     if (s_speaker) {
         esp_codec_dev_set_out_vol(s_speaker, s_volume);
     }

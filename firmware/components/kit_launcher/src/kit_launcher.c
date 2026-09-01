@@ -30,6 +30,7 @@ static lv_obj_t *s_launcher_screen = NULL;
 static lv_obj_t *s_splash_screen = NULL;
 static lv_obj_t *s_settings_screen = NULL;
 static lv_obj_t *s_brightness_screen = NULL;
+static lv_obj_t *s_volume_screen = NULL;
 static lv_obj_t *s_sleep_screen = NULL;
 static lv_obj_t *s_poweroff_screen = NULL;
 static lv_obj_t *s_about_screen = NULL;
@@ -40,6 +41,7 @@ static lv_obj_t *s_feedback_screen = NULL;
 extern const lv_image_dsc_t kit_icon_triangle_a8;
 
 static lv_obj_t *s_brightness_val_lbl = NULL;
+static lv_obj_t *s_volume_val_lbl = NULL;
 static lv_obj_t *s_sound_val_lbl = NULL;
 static lv_obj_t *s_batt_lbl = NULL;
 static lv_obj_t *s_batt_fill = NULL;
@@ -143,12 +145,16 @@ static void open_settings_cb(lv_event_t *e);
 static void close_settings_cb(lv_event_t *e);
 static void open_brightness_cb(lv_event_t *e);
 static void close_brightness_cb(lv_event_t *e);
+static void open_volume_cb(lv_event_t *e);
+static void close_volume_cb(lv_event_t *e);
 static void open_sleep_cb(lv_event_t *e);
 static void open_poweroff_cb(lv_event_t *e);
 static void open_about_cb(lv_event_t *e);
 static void close_about_cb(lv_event_t *e);
 static void brightness_slider_cb(lv_event_t *e);
 static void brightness_released_cb(lv_event_t *e);
+static void volume_slider_cb(lv_event_t *e);
+static void volume_released_cb(lv_event_t *e);
 static void sound_toggle_cb(lv_event_t *e);
 static void run_test_tool_cb(lv_event_t *e);
 static void home_tile_cb(lv_event_t *e);
@@ -881,6 +887,7 @@ static void open_settings_cb(lv_event_t *e)
 
     lv_obj_t *body = make_scroll_body(s_settings_screen, 0);
     make_row(body, NULL, 0, "Brilho",           false, open_brightness_cb, NULL);
+    make_row(body, NULL, 0, "Volume",           false, open_volume_cb,     NULL);
     make_row(body, NULL, 0, "Repouso da tela",  false, open_sleep_cb,      NULL);
     make_row(body, NULL, 0, "Desligar sozinho", false, open_poweroff_cb,   NULL);
     make_sound_row(body);
@@ -990,6 +997,102 @@ static void brightness_released_cb(lv_event_t *e)
 {
     lv_obj_t *slider = lv_event_get_target(e);
     kit_config_set_brightness((uint8_t)lv_slider_get_value(slider));
+}
+
+// ---------------------------------------------------------------------------
+// Volume
+// ---------------------------------------------------------------------------
+
+static void open_volume_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_beep_impl(1200, 40);
+    if (s_volume_screen) return;
+
+    s_volume_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_volume_screen, "VOLUME", close_volume_cb);
+
+    lv_obj_t *spk = lv_obj_create(s_volume_screen);
+    lv_obj_set_size(spk, 112, 112);
+    lv_obj_set_style_bg_color(spk, lv_color_hex(KIT_COLOR_GREEN), 0);
+    lv_obj_set_style_border_width(spk, 0, 0);
+    lv_obj_set_style_radius(spk, 28, 0);
+    lv_obj_set_style_pad_all(spk, 0, 0);
+    lv_obj_clear_flag(spk, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(spk, LV_ALIGN_CENTER, 0, -84);
+    lv_obj_t *ico = add_label(spk, KIT_ICON_BARS, KIT_COLOR_BG, &kit_display_44, 0);
+    lv_obj_center(ico);
+
+    uint8_t cur = kit_config_get_volume();
+
+    lv_obj_t *slider = lv_slider_create(s_volume_screen);
+    lv_slider_set_range(slider, 0, 100);
+    lv_slider_set_value(slider, cur, LV_ANIM_OFF);
+    lv_obj_set_size(slider, KIT_DISPLAY_WIDTH - 64, 22);
+    lv_obj_align(slider, LV_ALIGN_CENTER, 0, 14);
+    lv_obj_set_ext_click_area(slider, 24);
+    lv_obj_set_style_bg_color(slider, lv_color_hex(KIT_COLOR_SURFACE), LV_PART_MAIN);
+    lv_obj_set_style_radius(slider, 11, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(slider, lv_color_hex(KIT_COLOR_GREEN), LV_PART_INDICATOR);
+    lv_obj_set_style_radius(slider, 11, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(slider, lv_color_hex(KIT_COLOR_TEXT), LV_PART_KNOB);
+    lv_obj_set_style_radius(slider, LV_RADIUS_CIRCLE, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(slider, 13, LV_PART_KNOB);
+    lv_obj_add_event_cb(slider, volume_slider_cb, LV_EVENT_VALUE_CHANGED, NULL);
+    lv_obj_add_event_cb(slider, volume_released_cb, LV_EVENT_RELEASED, NULL);
+
+    lv_obj_t *lmin = add_label(s_volume_screen, "MIN", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
+    lv_obj_align_to(lmin, slider, LV_ALIGN_OUT_BOTTOM_LEFT, 0, 16);
+    lv_obj_t *lmax = add_label(s_volume_screen, "MAX", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
+    lv_obj_align_to(lmax, slider, LV_ALIGN_OUT_BOTTOM_RIGHT, 0, 16);
+
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%d%%", cur);
+    s_volume_val_lbl = add_label(s_volume_screen, buf, KIT_COLOR_GREEN, &kit_display_44, 0);
+    lv_obj_align(s_volume_val_lbl, LV_ALIGN_CENTER, 0, 84);
+
+    lv_obj_t *back = make_button(s_volume_screen, "VOLTAR", close_volume_cb, false);
+    lv_obj_align(back, LV_ALIGN_BOTTOM_MID, 0, -14);
+}
+
+static void close_volume_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_beep_impl(800, 30);
+    if (s_volume_screen) {
+        lv_obj_delete(s_volume_screen);
+        s_volume_screen = NULL;
+        s_volume_val_lbl = NULL;
+    }
+}
+
+static void volume_slider_cb(lv_event_t *e)
+{
+    lv_obj_t *slider = lv_event_get_target(e);
+    int32_t val = lv_slider_get_value(slider);
+    kit_audio_set_volume_impl((uint8_t)val);   // aplica ao vivo
+    if (s_volume_val_lbl) {
+        char buf[8];
+        snprintf(buf, sizeof(buf), "%d%%", (int)val);
+        lv_label_set_text(s_volume_val_lbl, buf);
+    }
+    // Prévia audível durante o arraste, no máximo ~6x/s pra não engasgar.
+    static uint32_t s_last_preview = 0;
+    uint32_t now = lv_tick_get();
+    if (now - s_last_preview >= 160) {
+        s_last_preview = now;
+        kit_audio_beep_impl(1320, 45);
+    }
+}
+
+// Só persiste ao soltar o dedo.
+static void volume_released_cb(lv_event_t *e)
+{
+    lv_obj_t *slider = lv_event_get_target(e);
+    uint8_t v = (uint8_t)lv_slider_get_value(slider);
+    kit_config_set_volume(v);
+    kit_audio_set_volume_impl(v);
+    kit_audio_beep_impl(1320, 90);   // toque final no volume escolhido
 }
 
 // ---------------------------------------------------------------------------
@@ -1180,6 +1283,8 @@ void kit_launcher_go_home(void)
     if (s_poweroff_screen)   { lv_obj_delete(s_poweroff_screen);   s_poweroff_screen = NULL; }
     if (s_brightness_screen) { lv_obj_delete(s_brightness_screen); s_brightness_screen = NULL;
                                s_brightness_val_lbl = NULL; }
+    if (s_volume_screen)     { lv_obj_delete(s_volume_screen);     s_volume_screen = NULL;
+                               s_volume_val_lbl = NULL; }
     if (s_settings_screen)   { lv_obj_delete(s_settings_screen);   s_settings_screen = NULL;
                                s_sound_val_lbl = NULL; }
     if (s_splash_screen)     { lv_obj_delete(s_splash_screen);     s_splash_screen = NULL; }

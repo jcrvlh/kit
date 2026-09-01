@@ -39,6 +39,11 @@ void     kit_config_set_auto_poweroff_s(uint32_t seconds);
 bool kit_config_get_sound_enabled(void);
 void kit_config_set_sound_enabled(bool enabled);
 
+// -- Volume do áudio (0..100). Padrão 80. Aplicado no codec pela kit_audio
+//    no boot e a cada ajuste. --
+uint8_t kit_config_get_volume(void);
+void    kit_config_set_volume(uint8_t percent);
+
 // -- Acesso genérico a NVS (namespace "kit_sys"), sem passar pelo cache. --
 kit_err_t kit_config_get_u8(const char *key, uint8_t *out_val, uint8_t default_val);
 kit_err_t kit_config_set_u8(const char *key, uint8_t val);
