@@ -23,6 +23,13 @@ kit_err_t kit_imu_init(void);
 bool kit_imu_poll_shake(void);
 
 /**
+ * Liga/desliga o acelerômetro (CTRL7.bit0 do QMI8658). O Runtime desliga
+ * quando a tela entra em repouso — sem gesto de chacoalhar, o sensor só
+ * gastaria bateria — e religa ao acordar. Chamada barata e idempotente.
+ */
+void kit_imu_set_enabled(bool enable);
+
+/**
  * Despacha o callback de shake registrado por uma Tool externa.
  * Chamado pelo Runtime quando kit_imu_poll_shake() retorna true.
  */

@@ -36,8 +36,11 @@ static const char *TAG = "KIT_QUEBRAGELO";
 #define Q_GO_MARGIN  18
 #define Q_PAGE_H     (KIT_DISPLAY_HEIGHT - Q_TITLEBAR - Q_FOOT) // 256
 
-#define Q_DRAW_TICKS   13
-#define Q_DRAW_TICK_MS 55
+// Flicker do sorteio: desacelera em ease-out (o intervalo cresce a cada troca)
+// pra casar com a catraca da Garrafa (KIT_SFX_BOTTLE_SPIN, ~1,9 s).
+#define Q_DRAW_TICKS   20      // 19 trocas + a trava
+#define Q_DRAW_MS_MIN  34
+#define Q_DRAW_MS_MAX  165
 
 // Baralho fixo de perguntas quebra-gelo — leves e criativas, todas em CAIXA
 // ALTA (regra da tipografia mono). Curtas o bastante para caber em poucas
@@ -221,7 +224,10 @@ static void do_draw(void)
     lv_obj_set_style_opa(s_go_btn, LV_OPA_60, 0);   // "ocupado"
 
     s_tick = 0;
-    s_timer = lv_timer_create(draw_tick_cb, Q_DRAW_TICK_MS, NULL);
+    // Catraca da Garrafa: um SFX só, que já desacelera e fecha com um "parou".
+    const kit_api_table_t *a = api();
+    if (a && a->audio) a->audio->sfx(KIT_SFX_BOTTLE_SPIN);
+    s_timer = lv_timer_create(draw_tick_cb, Q_DRAW_MS_MIN, NULL);
 }
 
 static void draw_tick_cb(lv_timer_t *t)
@@ -234,9 +240,10 @@ static void draw_tick_cb(lv_timer_t *t)
         if (api() && api()->random) i = (int)api()->random->range(0, QUESTIONS_N - 1);
         else                        i = rand() % QUESTIONS_N;
         lv_label_set_text(s_phrase, QUESTIONS[i]);
-        // Tique curtinho e baixo subindo de tom — "dando corda" até a revelação.
-        const kit_api_table_t *a = api();
-        if (a && a->audio) a->audio->beep((uint16_t)(1200 + s_tick * 80), 9);
+        // desacelera junto com a catraca (intervalo cresce até Q_DRAW_MS_MAX)
+        uint32_t p = Q_DRAW_MS_MIN +
+            (uint32_t)(Q_DRAW_MS_MAX - Q_DRAW_MS_MIN) * s_tick / (Q_DRAW_TICKS - 1);
+        lv_timer_set_period(s_timer, p);
         return;
     }
 
@@ -248,9 +255,6 @@ static void draw_tick_cb(lv_timer_t *t)
     if (s_timer) { lv_timer_delete(s_timer); s_timer = NULL; }
     s_drawing = false;
     lv_obj_set_style_opa(s_go_btn, LV_OPA_COVER, 0);
-
-    const kit_api_table_t *a = api();
-    if (a && a->audio) a->audio->sfx(KIT_SFX_REVEAL);   // duas notas subindo, no fim
 }
 
 void kit_quebragelo_draw(void)

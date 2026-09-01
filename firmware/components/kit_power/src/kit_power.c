@@ -1,6 +1,7 @@
 #include "kit_power.h"
 #include "esp_log.h"
 #include "esp_mac.h"
+#include "esp_pm.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <stdio.h>
@@ -72,6 +73,39 @@ static i2c_master_dev_handle_t get_or_add_i2c_device(uint8_t dev_addr)
 #define AXP2101_PKEY_POS_BIT        0x01
 
 static bool s_pwr_pressed = false;
+
+// Escalonamento de frequência / light sleep (esp_pm). Só faz efeito com
+// CONFIG_PM_ENABLE=y no sdkconfig; sem isso, esp_pm_configure() devolve
+// ESP_ERR_NOT_SUPPORTED e o sistema segue a 240 MHz fixo.
+#if CONFIG_PM_ENABLE
+#define KIT_PM_MAX_FREQ_MHZ  240
+#define KIT_PM_MIN_FREQ_MHZ  40
+static bool s_pm_ready       = false;
+static bool s_pm_light_sleep = false;   // estado atual aplicado
+#endif
+
+// (Re)aplica a política de energia. light_sleep só é ligado quando a tela está
+// em repouso E o aparelho não está no USB — assim o console/Web Installer
+// (que só funciona plugado) nunca é interrompido por uma dormida.
+static void kit_power_apply_pm(bool want_light_sleep)
+{
+#if CONFIG_PM_ENABLE
+    if (!s_pm_ready || want_light_sleep == s_pm_light_sleep) return;
+    esp_pm_config_t cfg = {
+        .max_freq_mhz = KIT_PM_MAX_FREQ_MHZ,
+        .min_freq_mhz = KIT_PM_MIN_FREQ_MHZ,
+        .light_sleep_enable = want_light_sleep,
+    };
+    if (esp_pm_configure(&cfg) == ESP_OK) {
+        s_pm_light_sleep = want_light_sleep;
+        ESP_LOGI(TAG, "Energia: DFS %d–%d MHz, light sleep %s",
+                 KIT_PM_MIN_FREQ_MHZ, KIT_PM_MAX_FREQ_MHZ,
+                 want_light_sleep ? "ON" : "off");
+    }
+#else
+    (void)want_light_sleep;
+#endif
+}
 
 esp_err_t kit_i2c_write_reg(uint8_t dev_addr, uint8_t reg, uint8_t val)
 {
@@ -190,6 +224,34 @@ kit_err_t kit_power_init(void)
                       AXP2101_PKEY_NEG_BIT | AXP2101_PKEY_POS_BIT);
 
     ESP_LOGI(TAG, "Device Identity: %s", s_device_id);
+
+    // Política de energia base: escalonamento de frequência (240↔40 MHz)
+    // sempre ligado; light sleep fica desligado até a tela entrar em repouso.
+#if CONFIG_PM_ENABLE
+    esp_pm_config_t pm_cfg = {
+        .max_freq_mhz = KIT_PM_MAX_FREQ_MHZ,
+        .min_freq_mhz = KIT_PM_MIN_FREQ_MHZ,
+        .light_sleep_enable = false,
+    };
+    esp_err_t pm_err = esp_pm_configure(&pm_cfg);
+    if (pm_err == ESP_OK) {
+        s_pm_ready = true;
+        ESP_LOGI(TAG, "Gerenciamento de energia ativo (DFS %d–%d MHz)",
+                 KIT_PM_MIN_FREQ_MHZ, KIT_PM_MAX_FREQ_MHZ);
+    } else {
+        ESP_LOGW(TAG, "esp_pm_configure falhou: %s", esp_err_to_name(pm_err));
+    }
+#else
+    ESP_LOGI(TAG, "CONFIG_PM_ENABLE desligado — CPU fixa em 240 MHz");
+#endif
+
+    return KIT_OK;
+}
+
+kit_err_t kit_power_set_screen_sleeping(bool sleeping)
+{
+    // Só dorme de verdade (light sleep) no repouso e fora do USB.
+    kit_power_apply_pm(sleeping && !kit_power_is_usb_connected());
     return KIT_OK;
 }
 
@@ -240,6 +302,17 @@ bool kit_power_is_charging(void)
     uint8_t status = 0;
     if (kit_i2c_read_reg(AXP2101_I2C_ADDR, AXP2101_REG_PMU_STATUS2, &status) == ESP_OK) {
         return (status & 0x20) != 0; // Bit de status de carregamento ativo
+    }
+    return false;
+}
+
+bool kit_power_is_usb_connected(void)
+{
+    // AXP2101 STATUS1 (0x00), bit 5 = VBUS presente. Diferente de "carregando":
+    // com a bateria cheia o USB continua plugado mas o carregador para.
+    uint8_t status = 0;
+    if (kit_i2c_read_reg(AXP2101_I2C_ADDR, AXP2101_REG_PMU_STATUS1, &status) == ESP_OK) {
+        return (status & 0x20) != 0;
     }
     return false;
 }

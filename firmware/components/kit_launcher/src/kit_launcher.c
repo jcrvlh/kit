@@ -6,9 +6,13 @@
 #include "kit_config.h"
 #include "kit_fonts.h"
 #include "kit_theme.h"
+#include "kit_storage.h"
+#include "kit_usb_msc.h"
 #include "esp_log.h"
 #include "lvgl.h"
 #include <stdio.h>
+#include <stdint.h>
+#include <string.h>
 
 // Launcher do KIT — linguagem "Brutalist Bauhaus" (ver docs/design/design-language.md).
 // Telas: splash "INICIANDO", Home (sem tools), Ajustes, Brilho, Sobre, e um
@@ -34,6 +38,10 @@ static lv_obj_t *s_volume_screen = NULL;
 static lv_obj_t *s_sleep_screen = NULL;
 static lv_obj_t *s_poweroff_screen = NULL;
 static lv_obj_t *s_about_screen = NULL;
+static lv_obj_t *s_storage_screen = NULL;       // Ajustes > Armazenamento
+static lv_obj_t *s_sd_format_screen = NULL;     // confirmação de formatar o cartão
+static lv_obj_t *s_usbmsc_screen = NULL;        // Ajustes > Modo pen drive (USB MSC)
+static lv_obj_t *s_onboarding_screen = NULL;   // introdução do primeiro boot (repetível)
 static lv_obj_t *s_home_deck = NULL;       // lv_tileview horizontal — slideshow de Tools
 static lv_obj_t *s_home_dots_box = NULL;   // fileira de pontos de página (rodapé da Home)
 static lv_obj_t *s_feedback_screen = NULL;
@@ -49,58 +57,117 @@ static lv_obj_t *s_toast = NULL;
 
 static bool s_was_charging = false;
 
-// Grade de Tools da Home. Cada Tool só entra aqui quando já está implementada
-// (o campo `available` cobre o caso de uma Tool em desenvolvimento, que aparece
-// esmaecida e responde com "EM BREVE"). As demais Tools da Fase 2 entram nesta
-// lista à medida que forem feitas.
+// Grade de Tools da Home. Cada Tool built-in só entra aqui quando já está
+// implementada (o campo `available` cobre o caso de uma Tool em
+// desenvolvimento, que aparece esmaecida e responde com "EM BREVE"). Tools
+// externas (cartão microSD, Marco 2) entram em runtime — ver build_home_tools().
 typedef enum {
     TOOL_ICON_DICE, TOOL_ICON_SPIN, TOOL_ICON_COIN, TOOL_ICON_TRIANGLE,
     TOOL_ICON_BINGO, TOOL_ICON_ORDER, TOOL_ICON_TIMER, TOOL_ICON_FIRST,
-    TOOL_ICON_TEAMS, TOOL_ICON_ASK
+    TOOL_ICON_TEAMS, TOOL_ICON_ASK, TOOL_ICON_EXTERNAL
 } tool_icon_t;
 
 typedef struct {
-    const char *id;
-    const char *label;
+    char        id[40];
+    char        label[32];   // >= sizeof(kit_tool_entry_t.name), evita truncar
     uint32_t    color;
     tool_icon_t icon;
     bool        available;
+    bool        is_game;     // true = mini-jogo; false = ferramenta ("tool")
 } home_tool_t;
 
-static const home_tool_t HOME_TOOLS[] = {
-    { "com.kit.dice",    "Dados",   KIT_COLOR_RED,    TOOL_ICON_DICE, true },
-    { "com.kit.bottle",  "Garrafa", KIT_COLOR_BLUE,   TOOL_ICON_SPIN, true },
-    { "com.kit.coin",    "Moeda",   KIT_COLOR_YELLOW, TOOL_ICON_COIN, true },
-    { "com.kit.timer",   "Timer",   KIT_COLOR_GREEN,  TOOL_ICON_TIMER, true },
-    { "com.kit.primeiro","Primeiro",KIT_COLOR_YELLOW, TOOL_ICON_FIRST, true },
-    { "com.kit.times",   "Times",   KIT_COLOR_BLUE,   TOOL_ICON_TEAMS, true },
-    { "com.kit.bingo",   "Bingo",   KIT_COLOR_GREEN,  TOOL_ICON_BINGO, true },
-    { "com.kit.quebragelo", "Quebra-Gelo", KIT_COLOR_RED, TOOL_ICON_ASK, true },
+static const home_tool_t HOME_TOOLS_BUILTIN[] = {
+    { "com.kit.dice",    "Dados",   KIT_COLOR_RED,    TOOL_ICON_DICE, true, false },
+    { "com.kit.bottle",  "Garrafa", KIT_COLOR_BLUE,   TOOL_ICON_SPIN, true, false },
+    { "com.kit.coin",    "Moeda",   KIT_COLOR_YELLOW, TOOL_ICON_COIN, true, false },
+    { "com.kit.timer",   "Timer",   KIT_COLOR_GREEN,  TOOL_ICON_TIMER, true, false },
+    { "com.kit.primeiro","Primeiro",KIT_COLOR_YELLOW, TOOL_ICON_FIRST, true, false },
+    { "com.kit.times",   "Times",   KIT_COLOR_BLUE,   TOOL_ICON_TEAMS, true, false },
+    { "com.kit.bingo",   "Bingo",   KIT_COLOR_GREEN,  TOOL_ICON_BINGO, true, true },
+    { "com.kit.quebragelo", "Quebra-Gelo", KIT_COLOR_RED, TOOL_ICON_ASK, true, false },
 };
-#define HOME_TOOLS_N ((int)(sizeof(HOME_TOOLS) / sizeof(HOME_TOOLS[0])))
+#define HOME_TOOLS_BUILTIN_N ((int)(sizeof(HOME_TOOLS_BUILTIN) / sizeof(HOME_TOOLS_BUILTIN[0])))
+
+// Grade efetiva da Home: built-ins + o catálogo dinâmico do cartão SD
+// (kit_tool_manager_get_count/get_entry), montada uma vez em build_home_tools().
+#define KIT_HOME_TOOLS_MAX (HOME_TOOLS_BUILTIN_N + 16)
+static home_tool_t s_home_tools[KIT_HOME_TOOLS_MAX];
+static int         s_home_tools_n = 0;
 
 // -- Slideshow da Home ----------------------------------------------------
 // A Home é um lv_tileview horizontal: os HOME_MRU_SLOTS primeiros slides são as
 // Tools usadas mais recentemente (a mais recente primeiro) e o último slide é
 // "VER TODOS" — a grade completa. A ordem de recência é persistida em NVS
-// (kit_config, chaves "home_mru0".."home_mru2", valor = índice em HOME_TOOLS + 1).
+// (kit_config, chaves "home_mru0".."home_mru2", valor = índice em s_home_tools + 1).
 #define HOME_MRU_SLOTS 3
 #define HOME_STATUS_H  72
 #define HOME_DOTS_H    40
 #define HOME_DECK_H    (KIT_DISPLAY_HEIGHT - HOME_STATUS_H - HOME_DOTS_H)
 
-static int      s_mru[HOME_TOOLS_N];                 // índices em HOME_TOOLS, recente primeiro
+static int      s_mru[KIT_HOME_TOOLS_MAX];           // índices em s_home_tools, recente primeiro
 static int      s_mru_n = 0;
 static lv_obj_t *s_home_tiles[HOME_MRU_SLOTS + 1];
 static lv_obj_t *s_home_dots[HOME_MRU_SLOTS + 1];
 static int      s_home_slides = 0;
 static bool     s_home_deck_dirty = false;           // pediu rebuild ao voltar pra Home
 
+// Nome do ícone no manifest ("home_icon") -> glifo geométrico da Home. Uma Tool
+// do cartão pode reusar um dos desenhos das Tools oficiais; sem isso (ou nome
+// desconhecido) cai no cartão genérico.
+static tool_icon_t icon_from_name(const char *name)
+{
+    if (!name || !name[0]) return TOOL_ICON_EXTERNAL;
+    static const struct { const char *n; tool_icon_t i; } kMap[] = {
+        { "dice", TOOL_ICON_DICE },     { "spin", TOOL_ICON_SPIN },
+        { "coin", TOOL_ICON_COIN },     { "triangle", TOOL_ICON_TRIANGLE },
+        { "bingo", TOOL_ICON_BINGO },   { "order", TOOL_ICON_ORDER },
+        { "timer", TOOL_ICON_TIMER },   { "first", TOOL_ICON_FIRST },
+        { "teams", TOOL_ICON_TEAMS },   { "ask", TOOL_ICON_ASK },
+        { "card", TOOL_ICON_EXTERNAL },
+    };
+    for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); i++)
+        if (strcmp(name, kMap[i].n) == 0) return kMap[i].i;
+    return TOOL_ICON_EXTERNAL;
+}
+
+// Monta a grade efetiva da Home: as Tools built-in (compiladas no firmware)
+// seguidas do catálogo dinâmico que o Tool Manager varreu em /sdcard/tools.
+// A Tool do cartão pode declarar `accent` (cor do card) e `home_icon` no
+// manifest; sem isso, gira pela paleta e usa o ícone genérico de cartão.
+static void build_home_tools(void)
+{
+    s_home_tools_n = 0;
+    for (int i = 0; i < HOME_TOOLS_BUILTIN_N && s_home_tools_n < KIT_HOME_TOOLS_MAX; i++) {
+        s_home_tools[s_home_tools_n++] = HOME_TOOLS_BUILTIN[i];
+    }
+
+    static const uint32_t kExtPalette[] = {
+        KIT_COLOR_RED, KIT_COLOR_BLUE, KIT_COLOR_YELLOW, KIT_COLOR_GREEN,
+    };
+    uint32_t ext_n = kit_tool_manager_get_count();
+    for (uint32_t i = 0; i < ext_n && s_home_tools_n < KIT_HOME_TOOLS_MAX; i++) {
+        kit_tool_entry_t e;
+        if (kit_tool_manager_get_entry(i, &e) != KIT_OK) continue;
+
+        home_tool_t *t = &s_home_tools[s_home_tools_n++];
+        snprintf(t->id, sizeof(t->id), "%s", e.id);
+        snprintf(t->label, sizeof(t->label), "%s", e.name);
+        t->color     = e.accent ? e.accent
+                     : kExtPalette[i % (sizeof(kExtPalette) / sizeof(kExtPalette[0]))];
+        t->icon      = icon_from_name(e.icon);
+        t->available = true;
+        t->is_game   = e.is_game;
+    }
+
+    ESP_LOGI(TAG, "Home: %d Tool(s) built-in + %d do cartão SD.",
+             HOME_TOOLS_BUILTIN_N, s_home_tools_n - HOME_TOOLS_BUILTIN_N);
+}
+
 // Reconstrói a lista de recência a partir do NVS; Tools sem histórico entram no
-// fim, na ordem de declaração de HOME_TOOLS.
+// fim, na ordem de s_home_tools.
 static void home_mru_load(void)
 {
-    bool seen[HOME_TOOLS_N] = { 0 };
+    bool seen[KIT_HOME_TOOLS_MAX] = { 0 };
     s_mru_n = 0;
     for (int slot = 0; slot < HOME_MRU_SLOTS; slot++) {
         char key[16];
@@ -108,12 +175,12 @@ static void home_mru_load(void)
         uint8_t v = 0;
         kit_config_get_u8(key, &v, 0);
         int idx = (int)v - 1;
-        if (idx >= 0 && idx < HOME_TOOLS_N && !seen[idx]) {
+        if (idx >= 0 && idx < s_home_tools_n && !seen[idx]) {
             seen[idx] = true;
             s_mru[s_mru_n++] = idx;
         }
     }
-    for (int i = 0; i < HOME_TOOLS_N; i++)
+    for (int i = 0; i < s_home_tools_n; i++)
         if (!seen[i]) s_mru[s_mru_n++] = i;
 }
 
@@ -151,6 +218,18 @@ static void open_sleep_cb(lv_event_t *e);
 static void open_poweroff_cb(lv_event_t *e);
 static void open_about_cb(lv_event_t *e);
 static void close_about_cb(lv_event_t *e);
+static void open_storage_cb(lv_event_t *e);
+static void close_storage_cb(lv_event_t *e);
+static void sd_scan_cb(lv_event_t *e);
+static void open_sd_format_cb(lv_event_t *e);
+static void close_sd_format_cb(lv_event_t *e);
+static void do_sd_format_cb(lv_event_t *e);
+static void open_usbmsc_cb(lv_event_t *e);
+static void close_usbmsc_cb(lv_event_t *e);
+static void usbmsc_activate_cb(lv_event_t *e);
+static void usbmsc_exit_cb(lv_event_t *e);
+static void usbmsc_do_exit_cb(lv_event_t *e);
+static void usbmsc_confirm_back_cb(lv_event_t *e);
 static void brightness_slider_cb(lv_event_t *e);
 static void brightness_released_cb(lv_event_t *e);
 static void volume_slider_cb(lv_event_t *e);
@@ -158,6 +237,9 @@ static void volume_released_cb(lv_event_t *e);
 static void sound_toggle_cb(lv_event_t *e);
 static void run_test_tool_cb(lv_event_t *e);
 static void home_tile_cb(lv_event_t *e);
+static void onboarding_show(int step);
+static void onboarding_start_if_needed(void);
+static void repeat_onboarding_cb(lv_event_t *e);
 
 // ---------------------------------------------------------------------------
 // Blocos reutilizáveis
@@ -452,6 +534,7 @@ static void splash_done_cb(lv_timer_t *t)
         s_splash_screen = NULL;
     }
     lv_timer_delete(t);
+    onboarding_start_if_needed();   // primeiro boot: entra a introdução
 }
 
 static void build_splash(void)
@@ -593,12 +676,22 @@ static void make_tool_icon(lv_obj_t *badge, tool_icon_t kind, uint32_t color)
         lv_obj_align(icon_shape(ic, 3, 3, color, 2, 0), LV_ALIGN_TOP_MID,  6, 6);
         break;
     }
+    case TOOL_ICON_EXTERNAL: {
+        // cartão (Tool vinda do microSD): moldura com 3 pinos — sem glifo
+        // dedicado por Tool ainda (o manifest não traz ícone próprio).
+        lv_obj_t *card = icon_shape(ic, 20, 20, color, 4, 3);
+        lv_obj_center(card);
+        lv_obj_align(icon_shape(ic, 3, 8, color, 1, 0), LV_ALIGN_CENTER, -5, 0);
+        lv_obj_align(icon_shape(ic, 3, 8, color, 1, 0), LV_ALIGN_CENTER,  0, 0);
+        lv_obj_align(icon_shape(ic, 3, 8, color, 1, 0), LV_ALIGN_CENTER,  5, 0);
+        break;
+    }
     }
 }
 
 static void make_tool_tile(lv_obj_t *grid, int index)
 {
-    const home_tool_t *tool = &HOME_TOOLS[index];
+    const home_tool_t *tool = &s_home_tools[index];
     bool on = tool->color == KIT_COLOR_YELLOW;
     uint32_t ink = on ? KIT_COLOR_ON_YELLOW : KIT_COLOR_ON_COLOR;
 
@@ -678,7 +771,7 @@ static void make_settings_tile(lv_obj_t *grid)
 //    a posição no slideshow (marca-d'água "01".."04"). --
 static void make_tool_slide(lv_obj_t *tile, int index, int slot)
 {
-    const home_tool_t *tool = &HOME_TOOLS[index];
+    const home_tool_t *tool = &s_home_tools[index];
     bool on = tool->color == KIT_COLOR_YELLOW;
     uint32_t ink = on ? KIT_COLOR_ON_YELLOW : KIT_COLOR_ON_COLOR;
 
@@ -722,10 +815,20 @@ static void make_tool_slide(lv_obj_t *tile, int index, int slot)
     lv_obj_align(hint, LV_ALIGN_BOTTOM_LEFT, 0, 0);
 }
 
-// -- Último slide: "VER TODOS" — a grade completa, rola na vertical. --
+// Cabeçalho de seção dentro da grade (ocupa a linha inteira do flex-wrap).
+static void make_grid_header(lv_obj_t *grid, const char *txt, bool first)
+{
+    lv_obj_t *h = add_label(grid, txt, KIT_COLOR_TEXT_MUTED, &kit_mono_16, 3);
+    lv_obj_set_width(h, lv_pct(100));
+    lv_obj_set_style_pad_top(h, first ? 0 : 10, 0);
+    lv_obj_set_style_pad_bottom(h, 2, 0);
+}
+
+// -- Último slide: "VER TODOS" — a grade completa, rola na vertical.
+//    Ferramentas em cima, mini-jogos embaixo (separação visual). --
 static void make_all_slide(lv_obj_t *tile)
 {
-    lv_obj_t *hdr = add_label(tile, "TODAS AS TOOLS", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 3);
+    lv_obj_t *hdr = add_label(tile, "TUDO", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 3);
     lv_obj_align(hdr, LV_ALIGN_TOP_LEFT, KIT_PAD, 4);
 
     lv_obj_t *grid = lv_obj_create(tile);
@@ -745,7 +848,23 @@ static void make_all_slide(lv_obj_t *tile)
     lv_obj_set_scroll_dir(grid, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_AUTO);
 
-    for (int i = 0; i < HOME_TOOLS_N; i++) make_tool_tile(grid, i);
+    int n_games = 0;
+    for (int i = 0; i < s_home_tools_n; i++)
+        if (s_home_tools[i].is_game) n_games++;
+
+    // Ferramentas em cima, mini-jogos no meio, sistema (Ajustes) embaixo —
+    // cada bloco com seu cabeçalho de seção.
+    make_grid_header(grid, "FERRAMENTAS", true);
+    for (int i = 0; i < s_home_tools_n; i++)
+        if (!s_home_tools[i].is_game) make_tool_tile(grid, i);
+
+    if (n_games > 0) {
+        make_grid_header(grid, "MINI-JOGOS", false);
+        for (int i = 0; i < s_home_tools_n; i++)
+            if (s_home_tools[i].is_game) make_tool_tile(grid, i);
+    }
+
+    make_grid_header(grid, "SISTEMA", false);
     make_settings_tile(grid);
 }
 
@@ -827,8 +946,183 @@ static void build_home(lv_obj_t *s)
 
     make_battery(s);
 
+    build_home_tools();   // built-ins + catálogo do cartão SD (kit_tool_manager)
     home_mru_load();
     home_build_deck();
+}
+
+// Recallback do Tool Manager: o catálogo do cartão mudou (formatou, montou um
+// cartão novo, recarregou). Refaz a grade e o slideshow da Home na hora — sem
+// reboot. Roda sempre na task LVGL (disparado por um toque nos Ajustes).
+static void launcher_catalog_changed(void)
+{
+    ESP_LOGI(TAG, "Cat\xC3\xA1logo de Tools mudou — refazendo a Home.");
+    build_home_tools();
+    home_mru_load();
+    home_clear_deck();
+    home_build_deck();
+    s_home_deck_dirty = false;
+}
+
+// ---------------------------------------------------------------------------
+// Introdução (onboarding)
+// ---------------------------------------------------------------------------
+// Quatro telas no primeiro boot: o KIT se apresenta, diz pra que serve, mostra
+// o que tem dentro e devolve o usuário na Home. A flag "onboarded" (NVS) marca
+// que já rodou; os Ajustes têm um botão pra repetir.
+
+#define ONB_STEPS 4
+
+static int s_onb_step = 0;
+
+static void onboarding_next_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);   // toque leve pra avançar
+    onboarding_show(s_onb_step + 1);
+}
+
+static void onboarding_finish_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_ONBOARD_DONE);   // fanfarra feliz de boas-vindas
+    kit_config_set_u8("onboarded", 1);
+    if (s_onboarding_screen) { lv_obj_delete(s_onboarding_screen); s_onboarding_screen = NULL; }
+    kit_launcher_go_home();
+}
+
+// Frase grande, branca e centralizada. Archivo Bold é a única fonte proporcional
+// do sistema — o "grande e negrito" possível sem quebrar a regra de que as
+// fontes display são só números. `font` escolhe o tamanho (kit_sans_28 na tela
+// de abertura, kit_sans_22 nas mais longas).
+static lv_obj_t *onb_sentence(lv_obj_t *parent, const char *txt, const lv_font_t *font)
+{
+    lv_obj_t *l = add_label(parent, txt, KIT_COLOR_TEXT, font, 0);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(l, KIT_CONTENT);
+    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
+    return l;
+}
+
+// Fileira dos selos das Tools (tela 3), na cor de cada uma.
+static void onb_tool_reel(lv_obj_t *parent)
+{
+    lv_obj_t *reel = lv_obj_create(parent);
+    lv_obj_remove_style_all(reel);
+    lv_obj_set_size(reel, KIT_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(reel, LV_FLEX_FLOW_ROW_WRAP);
+    lv_obj_set_flex_align(reel, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(reel, 10, 0);
+    lv_obj_set_style_pad_column(reel, 10, 0);
+    lv_obj_clear_flag(reel, LV_OBJ_FLAG_SCROLLABLE);
+
+    // Sempre as Tools built-in — a introdução roda no primeiro boot, antes de
+    // qualquer varredura de cartão fazer sentido para o usuário.
+    for (int i = 0; i < HOME_TOOLS_BUILTIN_N; i++) {
+        lv_obj_t *badge = lv_obj_create(reel);
+        lv_obj_set_size(badge, 46, 46);
+        lv_obj_set_style_bg_color(badge, lv_color_hex(KIT_COLOR_SURFACE_ALT), 0);
+        lv_obj_set_style_border_width(badge, 0, 0);
+        lv_obj_set_style_radius(badge, 14, 0);
+        lv_obj_set_style_pad_all(badge, 0, 0);
+        lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
+        make_tool_icon(badge, HOME_TOOLS_BUILTIN[i].icon, HOME_TOOLS_BUILTIN[i].color);
+    }
+}
+
+static void onboarding_show(int step)
+{
+    if (step < 0) step = 0;
+    if (step >= ONB_STEPS) { onboarding_finish_cb(NULL); return; }
+
+    if (s_onboarding_screen) { lv_obj_delete(s_onboarding_screen); s_onboarding_screen = NULL; }
+    s_onb_step = step;
+    s_onboarding_screen = make_overlay(KIT_COLOR_BG);
+
+    lv_obj_t *col = make_group(s_onboarding_screen, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(col, 18, 0);
+    lv_obj_set_width(col, KIT_CONTENT);
+    lv_obj_align(col, LV_ALIGN_CENTER, 0, -28);
+
+    const char *btn_txt = "CONTINUAR";
+    bool finish = false;
+
+    switch (step) {
+    case 0:
+        kit_audio_sfx_impl(KIT_SFX_WELCOME);   // aceno de boas-vindas, só aqui
+        make_logo_trio(col);
+        add_label(col, "OL\xC3\x81, EU SOU O", KIT_COLOR_TEXT_MUTED, &kit_mono_20, 3);
+        add_label(col, "KIT", KIT_COLOR_TEXT, &kit_display_72, 0);
+        btn_txt = "COME\xC3\x87""AR";
+        break;
+    case 1:
+        onb_sentence(col, "Sou um kit de ferramentas para a sua game night.", &kit_sans_28);
+        btn_txt = "VEM VER";
+        break;
+    case 2:
+        onb_sentence(col, "Aqui tem dados, garrafa, moeda, timer, quebra-gelo e muito mais.", &kit_sans_22);
+        onb_tool_reel(col);
+        btn_txt = "CONTINUAR";
+        break;
+    case 3: {
+        lv_obj_t *badge = lv_obj_create(col);
+        lv_obj_set_size(badge, 96, 96);
+        lv_obj_set_style_bg_color(badge, lv_color_hex(KIT_COLOR_SURFACE_ALT), 0);
+        lv_obj_set_style_border_width(badge, 0, 0);
+        lv_obj_set_style_radius(badge, 28, 0);
+        lv_obj_set_style_pad_all(badge, 0, 0);
+        lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_t *chk = add_label(badge, KIT_ICON_CHECK, KIT_COLOR_GREEN, &kit_display_44, 0);
+        lv_obj_center(chk);
+        add_label(col, "PRONTO", KIT_COLOR_TEXT, &kit_mono_26, 3);
+        onb_sentence(col, "Boa game night! O KIT foi feito com carinho para pessoas como voc\xC3\xAA.", &kit_sans_22);
+        btn_txt = "COME\xC3\x87""AR";
+        finish = true;
+        break;
+    }
+    }
+
+    lv_obj_t *btn = make_button(s_onboarding_screen, btn_txt,
+                                finish ? onboarding_finish_cb : onboarding_next_cb, true);
+    lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -20);
+    if (finish) {
+        lv_obj_set_style_bg_color(btn, lv_color_hex(KIT_COLOR_GREEN), 0);
+        lv_obj_set_style_text_color(lv_obj_get_child(btn, 0), lv_color_hex(KIT_COLOR_ON_COLOR), 0);
+    }
+}
+
+static void onboarding_start_if_needed(void)
+{
+    uint8_t done = 0;
+    kit_config_get_u8("onboarded", &done, 0);
+    if (!done) onboarding_show(0);
+}
+
+static void onboarding_replay_shutdown_cb(lv_timer_t *t)
+{
+    lv_timer_delete(t);
+    kit_power_shutdown();   // AXP2101 soft power-off; a introdução volta no próximo boot
+}
+
+// "Repetir introdução": limpa a flag e desliga o aparelho. Quem religa cai
+// direto na introdução, como se fosse o primeiro boot.
+static void repeat_onboarding_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    kit_config_set_u8("onboarded", 0);
+    if (s_settings_screen) {
+        lv_obj_delete(s_settings_screen);
+        s_settings_screen = NULL;
+        s_sound_val_lbl = NULL;
+    }
+
+    lv_obj_t *bye = make_overlay(KIT_COLOR_BG);
+    lv_obj_t *l = add_label(bye, "AT\xC3\x89 J\xC3\x81", KIT_COLOR_TEXT_MUTED, &kit_mono_26, 4);
+    lv_obj_center(l);
+
+    lv_timer_t *t = lv_timer_create(onboarding_replay_shutdown_cb, 900, NULL);
+    lv_timer_set_repeat_count(t, 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -879,7 +1173,7 @@ static void sound_toggle_cb(lv_event_t *e)
 static void open_settings_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(1200, 40);
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
     if (s_settings_screen) return;
 
     s_settings_screen = make_overlay(KIT_COLOR_BG);
@@ -892,13 +1186,16 @@ static void open_settings_cb(lv_event_t *e)
     make_row(body, NULL, 0, "Desligar sozinho", false, open_poweroff_cb,   NULL);
     make_sound_row(body);
     make_row(body, NULL, 0, "Testes",           false, run_test_tool_cb,   NULL);
+    make_row(body, NULL, 0, "Repetir introdu\xC3\xA7\xC3\xA3o", false, repeat_onboarding_cb, NULL);
+    make_row(body, NULL, 0, "Armazenamento",    false, open_storage_cb,    NULL);
+    make_row(body, NULL, 0, "Modo pen drive",   false, open_usbmsc_cb,     NULL);
     make_row(body, NULL, 0, "Sobre o KIT",      false, open_about_cb,      NULL);
 }
 
 static void close_settings_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(800, 30);
+    kit_audio_sfx_impl(KIT_SFX_BACK);
     if (s_settings_screen) {
         lv_obj_delete(s_settings_screen);
         s_settings_screen = NULL;
@@ -913,7 +1210,7 @@ static void close_settings_cb(lv_event_t *e)
 static void open_brightness_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(1200, 40);
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
     if (s_brightness_screen) return;
 
     s_brightness_screen = make_overlay(KIT_COLOR_BG);
@@ -972,7 +1269,7 @@ static void open_brightness_cb(lv_event_t *e)
 static void close_brightness_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(800, 30);
+    kit_audio_sfx_impl(KIT_SFX_BACK);
     if (s_brightness_screen) {
         lv_obj_delete(s_brightness_screen);
         s_brightness_screen = NULL;
@@ -1006,7 +1303,7 @@ static void brightness_released_cb(lv_event_t *e)
 static void open_volume_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(1200, 40);
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
     if (s_volume_screen) return;
 
     s_volume_screen = make_overlay(KIT_COLOR_BG);
@@ -1058,7 +1355,7 @@ static void open_volume_cb(lv_event_t *e)
 static void close_volume_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(800, 30);
+    kit_audio_sfx_impl(KIT_SFX_BACK);
     if (s_volume_screen) {
         lv_obj_delete(s_volume_screen);
         s_volume_screen = NULL;
@@ -1117,14 +1414,14 @@ static const timeout_opt_t POWEROFF_OPTS[] = {
 static void close_sleep_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(800, 30);
+    kit_audio_sfx_impl(KIT_SFX_BACK);
     if (s_sleep_screen) { lv_obj_delete(s_sleep_screen); s_sleep_screen = NULL; }
 }
 
 static void close_poweroff_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(800, 30);
+    kit_audio_sfx_impl(KIT_SFX_BACK);
     if (s_poweroff_screen) { lv_obj_delete(s_poweroff_screen); s_poweroff_screen = NULL; }
 }
 
@@ -1133,7 +1430,7 @@ static void sleep_pick_cb(lv_event_t *e)
     int i = (int)(intptr_t)lv_event_get_user_data(e);
     if (i < 0 || i >= SLEEP_OPTS_N) return;
     kit_config_set_screen_sleep_s(SLEEP_OPTS[i].seconds);
-    kit_audio_beep_impl(1200, 40);
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
     close_sleep_cb(NULL);
 }
 
@@ -1142,7 +1439,7 @@ static void poweroff_pick_cb(lv_event_t *e)
     int i = (int)(intptr_t)lv_event_get_user_data(e);
     if (i < 0 || i >= POWEROFF_OPTS_N) return;
     kit_config_set_auto_poweroff_s(POWEROFF_OPTS[i].seconds);
-    kit_audio_beep_impl(1200, 40);
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
     close_poweroff_cb(NULL);
 }
 
@@ -1168,7 +1465,7 @@ static void build_timeout_list(lv_obj_t *screen, const char *hint,
 static void open_sleep_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(1200, 40);
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
     if (s_sleep_screen) return;
     s_sleep_screen = make_overlay(KIT_COLOR_BG);
     make_titlebar(s_sleep_screen, "REPOUSO", close_sleep_cb);
@@ -1181,7 +1478,7 @@ static void open_sleep_cb(lv_event_t *e)
 static void open_poweroff_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(1200, 40);
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
     if (s_poweroff_screen) return;
     s_poweroff_screen = make_overlay(KIT_COLOR_BG);
     make_titlebar(s_poweroff_screen, "DESLIGAR", close_poweroff_cb);
@@ -1198,7 +1495,7 @@ static void open_poweroff_cb(lv_event_t *e)
 static void open_about_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(1200, 40);
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
     if (s_about_screen) return;
 
     s_about_screen = make_overlay(KIT_COLOR_BG);
@@ -1229,11 +1526,344 @@ static void open_about_cb(lv_event_t *e)
 static void close_about_cb(lv_event_t *e)
 {
     (void)e;
-    kit_audio_beep_impl(800, 30);
+    kit_audio_sfx_impl(KIT_SFX_BACK);
     if (s_about_screen) {
         lv_obj_delete(s_about_screen);
         s_about_screen = NULL;
     }
+}
+
+// ---------------------------------------------------------------------------
+// Armazenamento (Ajustes > Armazenamento)
+// ---------------------------------------------------------------------------
+
+static void fmt_size(char *buf, size_t n, uint64_t bytes)
+{
+    double mb = (double)bytes / (1024.0 * 1024.0);
+    if (mb >= 1000.0) snprintf(buf, n, "%.1f GB", mb / 1024.0);
+    else              snprintf(buf, n, "%.0f MB", mb);
+}
+
+static void storage_spec(lv_obj_t *body, const char *key, uint64_t total, uint64_t freeb)
+{
+    char t[16], f[16], v[48];
+    fmt_size(t, sizeof(t), total);
+    fmt_size(f, sizeof(f), freeb);
+    snprintf(v, sizeof(v), "%s livre de %s", f, t);
+    make_spec(body, key, v);
+}
+
+static void build_storage_body(void)
+{
+    uint64_t sd_total = 0, sd_free = 0;
+    bool sd = kit_storage_sd_is_mounted() &&
+              kit_storage_sd_info(&sd_total, &sd_free) == KIT_OK;
+
+    // Cartão montado: duas pílulas empilhadas (recarregar + formatar).
+    lv_obj_t *body = make_scroll_body(s_storage_screen,
+                                      sd ? (2 * KIT_BTN_H + 40) : (KIT_BTN_H + 28));
+
+    uint32_t lfs_total = 0, lfs_free = 0;
+    if (kit_storage_get_info(&lfs_total, &lfs_free) == KIT_OK)
+        storage_spec(body, "INTERNO", lfs_total, lfs_free);
+    else
+        make_spec(body, "INTERNO", "indispon\xC3\xADvel");
+
+    if (sd) {
+        storage_spec(body, "CART\xC3\x83O SD", sd_total, sd_free);
+        char tv[16];
+        snprintf(tv, sizeof(tv), "%lu", (unsigned long)kit_tool_manager_get_count());
+        make_spec(body, "TOOLS NO CART\xC3\x83O", tv);
+
+        lv_obj_t *rl = make_button(s_storage_screen, "RECARREGAR TOOLS", sd_scan_cb, false);
+        lv_obj_align(rl, LV_ALIGN_BOTTOM_MID, 0, -(14 + KIT_BTN_H + 12));
+
+        lv_obj_t *fmt = make_button(s_storage_screen, "FORMATAR CART\xC3\x83O", open_sd_format_cb, false);
+        lv_obj_set_style_border_color(fmt, lv_color_hex(KIT_COLOR_RED), 0);
+        lv_obj_align(fmt, LV_ALIGN_BOTTOM_MID, 0, -14);
+        lv_obj_t *lbl = lv_obj_get_child(fmt, 0);
+        if (lbl) lv_obj_set_style_text_color(lbl, lv_color_hex(KIT_COLOR_RED), 0);
+    } else {
+        make_spec(body, "CART\xC3\x83O SD", "n\xC3\xA3o encontrado");
+        // Cartão inserido depois do boot: monta agora e recarrega o catálogo,
+        // sem exigir reiniciar o KIT.
+        lv_obj_t *scan = make_button(s_storage_screen, "PROCURAR CART\xC3\x83O", sd_scan_cb, false);
+        lv_obj_align(scan, LV_ALIGN_BOTTOM_MID, 0, -14);
+    }
+}
+
+static void sd_scan_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    bool was_mounted = kit_storage_sd_is_mounted();
+    bool ok = (kit_storage_sd_mount() == KIT_OK);
+    if (ok) kit_tool_manager_reload_catalog();   // dispara launcher_catalog_changed
+    if (s_storage_screen) {
+        lv_obj_clean(s_storage_screen);
+        make_titlebar(s_storage_screen, "ARMAZENAMENTO", close_storage_cb);
+        build_storage_body();
+    }
+    show_toast(!ok ? "SEM CART\xC3\x83O"
+                   : was_mounted ? "TOOLS RECARREGADAS" : "CART\xC3\x83O MONTADO");
+}
+
+static void open_storage_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_storage_screen) return;
+    s_storage_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_storage_screen, "ARMAZENAMENTO", close_storage_cb);
+    build_storage_body();
+}
+
+static void close_storage_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_storage_screen) { lv_obj_delete(s_storage_screen); s_storage_screen = NULL; }
+}
+
+// -- Confirmação de formatar o cartão --------------------------------------
+
+static void open_sd_format_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_sd_format_screen) return;
+    s_sd_format_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_sd_format_screen, "FORMATAR", close_sd_format_cb);
+
+    lv_obj_t *body = make_scroll_body(s_sd_format_screen, 2 * KIT_BTN_H + 40);
+    lv_obj_t *warn = add_label(body,
+        "Isso APAGA TUDO no cart\xC3\xA3o e recria a pasta tools/ do KIT. "
+        "N\xC3\xA3o d\xC3\xA1 pra desfazer.", KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(warn, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(warn, KIT_CONTENT);
+
+    lv_obj_t *ok = make_button(s_sd_format_screen, "FORMATAR AGORA", do_sd_format_cb, true);
+    lv_obj_set_style_bg_color(ok, lv_color_hex(KIT_COLOR_RED), 0);
+    lv_obj_t *okl = lv_obj_get_child(ok, 0);
+    if (okl) lv_obj_set_style_text_color(okl, lv_color_hex(KIT_COLOR_ON_COLOR), 0);
+    lv_obj_align(ok, LV_ALIGN_BOTTOM_MID, 0, -(14 + KIT_BTN_H + 12));
+
+    lv_obj_t *no = make_button(s_sd_format_screen, "CANCELAR", close_sd_format_cb, false);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_MID, 0, -14);
+}
+
+static void close_sd_format_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_sd_format_screen) { lv_obj_delete(s_sd_format_screen); s_sd_format_screen = NULL; }
+}
+
+static void do_sd_format_cb(lv_event_t *e)
+{
+    (void)e;
+
+    // "FORMATANDO..." precisa aparecer ANTES da chamada bloqueante — força o
+    // desenho imediato (a task LVGL fica presa durante o format).
+    lv_obj_t *busy = make_overlay(KIT_COLOR_BG);
+    lv_obj_t *msg = add_label(busy, "FORMATANDO O CART\xC3\x83O...", KIT_COLOR_TEXT, &kit_mono_20, 3);
+    lv_obj_center(msg);
+    lv_refr_now(NULL);
+
+    kit_err_t err = kit_storage_sd_format();
+    kit_tool_manager_reload_catalog();   // catálogo agora está vazio
+
+    lv_obj_delete(busy);
+    if (s_sd_format_screen) { lv_obj_delete(s_sd_format_screen); s_sd_format_screen = NULL; }
+
+    if (s_storage_screen) {   // recarrega com os números novos
+        lv_obj_clean(s_storage_screen);
+        make_titlebar(s_storage_screen, "ARMAZENAMENTO", close_storage_cb);
+        build_storage_body();
+    }
+
+    if (err == KIT_OK) {
+        kit_audio_sfx_impl(KIT_SFX_CONFIRM);
+        show_toast("CART\xC3\x83O PRONTO");
+    } else {
+        kit_audio_beep_impl(400, 60);
+        show_toast("FALHOU");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Modo pen drive (USB Mass Storage)  —  Ajustes > Modo pen drive
+// ---------------------------------------------------------------------------
+
+static lv_obj_t  *s_usbmsc_diag_lbl = NULL;
+static lv_timer_t *s_usbmsc_poll = NULL;
+
+static void usbmsc_poll_cb(lv_timer_t *t)
+{
+    (void)t;
+    if (!s_usbmsc_diag_lbl) return;
+    uint32_t mb = kit_usb_msc_card_mb();
+    bool usb = kit_usb_msc_usb_ready();
+    bool host = kit_usb_msc_host_connected();
+    char buf[96];
+    snprintf(buf, sizeof(buf), "CART\xC3\x83O %lu MB\nUSB %s\nPC %s",
+             (unsigned long)mb,
+             usb  ? "conectado" : "aguardando...",
+             host ? "leu o cart\xC3\xA3o" : "-");
+    lv_label_set_text(s_usbmsc_diag_lbl, buf);
+    lv_obj_set_style_text_color(s_usbmsc_diag_lbl,
+        lv_color_hex(usb ? KIT_COLOR_GREEN : KIT_COLOR_TEXT_MUTED), 0);
+}
+
+static void usbmsc_stop_poll(void)
+{
+    if (s_usbmsc_poll) { lv_timer_delete(s_usbmsc_poll); s_usbmsc_poll = NULL; }
+    s_usbmsc_diag_lbl = NULL;
+}
+
+// Tela "ativo": o cartão está no computador. A única saída é reiniciar.
+static void usbmsc_show_active(void)
+{
+    usbmsc_stop_poll();
+    lv_obj_clean(s_usbmsc_screen);
+
+    lv_obj_t *col = make_group(s_usbmsc_screen, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(col, 14, 0);
+    lv_obj_set_width(col, KIT_CONTENT);
+    lv_obj_align(col, LV_ALIGN_CENTER, 0, -30);
+
+    add_label(col, "MODO PEN DRIVE", KIT_COLOR_TEXT_MUTED, &kit_mono_20, 4);
+    add_label(col, "ATIVO", KIT_COLOR_GREEN, &kit_display_44, 0);
+
+    lv_obj_t *hint = add_label(col,
+        "Copie os arquivos .kit pelo computador.",
+        KIT_COLOR_TEXT_MUTED, &kit_sans_22, 0);
+    lv_label_set_long_mode(hint, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(hint, KIT_CONTENT);
+    lv_obj_set_style_text_align(hint, LV_TEXT_ALIGN_CENTER, 0);
+
+    lv_obj_t *warn = add_label(col,
+        "EJETE O CART\xC3\x83O NO COMPUTADOR ANTES DE SAIR",
+        KIT_COLOR_YELLOW, &kit_mono_16, 2);
+    lv_label_set_long_mode(warn, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(warn, KIT_CONTENT);
+    lv_obj_set_style_text_align(warn, LV_TEXT_ALIGN_CENTER, 0);
+
+    s_usbmsc_diag_lbl = add_label(col, "", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_obj_set_style_text_align(s_usbmsc_diag_lbl, LV_TEXT_ALIGN_CENTER, 0);
+    s_usbmsc_poll = lv_timer_create(usbmsc_poll_cb, 500, NULL);
+    usbmsc_poll_cb(NULL);
+
+    lv_obj_t *out = make_button(s_usbmsc_screen, "SAIR (REINICIA)", usbmsc_exit_cb, true);
+    lv_obj_set_style_bg_color(out, lv_color_hex(KIT_COLOR_RED), 0);
+    lv_obj_t *ol = lv_obj_get_child(out, 0);
+    if (ol) lv_obj_set_style_text_color(ol, lv_color_hex(KIT_COLOR_ON_COLOR), 0);
+    lv_obj_align(out, LV_ALIGN_BOTTOM_MID, 0, -14);
+}
+
+static void open_usbmsc_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_usbmsc_screen) return;
+    s_usbmsc_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_usbmsc_screen, "PEN DRIVE", close_usbmsc_cb);
+
+    if (kit_usb_msc_is_active()) { usbmsc_show_active(); return; }
+
+    lv_obj_t *body = make_scroll_body(s_usbmsc_screen, KIT_BTN_H + 28);
+    lv_obj_t *tx = add_label(body,
+        "Liga o cart\xC3\xA3o do KIT no computador como um pen drive, pra voc\xC3\xAA "
+        "copiar e organizar os arquivos .kit sem tirar o cart\xC3\xA3o.\n\n"
+        "Enquanto estiver ligado o KIT fica em espera e o cabo n\xC3\xA3o serve "
+        "de console. Ao terminar, ejete no computador e toque em SAIR \xE2\x80\x94 "
+        "o KIT reinicia e l\xC3\xAA as Tools novas.",
+        KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(tx, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(tx, KIT_CONTENT);
+
+    bool sd = kit_storage_sd_is_mounted();
+    lv_obj_t *btn = make_button(s_usbmsc_screen, sd ? "ATIVAR" : "SEM CART\xC3\x83O",
+                                usbmsc_activate_cb, true);
+    lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -14);
+    if (!sd) lv_obj_add_state(btn, LV_STATE_DISABLED);
+}
+
+static void close_usbmsc_cb(lv_event_t *e)
+{
+    (void)e;
+    // Com o modo ativo não há volta limpa — sair = reiniciar.
+    if (kit_usb_msc_is_active()) { usbmsc_exit_cb(NULL); return; }
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_usbmsc_screen) { lv_obj_delete(s_usbmsc_screen); s_usbmsc_screen = NULL; }
+}
+
+static void usbmsc_activate_cb(lv_event_t *e)
+{
+    (void)e;
+    if (!kit_storage_sd_is_mounted()) { show_toast("SEM CART\xC3\x83O"); return; }
+
+    lv_obj_t *busy = make_overlay(KIT_COLOR_BG);
+    lv_obj_t *m = add_label(busy, "ATIVANDO...", KIT_COLOR_TEXT, &kit_mono_20, 3);
+    lv_obj_center(m);
+    lv_refr_now(NULL);
+
+    kit_err_t err = kit_usb_msc_enter();
+    lv_obj_delete(busy);
+
+    if (err != KIT_OK) {
+        kit_audio_beep_impl(400, 60);
+        show_toast("N\xC3\x83O ATIVOU");
+        return;
+    }
+    kit_audio_sfx_impl(KIT_SFX_CONFIRM);
+    if (s_usbmsc_screen) usbmsc_show_active();
+}
+
+static void usbmsc_confirm_back_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_usbmsc_screen) usbmsc_show_active();
+}
+
+static void usbmsc_do_exit_cb(lv_event_t *e)
+{
+    (void)e;
+    lv_obj_t *busy = make_overlay(KIT_COLOR_BG);
+    lv_obj_t *m = add_label(busy, "REINICIANDO...", KIT_COLOR_TEXT, &kit_mono_20, 3);
+    lv_obj_center(m);
+    lv_refr_now(NULL);
+    kit_usb_msc_exit_reboot();   // não retorna
+}
+
+// SAIR não reinicia direto: pergunta se o cartão já foi ejetado no computador
+// (sair com o disco ainda montado pode corromper os arquivos .kit).
+static void usbmsc_exit_cb(lv_event_t *e)
+{
+    (void)e;
+    if (!s_usbmsc_screen) { usbmsc_do_exit_cb(NULL); return; }
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    usbmsc_stop_poll();
+    lv_obj_clean(s_usbmsc_screen);
+    make_titlebar(s_usbmsc_screen, "PEN DRIVE", usbmsc_confirm_back_cb);
+
+    lv_obj_t *body = make_scroll_body(s_usbmsc_screen, 2 * KIT_BTN_H + 40);
+    lv_obj_t *q = add_label(body,
+        "J\xC3\xA1 ejetou o cart\xC3\xA3o no computador?\n\n"
+        "Sair com o disco ainda montado pode corromper os arquivos.",
+        KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(q, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(q, KIT_CONTENT);
+
+    lv_obj_t *ok = make_button(s_usbmsc_screen, "J\xC3\x81 EJETEI \xE2\x80\x94 SAIR", usbmsc_do_exit_cb, true);
+    lv_obj_set_style_bg_color(ok, lv_color_hex(KIT_COLOR_RED), 0);
+    lv_obj_t *okl = lv_obj_get_child(ok, 0);
+    if (okl) lv_obj_set_style_text_color(okl, lv_color_hex(KIT_COLOR_ON_COLOR), 0);
+    lv_obj_align(ok, LV_ALIGN_BOTTOM_MID, 0, -(14 + KIT_BTN_H + 12));
+
+    lv_obj_t *no = make_button(s_usbmsc_screen, "AINDA N\xC3\x83O", usbmsc_confirm_back_cb, false);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_MID, 0, -14);
 }
 
 // ---------------------------------------------------------------------------
@@ -1243,8 +1873,8 @@ static void close_about_cb(lv_event_t *e)
 static void home_tile_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i < 0 || i >= HOME_TOOLS_N) return;
-    const home_tool_t *tool = &HOME_TOOLS[i];
+    if (i < 0 || i >= s_home_tools_n) return;
+    const home_tool_t *tool = &s_home_tools[i];
 
     if (!tool->available) {
         kit_audio_beep_impl(500, 30);
@@ -1252,11 +1882,14 @@ static void home_tile_cb(lv_event_t *e)
         return;
     }
 
-    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    kit_audio_sfx_impl(KIT_SFX_TOOL_OPEN);
     ESP_LOGI(TAG, "Abrindo Tool '%s'...", tool->id);
     if (s_toast) { lv_obj_delete(s_toast); s_toast = NULL; }
     home_mru_touch(i);   // sobe pro topo da recência (deck reconstrói ao voltar)
-    kit_tool_manager_start(tool->id);
+    if (kit_tool_manager_start(tool->id) != KIT_OK) {
+        kit_audio_beep_impl(400, 60);
+        show_toast("NAO ABRIU");
+    }
 }
 
 static void run_test_tool_cb(lv_event_t *e)
@@ -1277,8 +1910,15 @@ static void run_test_tool_cb(lv_event_t *e)
 
 void kit_launcher_go_home(void)
 {
+    // Modo pen drive ativo: o cartão está no PC e o USB não é console —
+    // a única saída coerente é reiniciar.
+    if (kit_usb_msc_is_active()) { kit_usb_msc_exit_reboot(); return; }
+
     if (s_feedback_screen)   { lv_obj_delete(s_feedback_screen);   s_feedback_screen = NULL; }
+    if (s_usbmsc_screen)     { lv_obj_delete(s_usbmsc_screen);     s_usbmsc_screen = NULL; }
     if (s_about_screen)      { lv_obj_delete(s_about_screen);      s_about_screen = NULL; }
+    if (s_sd_format_screen)  { lv_obj_delete(s_sd_format_screen);  s_sd_format_screen = NULL; }
+    if (s_storage_screen)    { lv_obj_delete(s_storage_screen);    s_storage_screen = NULL; }
     if (s_sleep_screen)      { lv_obj_delete(s_sleep_screen);      s_sleep_screen = NULL; }
     if (s_poweroff_screen)   { lv_obj_delete(s_poweroff_screen);   s_poweroff_screen = NULL; }
     if (s_brightness_screen) { lv_obj_delete(s_brightness_screen); s_brightness_screen = NULL;
@@ -1287,6 +1927,8 @@ void kit_launcher_go_home(void)
                                s_volume_val_lbl = NULL; }
     if (s_settings_screen)   { lv_obj_delete(s_settings_screen);   s_settings_screen = NULL;
                                s_sound_val_lbl = NULL; }
+    if (s_onboarding_screen) { lv_obj_delete(s_onboarding_screen); s_onboarding_screen = NULL;
+                               kit_config_set_u8("onboarded", 1); }  // saiu pelo BOTÃO físico: não repete no próximo boot
     if (s_splash_screen)     { lv_obj_delete(s_splash_screen);     s_splash_screen = NULL; }
     if (s_toast)             { lv_obj_delete(s_toast);             s_toast = NULL; }
 
@@ -1328,6 +1970,7 @@ kit_err_t kit_launcher_init(void)
     lv_obj_clear_flag(s_launcher_screen, LV_OBJ_FLAG_SCROLLABLE);
 
     build_home(s_launcher_screen);
+    kit_tool_manager_set_catalog_changed_cb(launcher_catalog_changed);
     update_battery();
     build_splash();
 

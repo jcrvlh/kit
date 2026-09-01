@@ -18,6 +18,40 @@ CONFIG_SPIRAM_MEMTEST=y
 CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
 CONFIG_SPIRAM_RODATA=y
 
+# Cartão microSD (FAT) — nomes de arquivo longos e acentuados para os pacotes
+# .kit e assets. LFN na heap (usa PSRAM) para não estourar a stack.
+CONFIG_FATFS_LFN_HEAP=y
+CONFIG_FATFS_MAX_LFN=255
+CONFIG_FATFS_API_ENCODING_UTF_8=y
+
+# ELF Loader — carregamento dinâmico de Tools (.so) a partir do cartão microSD.
+# O objeto compartilhado é ligado contra a tabela de símbolos do KIT
+# (kit_tool_loader). Base do dlopen() = /sdcard.
+#
+# LOAD_PSRAM fica DESLIGADO: no elf_loader 1.3.3 o caminho de shared object
+# (esp_elf_load_segment) não faz o remap DROM->IROM do S3, então código em
+# PSRAM cai em InstructionFetchError. A Tool é relocada na RAM interna (IRAM),
+# executável nos dois barramentos. Tools pequenas (Marco 1); rever quando
+# precisarem de mais que ~100 KB.
+CONFIG_ELF_LOADER=y
+CONFIG_ELF_LOADER_LOAD_PSRAM=n
+CONFIG_ELF_DYNAMIC_LOAD_SHARED_OBJECT=y
+CONFIG_ELF_FILE_SYSTEM_BASE_PATH="/sdcard"
+
+# --- USB: "Modo pen drive" (Mass Storage) ---------------------------------
+# O TinyUSB só é instalado quando o usuário entra em Ajustes > Modo pen drive
+# (kit_usb_msc). No uso normal a porta USB segue como USB-Serial/JTAG
+# (console + Web Installer) — o ESP32-S3 tem um PHY USB só, compartilhado.
+# Ao sair do modo, o KIT reinicia para devolver o barramento ao console.
+CONFIG_TINYUSB_MSC_ENABLED=y
+CONFIG_TINYUSB_MSC_BUFSIZE=8192
+
+# MALLOC_CAP_EXEC só existe fora da DIRAM comum quando o memory protection
+# (PMP W^X) da IDF está ligado — nesse caso não sobra heap executável e o
+# esp_elf_malloc(exec=true) do loader falha com ENOMEM. Desligado, a DIRAM
+# principal (232 KB) vira executável e a Tool aloca dali sem remap nenhum.
+# CONFIG_ESP_SYSTEM_MEMPROT_FEATURE is not set
+
 # Custom Partition Table
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
@@ -30,6 +64,16 @@ CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+
+# Gerenciamento de energia — "meia-hibernação" com a tela em repouso.
+# DFS (240<->40 MHz) fica sempre ativo; o light sleep automático é ligado em
+# runtime só quando a tela apaga E não há USB (ver kit_power_set_screen_sleeping).
+CONFIG_PM_ENABLE=y
+CONFIG_FREERTOS_USE_TICKLESS_IDLE=y
+CONFIG_FREERTOS_IDLE_TIME_BEFORE_SLEEP=3
+CONFIG_PM_SLP_IRAM_OPT=y
+CONFIG_PM_RTOS_IDLE_OPT=y
+CONFIG_PM_POWER_DOWN_CPU_IN_LIGHT_SLEEP=y
 
 # Native USB Serial / JTAG Console
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

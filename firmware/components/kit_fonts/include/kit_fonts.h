@@ -16,6 +16,7 @@ extern "C" {
  *   kit_mono_20  Space Mono Bold   — rótulos de botão, legendas em caixa alta
  *   kit_mono_16  Space Mono Regular— tabela de especificações, MIN/MAX
  *   kit_sans_22  Archivo Bold      — rótulos de linha de lista (caixa normal)
+ *   kit_sans_28  Archivo Bold      — frases da Introdução (onboarding)
  *   kit_display_44 Archivo Black   — wordmark "KIT", número grande do brilho
  *   kit_display_72 Archivo Black   — só " - 0-9 A-Z Ã Ç Õ": rótulo do resultado
  *                                    da Decisor Tool (CARA/COROA/SIM/NÃO/custom)
@@ -26,6 +27,7 @@ extern const lv_font_t kit_mono_16;
 extern const lv_font_t kit_mono_20;
 extern const lv_font_t kit_mono_26;
 extern const lv_font_t kit_sans_22;
+extern const lv_font_t kit_sans_28;
 extern const lv_font_t kit_display_44;
 extern const lv_font_t kit_display_72;
 extern const lv_font_t kit_display_120;

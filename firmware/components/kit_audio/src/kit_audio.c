@@ -14,12 +14,26 @@
 static const char *TAG = "KIT_AUDIO";
 static uint8_t s_volume = 80;
 
+// Repouso: com a tela apagada o Runtime chama kit_audio_suspend(true) e nenhum
+// efeito novo é enfileirado. O que já estava na fila (ex.: o "cadeado" ao
+// apagar) toca até o fim; depois a audio_task fecha o codec/PA sozinha por
+// ociosidade (AUDIO_IDLE_MS), zerando a corrente de repouso do amplificador.
+static volatile bool s_suspended = false;
+
 static i2s_chan_handle_t s_tx_handle = NULL;
 static esp_codec_dev_handle_t s_speaker = NULL;
+
+// O codec/PA fica fechado quando não há som: aberto, o amplificador do ES8311
+// segura o PA_EN e injeta um chiado contínuo no alto-falante (e gasta a
+// corrente de repouso do PA de 5 V). audio_task abre sob demanda e fecha de
+// novo depois de AUDIO_IDLE_MS parado. Só a audio_task mexe nesse estado.
+static bool s_codec_open = false;
+static esp_codec_dev_sample_info_t s_fs;
 
 #define AUDIO_SAMPLE_RATE   16000
 #define AUDIO_FRAME_COUNT   256
 #define AUDIO_TWO_PI        6.28318530717958647692f
+#define AUDIO_IDLE_MS       3000
 
 // O som roda numa task própria: escrever no I2S é síncrono (bloqueia até o
 // codec drenar o buffer) e, chamado direto do callback do LVGL, travava a task
@@ -159,21 +173,113 @@ static void render_sfx(kit_sfx_t sfx)
         break;
 
     case KIT_SFX_REVEAL:
-        // Duas notas subindo, macio.
-        render_tone(880,  70,  8500.0f);
-        render_tone(1320, 120, 9500.0f);
+        // Duas notas subindo (G5 -> C6), bem macias e baixas — é só um
+        // "pronto", não uma fanfarra. Amplitude ~metade do resto.
+        render_tone(784,  60,  4200.0f);   // G5
+        render_silence(16);
+        render_tone(1047, 110, 4600.0f);   // C6
         break;
 
     case KIT_SFX_BINGO_BALL: {
-        // Sutil de propósito: é clicado muitas vezes seguidas, então em vez do
-        // chocalho estridente são só 5 estalinhos baixos e curtos (bolinhas
-        // remexendo) e uma nota macia e grave saindo — nada de brilho agudo.
-        for (int i = 0; i < 5; i++) {
-            render_tone((uint16_t)(900 + rnd(500)), 9, 2600.0f);
-            render_silence((uint16_t)(14 + rnd(16)));
+        // Sutil de propósito: é clicado muitas vezes seguidas. A animação de
+        // sorteio dura ~600 ms (10 trocas de número a 60 ms), então acompanha
+        // no mesmo compasso: um estalinho baixo e grave por troca, e no fim
+        // uma notinha macia pra "assentar" — nada de brilho agudo nem volume.
+        for (int i = 0; i < 9; i++) {
+            render_tone((uint16_t)(760 + rnd(360)), 8, 2400.0f);
+            render_silence(52);   // 8 + 52 ≈ 60 ms, no passo da animação
         }
-        render_tone(784, 55, 4200.0f);   // ...e a bolinha saindo (G5, suave)
-        render_tone(659, 70, 3200.0f);   // pequena queda (E5) pra "assentar"
+        render_tone(784, 44, 3800.0f);   // ...e a bolinha saindo (G5, suave)
+        render_tone(659, 44, 3000.0f);   // pequena queda (E5) pra "assentar"
+        break;
+    }
+
+    case KIT_SFX_TOOL_OPEN: {
+        // "Entrando num mundo novo": escalinha pentatônica de Dó subindo,
+        // leve e rápida, terminando numa notinha brilhante que fica no ar.
+        // Pentatônica = sempre alegre, sem nota torta. Toca toda vez que
+        // uma Tool abre, então é leve de propósito.
+        static const uint16_t run[] = { 523, 587, 659, 784, 880 };
+        for (int i = 0; i < 5; i++) {
+            render_tone(run[i], 40, 4200.0f + i * 320.0f);
+            render_silence(12);
+        }
+        render_tone(1047, 200, 5400.0f);  // C6 — chega no oitavado, redondo
+        break;
+    }
+
+    case KIT_SFX_WELCOME:
+        // "Oi": arpejo de Lá maior subindo, baixo e arejado — a introdução
+        // começa com um aceno, não com um anúncio.
+        render_tone(659,  90, 4800.0f);   // E5
+        render_silence(34);
+        render_tone(880,  90, 5200.0f);   // A5
+        render_silence(34);
+        render_tone(1109, 120, 5600.0f);  // C#6
+        render_silence(24);
+        render_tone(1319, 150, 4600.0f);  // E6 — resolução macia, mais baixa
+        break;
+
+    case KIT_SFX_ONBOARD_DONE:
+        // "Bem-vindo!": tríade de Dó subindo até o oitavado e um floreio
+        // brilhante no fim. Mais cheia e feliz que o CONFIRM — fecha a
+        // introdução em festa.
+        render_tone(523,  95, 9000.0f);   // C5
+        render_silence(22);
+        render_tone(659,  95, 9500.0f);   // E5
+        render_silence(22);
+        render_tone(784,  95, 10000.0f);  // G5
+        render_silence(22);
+        render_tone(1047, 170, 11000.0f); // C6 — chegada
+        render_silence(40);
+        render_tone(1319, 70,  9000.0f);  // E6
+        render_tone(1047, 70,  8500.0f);  // C6
+        render_tone(1568, 200, 11000.0f); // G6 — final alto e alegre
+        break;
+
+    case KIT_SFX_TIMER_TICK:
+        // Contagem regressiva dos últimos 5 s: um tique único, seco e baixo —
+        // só um lembrete de que o tempo está acabando, sem assustar. O toque
+        // do fim (TIMER_DONE) é que é o alarme.
+        render_tone(1900, 7,  4200.0f);
+        render_tone(1400, 9,  3000.0f);
+        break;
+
+    case KIT_SFX_LOCK:
+        // Cadeado fechando: dois estalinhos secos e agudos (a lingueta entrando)
+        // e um trinco grave e curto no fim — "trancou". Baixo de propósito, é só
+        // um aviso de que a tela apagou.
+        render_tone(2100, 9,  3200.0f);
+        render_silence(8);
+        render_tone(1500, 11, 3600.0f);
+        render_silence(6);
+        render_tone(430,  70, 7000.0f);   // trinco grave — fechado
+        break;
+
+    case KIT_SFX_UNLOCK:
+        // Cadeado abrindo: o trinco grave solta e a lingueta sai em dois
+        // estalinhos subindo — o oposto do LOCK, dá sensação de "liberou".
+        render_tone(430,  45, 6000.0f);   // o trinco cede
+        render_silence(10);
+        render_tone(1500, 11, 3600.0f);
+        render_silence(6);
+        render_tone(2100, 12, 3400.0f);   // lingueta fora — aberto
+        break;
+
+    case KIT_SFX_BOTTLE_SPIN: {
+        // Catraca da Garrafa: um "toc" seco por entalhe, o intervalo abrindo em
+        // ease-out conforme o giro perde força (~2 s). Frequência média (o
+        // falantinho não reproduz grave) e amplitude ~2/3 da cheia — audível,
+        // mas com folga pra não estourar no volume máximo. Fecha com uma nota
+        // um pouco mais grave e longa: "assentou".
+        uint16_t gap = 14;
+        for (int i = 0; i < 20; i++) {
+            render_tone((uint16_t)(1050 + rnd(260)), 8, 8000.0f);  // "toc" seco
+            render_silence(gap);
+            uint32_t next = (uint32_t)gap + 3u + (uint32_t)i;
+            gap = next > 140 ? 140 : (uint16_t)next;
+        }
+        render_tone(760, 80, 9000.0f);   // parou
         break;
     }
 
@@ -182,22 +288,48 @@ static void render_sfx(kit_sfx_t sfx)
     }
 }
 
+// Liga o codec/PA (abre o dispositivo e reaplica o volume salvo). Só chamada
+// pela audio_task. Um "toc" baixo pode acontecer aqui quando o PA sobe.
+static void audio_codec_wake(void)
+{
+    if (s_codec_open || !s_speaker) return;
+    int oret = esp_codec_dev_open(s_speaker, &s_fs);
+    if (oret != ESP_CODEC_DEV_OK) {
+        ESP_LOGW(TAG, "audio_codec_wake: open falhou (código %d)", oret);
+        return;
+    }
+    esp_codec_dev_set_out_vol(s_speaker, s_volume);
+    s_codec_open = true;
+}
+
+// Desliga o codec/PA depois de um tempo parado: derruba o PA_EN, o que
+// elimina o chiado e a corrente de repouso do amplificador.
+static void audio_codec_sleep(void)
+{
+    if (!s_codec_open || !s_speaker) return;
+    esp_codec_dev_close(s_speaker);
+    s_codec_open = false;
+}
+
 static void audio_task(void *arg)
 {
     (void)arg;
     kit_beep_req_t req;
     while (1) {
-        if (xQueueReceive(s_beep_queue, &req, portMAX_DELAY) == pdTRUE) {
-            if (req.sfx < 0) {
-                // Bipes muito curtos (<= 14 ms) são "ticks" de textura — saem
-                // mais baixos pra não estourar quando disparados em rajada
-                // (catraca da Garrafa, animação de sorteio).
-                float amp = (req.duration_ms <= 14) ? AUDIO_AMP_FULL * 0.34f
-                                                    : AUDIO_AMP_FULL;
-                render_tone(req.freq_hz, req.duration_ms, amp);
-            } else {
-                render_sfx((kit_sfx_t)req.sfx);
-            }
+        if (xQueueReceive(s_beep_queue, &req, pdMS_TO_TICKS(AUDIO_IDLE_MS)) != pdTRUE) {
+            audio_codec_sleep();   // ocioso: desliga o PA
+            continue;
+        }
+        audio_codec_wake();
+        if (req.sfx < 0) {
+            // Bipes muito curtos (<= 14 ms) são "ticks" de textura — saem
+            // mais baixos pra não estourar quando disparados em rajada
+            // (catraca da Garrafa, animação de sorteio).
+            float amp = (req.duration_ms <= 14) ? AUDIO_AMP_FULL * 0.34f
+                                                : AUDIO_AMP_FULL;
+            render_tone(req.freq_hz, req.duration_ms, amp);
+        } else {
+            render_sfx((kit_sfx_t)req.sfx);
         }
     }
 }
@@ -308,23 +440,29 @@ kit_err_t kit_audio_init(void)
         return KIT_FAIL;
     }
 
-    esp_codec_dev_sample_info_t fs = {
+    s_fs = (esp_codec_dev_sample_info_t){
         .bits_per_sample = 16,
         .channel = 1,
         .channel_mask = 0,
         .sample_rate = AUDIO_SAMPLE_RATE,
         .mclk_multiple = 256,
     };
-    int oret = esp_codec_dev_open(s_speaker, &fs);
+    s_volume = kit_config_get_volume();   // volume salvo (kit_config_init roda antes)
+
+    // Abre uma vez para validar o pipeline, aplica o volume e fecha de novo:
+    // o codec nasce ocioso (PA_EN baixo, sem chiado). audio_task religa no
+    // primeiro som e desliga sozinho depois de AUDIO_IDLE_MS parado.
+    int oret = esp_codec_dev_open(s_speaker, &s_fs);
     if (oret != ESP_CODEC_DEV_OK) {
         ESP_LOGE(TAG, "Falha ao abrir dispositivo de reprodução (código %d)", oret);
         return KIT_FAIL;
     }
-    s_volume = kit_config_get_volume();   // volume salvo (kit_config_init roda antes)
     int vret = esp_codec_dev_set_out_vol(s_speaker, s_volume);
     if (vret != ESP_CODEC_DEV_OK) {
         ESP_LOGW(TAG, "esp_codec_dev_set_out_vol retornou %d", vret);
     }
+    esp_codec_dev_close(s_speaker);
+    s_codec_open = false;
 
     // Task + fila do bipe assíncrono.
     s_beep_queue = xQueueCreate(6, sizeof(kit_beep_req_t));
@@ -338,13 +476,20 @@ kit_err_t kit_audio_init(void)
     return KIT_OK;
 }
 
+void kit_audio_suspend(bool suspend)
+{
+    if (suspend == s_suspended) return;
+    s_suspended = suspend;
+    ESP_LOGI(TAG, "Áudio %s", suspend ? "suspenso (repouso)" : "reativado");
+}
+
 kit_err_t kit_audio_beep_impl(uint16_t freq_hz, uint16_t duration_ms)
 {
     if (!s_speaker || !s_beep_queue) {
         ESP_LOGW(TAG, "Áudio não inicializado, ignorando bipe.");
         return KIT_FAIL;
     }
-    if (!kit_config_get_sound_enabled()) return KIT_OK;
+    if (s_suspended || !kit_config_get_sound_enabled()) return KIT_OK;
 
     kit_beep_req_t req = { .sfx = -1, .freq_hz = freq_hz, .duration_ms = duration_ms };
     // Não espera: se a fila estiver cheia (bipes muito seguidos), descarta.
@@ -357,7 +502,7 @@ kit_err_t kit_audio_beep_impl(uint16_t freq_hz, uint16_t duration_ms)
 kit_err_t kit_audio_sfx_impl(kit_sfx_t sfx)
 {
     if (!s_speaker || !s_beep_queue) return KIT_FAIL;
-    if (!kit_config_get_sound_enabled()) return KIT_OK;
+    if (s_suspended || !kit_config_get_sound_enabled()) return KIT_OK;
 
     kit_beep_req_t req = { .sfx = (int16_t)sfx, .freq_hz = 0, .duration_ms = 0 };
     if (xQueueSend(s_beep_queue, &req, 0) != pdTRUE) {
@@ -396,7 +541,8 @@ kit_err_t kit_audio_set_volume_impl(uint8_t percentage)
     if (percentage == s_volume) return KIT_OK;
     s_volume = percentage;
     ESP_LOGD(TAG, "Volume do áudio ajustado para %d%%", percentage);
-    if (s_speaker) {
+    // Se o codec estiver dormindo, o novo volume é aplicado no próximo wake.
+    if (s_speaker && s_codec_open) {
         esp_codec_dev_set_out_vol(s_speaker, s_volume);
     }
     return KIT_OK;

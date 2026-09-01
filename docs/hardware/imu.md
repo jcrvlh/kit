@@ -33,3 +33,8 @@ Especificação do sensor inercial integrado ao KIT.
 | `CTRL3` (0x04) | `0x00` | giroscópio desligado |
 | `CTRL7` (0x08) | `0x01` | habilita só o acelerômetro |
 | `AX_L` (0x35) | — | início dos 6 bytes de aceleração (X/Y/Z, int16 LE) |
+
+> **Repouso:** com a tela apagada o Runtime chama `kit_imu_set_enabled(false)`,
+> que grava `CTRL7 = 0x00` e para o acelerômetro. Ao acordar, `CTRL7` volta a
+> `0x01` e o sensor retoma na configuração já gravada em `CTRL2`. Ver
+> `docs/hardware/power.md`.

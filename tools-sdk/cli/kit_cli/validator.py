@@ -21,6 +21,16 @@ VALID_PERMISSIONS = {
 
 ID_REGEX = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)+$")
 SEMVER_REGEX = re.compile(r"^\d+\.\d+\.\d+$")
+ACCENT_REGEX = re.compile(r"^#?[0-9a-fA-F]{6}$")
+
+# Ícones geométricos que o Launcher sabe desenhar para o card da Home.
+VALID_HOME_ICONS = {
+    "card", "dice", "spin", "coin", "triangle",
+    "bingo", "order", "timer", "first", "teams", "ask",
+}
+
+# Tipo da Tool na listagem da Home: ferramenta ou mini-jogo.
+VALID_KINDS = {"tool", "game"}
 
 # Tamanho máximo de um pacote .kit (7 MB — tamanho da partição tools)
 MAX_PACKAGE_BYTES = 7 * 1024 * 1024
@@ -81,6 +91,22 @@ def validate_manifest_dict(data: dict) -> Tuple[bool, List[str]]:
     if "api_level" in data:
         if not isinstance(data["api_level"], int) or data["api_level"] < 1:
             errors.append("O campo 'api_level' deve ser um número inteiro maior ou igual a 1.")
+
+    # Campos opcionais de aparência na Home
+    if "kind" in data and data["kind"] not in VALID_KINDS:
+        errors.append(
+            f"'kind' inválido: '{data['kind']}'. Válidos: {sorted(VALID_KINDS)}"
+        )
+
+    if "accent" in data and not (
+        isinstance(data["accent"], str) and ACCENT_REGEX.match(data["accent"])
+    ):
+        errors.append("O campo 'accent' deve ser uma cor hex '#RRGGBB'.")
+
+    if "home_icon" in data and data["home_icon"] not in VALID_HOME_ICONS:
+        errors.append(
+            f"'home_icon' inválido: '{data['home_icon']}'. Válidos: {sorted(VALID_HOME_ICONS)}"
+        )
 
     # Validação de semver para min_runtime e max_runtime
     for field in ("min_runtime", "max_runtime"):

@@ -353,6 +353,12 @@ static void count_tick_cb(lv_timer_t *t)
             trigger_finish();
             return;
         }
+        // Últimos 5 s: um tique curtíssimo por segundo pra sinalizar que
+        // está acabando. O alarme (TIMER_DONE) toca só no zero.
+        if (s_cur_secs <= 5) {
+            const kit_api_table_t *at = api();
+            if (at && at->audio) at->audio->sfx(KIT_SFX_TIMER_TICK);
+        }
     }
     sync_clock();
 }

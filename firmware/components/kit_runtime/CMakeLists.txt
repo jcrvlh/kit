@@ -10,8 +10,9 @@ idf_component_register(
         kit_display
         kit_input 
         kit_storage 
-        kit_tool_manager 
-        kit_launcher 
+        kit_tool_manager
+        kit_tool_loader
+        kit_launcher
         kit_random
         kit_power
         kit_imu

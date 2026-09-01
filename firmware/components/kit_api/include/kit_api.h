@@ -109,6 +109,13 @@ typedef enum {
     KIT_SFX_TIMER_DONE,    // alarme do fim do timer
     KIT_SFX_REVEAL,        // sorteio revelado (Primeiro, Quebra-gelo)
     KIT_SFX_BINGO_BALL,    // bolinha do bingo saindo (curto e discreto, clicado em série)
+    KIT_SFX_TOOL_OPEN,     // abrir uma Tool — escalinha pentatônica feliz subindo
+    KIT_SFX_WELCOME,       // Introdução: abertura curta, sutil e alegre (só no onboarding)
+    KIT_SFX_ONBOARD_DONE,  // Introdução: fanfarra feliz de boas-vindas ao concluir
+    KIT_SFX_TIMER_TICK,    // contagem regressiva: tique curtíssimo nos últimos 5 s
+    KIT_SFX_LOCK,          // tela apagada: cadeado fechando (estalo + trinco grave)
+    KIT_SFX_UNLOCK,        // tela ligada: cadeado abrindo (trinco solta + estalo subindo)
+    KIT_SFX_BOTTLE_SPIN,   // Garrafa: catraca de madeira desacelerando (~2,2 s) e um "assentou"
 } kit_sfx_t;
 
 typedef struct {

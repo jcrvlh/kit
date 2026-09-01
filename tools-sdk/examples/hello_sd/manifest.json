@@ -1,0 +1,23 @@
+{
+  "manifest_version": 1,
+  "id": "com.kit.hello",
+  "name": "Olá SD",
+  "version": "1.0.0",
+  "version_code": 1,
+  "min_runtime": "0.1.0",
+  "max_runtime": "1.0.0",
+  "author": "KIT Core Team",
+  "description": "Prova do Marco 1: Tool carregada como .so do cartão microSD.",
+  "icon": "icon.bin",
+  "accent": "#4C6EF5",
+  "home_icon": "card",
+  "entry_point": "tool.so",
+  "arch": "xtensa-esp32s3",
+  "permissions": [
+    "display",
+    "audio"
+  ],
+  "api_level": 1,
+  "assets": [],
+  "checksum": "sha256:cebf4f666d912066258c8f9ea793abf725c7e13c655cf3e4bd84c6b6984e48fe"
+}

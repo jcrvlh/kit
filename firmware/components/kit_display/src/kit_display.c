@@ -57,6 +57,22 @@ static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_
     return false;
 }
 
+// O CO5300 exige que a janela de endereçamento (CASET/RASET) comece em pixel
+// par e termine em ímpar — ou seja, x e largura pares. Se o LVGL manda uma área
+// com x1 ímpar (ou largura ímpar), o painel embaralha o fluxo QSPI e o conteúdo
+// sai "rasgado"/cortado na diagonal. Como o LVGL invalida a caixa exata de cada
+// label, isso aparecia quando um texto mudava de largura: o "%d%%" do brilho e
+// do volume ao passar de 99% para 100%, o contador "PESSOA N" do Times, etc.
+// Aqui esticamos a área invalidada para fora até coordenadas pares/ímpares.
+static void lvgl_round_area_cb(lv_event_t *e)
+{
+    lv_area_t *area = lv_event_get_invalidated_area(e);
+    area->x1 &= ~1;
+    area->y1 &= ~1;
+    area->x2 |= 1;
+    area->y2 |= 1;
+}
+
 static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
 {
     if (s_panel_handle) {
@@ -110,6 +126,7 @@ kit_err_t kit_display_init(void)
 
     lv_display_set_buffers(s_disp, s_buf1, s_buf2, BUFFER_SIZE, LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(s_disp, lvgl_flush_cb);
+    lv_display_add_event_cb(s_disp, lvgl_round_area_cb, LV_EVENT_INVALIDATE_AREA, NULL);
 
     // 5. Configuração do Painel IO do CO5300 via QSPI
     esp_lcd_panel_io_spi_config_t io_config = CO5300_PANEL_IO_QSPI_CONFIG(

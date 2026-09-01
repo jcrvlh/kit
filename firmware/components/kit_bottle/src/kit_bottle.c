@@ -223,20 +223,10 @@ static void arrow_draw_cb(lv_event_t *e)
 
 static void spin_tick_cb(lv_timer_t *t);
 
-// "Tick" da catraca conforme a seta primária gira. O giro desacelera, então os
-// ticks espaçam sozinhos — roleta sincronizada com a animação. Entalhe largo +
-// no mínimo 2 ticks de animação entre sons pra não virar um zumbido estourado.
-#define B_SND_NOTCH     5400
-#define B_SND_MIN_GAP   2
-static int32_t s_snd_accum = 0;
-static int     s_snd_gap   = 0;
-
 static void do_spin(void)
 {
     if (s_spinning || !s_arrow) return;
     s_spinning = true;
-    s_snd_accum = 0;
-    s_snd_gap   = 0;
 
     for (int i = 0; i < s_count; i++) {
         s_omega[i] = B_OMEGA_MIN + rnd_range(0, B_OMEGA_SPAN);
@@ -246,6 +236,13 @@ static void do_spin(void)
     lv_obj_add_flag(s_hint_lbl, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_style_opa(s_go_btn, LV_OPA_60, 0);   // "ocupado"
     if (s_tv) lv_tileview_set_tile_by_index(s_tv, 1, 0, LV_ANIM_OFF);
+
+    // Catraca desacelerando + "assentou": um SFX só, de amplitude baixa, casado
+    // com a duração típica do giro (~2 s). Renderizado na task de áudio, então
+    // não segura a animação; e por ser SFX (não bipes em rajada) não estoura no
+    // volume máximo.
+    const kit_api_table_t *a = api();
+    if (a && a->audio) a->audio->sfx(KIT_SFX_BOTTLE_SPIN);
 
     s_timer = lv_timer_create(spin_tick_cb, B_TICK_MS, NULL);
 }
@@ -262,18 +259,6 @@ static void spin_tick_cb(lv_timer_t *t)
         any = true;
     }
 
-    // catraca: acumula o giro da seta 0 e solta um tick a cada entalhe
-    if (any) {
-        s_snd_accum += s_omega[0];
-        s_snd_gap++;
-        if (s_snd_accum >= B_SND_NOTCH && s_snd_gap >= B_SND_MIN_GAP) {
-            s_snd_accum %= B_SND_NOTCH;
-            s_snd_gap = 0;
-            const kit_api_table_t *a = api();
-            if (a && a->audio) a->audio->beep(1750, 12);   // "toc" seco e baixo
-        }
-    }
-
     lv_obj_invalidate(s_arrow);
     if (any) return;
 
@@ -282,9 +267,6 @@ static void spin_tick_cb(lv_timer_t *t)
     s_spinning = false;
     lv_obj_set_style_opa(s_go_btn, LV_OPA_COVER, 0);
     lv_obj_clear_flag(s_hint_lbl, LV_OBJ_FLAG_HIDDEN);
-
-    const kit_api_table_t *a = api();
-    if (a && a->audio) a->audio->beep(1200, 30);   // um "toc" só, no fim
 }
 
 void kit_bottle_spin(void)

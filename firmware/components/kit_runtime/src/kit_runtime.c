@@ -16,6 +16,7 @@
 #include "kit_audio.h"
 #include "kit_imu.h"
 #include "kit_tool_manager.h"
+#include "kit_tool_loader.h"
 #include "kit_launcher.h"
 
 #include "kit_theme.h"
@@ -56,6 +57,16 @@ static void screen_set_on(bool on)
     // botão PWR ou por um toque deliberado na tela (ver poll_wake_touch), que é
     // consumido só para acordar — não chega à UI.
     kit_input_set_enabled_impl(on);
+
+    // Repouso = "meia-hibernação": sem tela, desligamos o que não faz falta
+    // para poupar bateria e religamos tudo ao acordar.
+    //   - acelerômetro (gesto de chacoalhar não é usado com a tela apagada);
+    //   - áudio (nenhum efeito novo é enfileirado);
+    //   - CPU: light sleep automático entre os polls (só na bateria).
+    kit_imu_set_enabled(on);
+    kit_audio_suspend(!on);
+    kit_power_set_screen_sleeping(!on);
+
     if (on) note_activity();
 }
 
@@ -107,6 +118,10 @@ static void poll_inactivity(void)
     // automático enquanto precisa da tela viva (ex.: a Timer Tool contando —
     // ela mesma escurece o painel para poupar bateria, sem apagar).
     if (kit_power_is_keep_awake()) return;
+
+    // Já em repouso: reavalia o light sleep (ex.: USB plugado/desplugado
+    // enquanto a tela está apagada). Chamada barata e idempotente.
+    if (!s_screen_on) kit_power_set_screen_sleeping(true);
 
     if (s_screen_on && sleep_s && idle_ms >= sleep_s * 1000) {
         ESP_LOGI(TAG, "Repouso: apagando a tela após %lu s sem atividade",
@@ -196,8 +211,16 @@ static void poll_system_buttons(void)
         // (ex.: rolar os dados). Na Home, liga/desliga o painel.
         if (s_is_in_tool && s_tool_primary_action && s_screen_on) {
             s_tool_primary_action();
+        } else if (s_screen_on) {
+            // Aperta-e-solta o PWR: cadeado fechando. O som é enfileirado antes
+            // de screen_set_on() suspender o áudio, então ainda toca.
+            kit_audio_sfx_impl(KIT_SFX_LOCK);
+            screen_set_on(false);
         } else {
-            screen_set_on(!s_screen_on);
+            // Cadeado abrindo: acorda primeiro (levanta a suspensão do áudio),
+            // depois toca.
+            screen_set_on(true);
+            kit_audio_sfx_impl(KIT_SFX_UNLOCK);
         }
         return;
     }
@@ -232,6 +255,12 @@ kit_err_t kit_runtime_init(void)
     err = kit_storage_init();
     if (err != KIT_OK) {
         ESP_LOGE(TAG, "Falha ao montar LittleFS (/tools)");
+    }
+
+    // 2b. Cartão microSD (opcional): armazenamento secundário para pacotes .kit
+    //     e assets multimídia pesados. A ausência de cartão não é um erro.
+    if (kit_storage_sd_mount() == KIT_OK) {
+        ESP_LOGI(TAG, "Cartão microSD disponível em %s", KIT_SD_MOUNT_POINT);
     }
 
     // 3. Inicializa Gerador de Números Aleatórios
@@ -276,6 +305,12 @@ kit_err_t kit_runtime_init(void)
     err = kit_tool_manager_init();
     if (err != KIT_OK) {
         ESP_LOGE(TAG, "Falha ao inicializar Tool Manager");
+    }
+
+    // 8b. Carregador dinâmico de Tools (.so do cartão microSD). Registra a
+    //     tabela de símbolos LVGL usada pelos objetos compartilhados.
+    if (kit_tool_loader_init() != KIT_OK) {
+        ESP_LOGW(TAG, "Carregador de Tools externas indisponível");
     }
 
     // 9. Inicializa Launcher UI
@@ -333,7 +368,8 @@ void kit_runtime_run(void)
 
         // Chacoalhar (IMU): só dentro de uma Tool, ~a cada 60 ms. Dispara a
         // mesma "ação principal" da Tool que o botão PWR (na Dice Tool, rolar).
-        if (s_is_in_tool && s_tool_primary_action && now - last_imu_us >= 60000) {
+        if (s_screen_on && s_is_in_tool && s_tool_primary_action &&
+            now - last_imu_us >= 60000) {
             last_imu_us = now;
             if (kit_imu_poll_shake()) {
                 note_activity();

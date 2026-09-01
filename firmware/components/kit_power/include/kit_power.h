@@ -44,6 +44,13 @@ uint8_t kit_power_get_battery_percentage(void);
 bool kit_power_is_charging(void);
 
 /**
+ * Retorna true se houver VBUS (cabo USB conectado), independente de a bateria
+ * estar carregando. Usado para não entrar em light sleep enquanto plugado
+ * (console serial / Web Installer).
+ */
+bool kit_power_is_usb_connected(void);
+
+/**
  * Evento do botão de energia (PWRON do AXP2101).
  */
 typedef enum {
@@ -67,6 +74,15 @@ bool kit_power_is_pwr_pressed(void);
  * Obtém o identificador único do dispositivo (ex: "KIT-A83F").
  */
 const char *kit_power_get_device_id(void);
+
+/**
+ * Informa ao subsistema de energia que a tela entrou (true) ou saiu (false) do
+ * repouso. Em repouso e fora do USB, habilita o light sleep automático do
+ * esp_pm (CPU dorme entre os polls, ~1–2 mA); ao acordar, volta ao
+ * escalonamento de frequência normal. No-op se CONFIG_PM_ENABLE estiver
+ * desligado. Deve ser reavaliada quando o estado de carga muda.
+ */
+kit_err_t kit_power_set_screen_sleeping(bool sleeping);
 
 /**
  * Implementação para kit_api: Impede suspensão automática.

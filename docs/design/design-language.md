@@ -11,8 +11,9 @@ O sistema vive em código:
 | [`firmware/components/kit_fonts/include/kit_fonts.h`](../../firmware/components/kit_fonts/include/kit_fonts.h) | Fontes tipográficas |
 | [`firmware/components/kit_launcher/src/kit_launcher.c`](../../firmware/components/kit_launcher/src/kit_launcher.c) | Telas e componentes montados em LVGL v9 |
 
-> Escopo atual: Home (slideshow de Tools), Ajustes (+ Brilho, Repouso da tela,
-> Desligar sozinho), Sobre, a **Test Tool** (`kit_tool_manager`) e as Tools
+> Escopo atual: Introdução (onboarding do 1º boot), Home (slideshow de Tools),
+> Ajustes (+ Brilho, Repouso da tela, Desligar sozinho, Repetir introdução),
+> Sobre, a **Test Tool** (`kit_tool_manager`) e as Tools
 > **Dados** (`kit_dice`), **Garrafa** (`kit_bottle`), **Decisor** (`kit_decisor`),
 > **Timer** (`kit_timer`), **Quem Vai Primeiro** (`kit_primeiro`),
 > **Sortear Times** (`kit_times`), **Globo de Bingo** (`kit_bingo`) e
@@ -94,6 +95,7 @@ Latin + Latin-1 (acentuação PT: ç ã õ é ê í ó ú ü …) mais um conjun
 | `kit_mono_20` | Space Mono **Bold** | 20 px | Rótulos de botão, legenda "NENHUMA TOOL" |
 | `kit_mono_16` | Space Mono Regular | 16 px | Tabela de especificações, `MIN` / `MAX` |
 | `kit_sans_22` | Archivo **Bold** | 22 px | Rótulos das linhas de Ajustes (caixa normal) |
+| `kit_sans_28` | Archivo **Bold** | 28 px | Frases da Introdução (caixa normal) |
 | `kit_display_44` | Archivo **Black** | 44 px | Wordmark `KIT`, número grande do Brilho, formas/ícones grandes |
 | `kit_display_72` | Archivo **Black** | 72 px | Só ` - 0-9 A-Z Ã Ç Õ` — rótulo do resultado da Decisor Tool |
 | `kit_display_120` | Archivo **Black** | ~85 px | Só `0-9 - +` — número do resultado da Dice Tool |
@@ -124,6 +126,7 @@ npx lv_font_conv@1.5.3 $C --size 26 --font SpaceMono-Bold.ttf    -r $TEXT --font
 npx lv_font_conv@1.5.3 $C --size 20 --font SpaceMono-Bold.ttf    -r $TEXT --font fa.woff -r $ICONS -o kit_mono_20.c
 npx lv_font_conv@1.5.3 $C --size 16 --font SpaceMono-Regular.ttf -r $TEXT --font fa.woff -r $ICONS -o kit_mono_16.c
 npx lv_font_conv@1.5.3 $C --size 22 --font Archivo-Bold.woff     -r $TEXT -o kit_sans_22.c
+npx lv_font_conv@1.5.3 $C --size 28 --font Archivo-Bold.woff     -r $TEXT -o kit_sans_28.c
 npx lv_font_conv@1.5.3 $C --size 44 --font ArchivoBlack-Regular.ttf -r 0x20-0x7F --font fa.woff -r $ICONS -o kit_display_44.c
 
 # número gigante da Dice Tool — só dígitos e sinais, sem ícones (arquivo enxuto)
@@ -243,9 +246,10 @@ Tratados em [`kit_runtime`](../architecture/runtime.md) (`poll_system_buttons`,
 
 | Tela | Função | Layout | Navegação |
 |---|---|---|---|
-| **Splash** | "INICIANDO" ao ligar | Fixo | Some sozinha (~1,4 s) → Home |
+| **Splash** | "INICIANDO" ao ligar | Fixo | Some sozinha (~1,4 s) → Introdução (1º boot) ou Home |
+| **Introdução** | 4 telas no 1º boot: marca → o que é → o que tem dentro → pronto | Overlay preto: coluna central + botão-pílula fixo no rodapé | Abre com o SFX `WELCOME` · `COMEÇAR`/`VEM VER`/`CONTINUAR` avança · `COMEÇAR` verde no fim toca `ONBOARD_DONE`, grava a flag `onboarded` e vai pra Home · BOOT sai e grava a flag |
 | **Home** | Launcher / slideshow de Tools | Barra de status + `lv_tileview` horizontal (4 recentes + "VER TODOS") + pontos | Arrasta na horizontal · slide/card → Tool · chip-anel (topo dir.) → Ajustes |
-| **Ajustes** | Lista de configurações | Titlebar + corpo rolável | Linhas → Brilho / Repouso da tela / Desligar sozinho / Test Tool / Testar som / Sobre |
+| **Ajustes** | Lista de configurações | Titlebar + corpo rolável | Linhas → Brilho / Repouso da tela / Desligar sozinho / Test Tool / Testar som / Repetir introdução / Sobre |
 | **Brilho** | Controle de brilho do AMOLED | Fixo | Titlebar ← ou `VOLTAR` |
 | **Repouso da tela** | Tempo sem toque até apagar a tela | Titlebar + lista de opção | Toque numa opção grava e volta |
 | **Desligar sozinho** | Tempo sem uso até o aparelho desligar | Titlebar + lista de opção | Toque numa opção grava e volta |

@@ -23,7 +23,7 @@ Bem-vindo à documentação técnica do **KIT**. Esta seção descreve a arquite
 * [Sensor IMU QMI8658](hardware/imu.md)
 * [Relógio de Tempo Real (RTC) PCF85063A](hardware/rtc.md)
 * [Gerenciamento de Energia & Bateria (AXP2101)](hardware/power.md)
-* [Slot microSD (Expansão Futura)](hardware/microsd.md)
+* [Slot microSD (carregamento de Tools, modo pen drive)](hardware/microsd.md)
 
 ### 3. [Interface e Linguagem Visual](design/design-language.md)
 * [Linguagem "Brutalist Bauhaus": princípios, paleta, tipografia](design/design-language.md)
@@ -62,6 +62,7 @@ Bem-vindo à documentação técnica do **KIT**. Esta seção descreve a arquite
 
 ### 7. [Guia do Usuário](user/installation.md)
 * [Instalação Inicial](user/installation.md)
+* [Adicionando Tools (web e cartão microSD)](user/adding-tools.md)
 * [Configurações do Dispositivo](user/configuration.md)
 * [Configuração de Wi-Fi](user/wifi.md)
 * [Modo de Recuperação (Recovery Mode)](user/recovery.md)

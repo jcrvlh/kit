@@ -28,6 +28,7 @@ static const char *TAG = "KIT_IMU";
 #define SHAKE_DEBOUNCE_US    700000LL    // 0,7 s entre disparos
 
 static bool    s_ready = false;
+static bool    s_enabled = true;   // acelerômetro ligado? (desligado no repouso)
 static int64_t s_last_shake_us = 0;
 
 // Callback de shake registrado por Tools externas via kit_api.imu
@@ -58,9 +59,21 @@ kit_err_t kit_imu_init(void)
     return KIT_OK;
 }
 
+void kit_imu_set_enabled(bool enable)
+{
+    if (!s_ready || enable == s_enabled) return;
+    s_enabled = enable;
+    // CTRL7: bit0 = acelerômetro. Com a tela em repouso o gesto de chacoalhar
+    // não é usado, então derrubamos o acelerômetro (~ dezenas de µA) e o
+    // religamos ao acordar. O QMI8658 retoma na configuração já gravada em
+    // CTRL2 assim que CTRL7.bit0 volta a 1.
+    kit_i2c_write_reg(QMI8658_ADDR, QMI8658_REG_CTRL7, enable ? 0x01 : 0x00);
+    ESP_LOGI(TAG, "Acelerômetro %s", enable ? "ligado" : "em repouso");
+}
+
 bool kit_imu_poll_shake(void)
 {
-    if (!s_ready) return false;
+    if (!s_ready || !s_enabled) return false;
 
     uint8_t b[6];
     if (kit_i2c_read_bytes(QMI8658_ADDR, QMI8658_REG_AX_L, b, sizeof(b)) != ESP_OK)

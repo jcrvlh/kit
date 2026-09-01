@@ -34,6 +34,13 @@ kit_err_t kit_audio_set_volume_impl(uint8_t percentage);
 kit_err_t kit_audio_sfx_impl(kit_sfx_t sfx);
 
 /**
+ * Suspende (true) ou reativa (false) o áudio. Suspenso, bipes e efeitos novos
+ * são descartados silenciosamente; o que já estava na fila termina e o codec/PA
+ * desliga por ociosidade. O Runtime usa isso quando a tela entra em repouso.
+ */
+void kit_audio_suspend(bool suspend);
+
+/**
  * Diagnóstico: re-sonda o ES8311 no I2C, loga o estado do pipeline e toca
  * um tom longo e contínuo (1,5 s). Usado pela linha "SOM" da tela Testes.
  */
