@@ -1,0 +1,37 @@
+name: Relato de bug
+description: Algo não funciona como esperado no firmware, no launcher ou no kit-cli
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: O que acontece
+      description: Descreva o comportamento observado e o esperado.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Passos para reproduzir
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      placeholder: Waveshare ESP32-S3-Touch-AMOLED-1.8 (V2)
+  - type: input
+    id: versions
+    attributes:
+      label: Versões
+      placeholder: "KIT Core: git SHA / tag · ESP-IDF: v5.3 · kit-cli: 0.2.0"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Saída do monitor serial, se houver.
+      render: shell

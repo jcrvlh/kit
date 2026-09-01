@@ -1,0 +1,50 @@
+name: Firmware
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware.yml'
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware.yml'
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: KIT Core
+            path: firmware
+            artifact: kit-core-bin
+          - name: Recovery
+            path: firmware/recovery
+            artifact: kit-recovery-bin
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (ESP-IDF v5.3, esp32s3)
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.3
+          target: esp32s3
+          path: ${{ matrix.path }}
+
+      - name: Coletar binários
+        run: |
+          mkdir -p dist
+          cp "${{ matrix.path }}"/build/*.bin dist/ 2>/dev/null || true
+          cp "${{ matrix.path }}"/build/bootloader/bootloader.bin dist/ 2>/dev/null || true
+          cp "${{ matrix.path }}"/build/partition_table/partition-table.bin dist/ 2>/dev/null || true
+          ls -l dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/
+          if-no-files-found: error

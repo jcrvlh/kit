@@ -1,0 +1,49 @@
+name: Tools SDK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools-sdk/**'
+      - '.github/workflows/tools-sdk.yml'
+  pull_request:
+    paths:
+      - 'tools-sdk/**'
+      - '.github/workflows/tools-sdk.yml'
+
+jobs:
+  kit-cli:
+    name: kit-cli (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.9', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Instalar
+        working-directory: tools-sdk/cli
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pytest
+
+      - name: Testar
+        working-directory: tools-sdk/cli
+        run: pytest -q
+
+  native-sdk:
+    name: SDK nativo (stubs + exemplos)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compilar
+        working-directory: tools-sdk
+        run: |
+          cmake -B build -S .
+          cmake --build build --parallel

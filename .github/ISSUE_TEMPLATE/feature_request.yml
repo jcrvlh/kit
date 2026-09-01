@@ -1,0 +1,31 @@
+name: Proposta de funcionalidade ou Tool
+description: Sugira uma nova Tool, API ou melhoria de plataforma
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema ou oportunidade
+      description: O que motiva a proposta? Que uso ela atende numa noite de jogos?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposta
+      description: Como funcionaria. Para Tools, descreva telas, disparos e persistência.
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Tipo
+      options:
+        - Nova Tool (built-in no Core)
+        - Nova Tool (catálogo / .kit)
+        - API do Runtime
+        - Launcher / UI
+        - Plataforma / distribuição
+        - Outro
+    validations:
+      required: true

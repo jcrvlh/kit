@@ -3,6 +3,8 @@
 [![Licença GPL-3.0](https://img.shields.io/badge/licen%C3%A7a-GPL--3.0-blue.svg)](LICENSE)
 [![Hardware](https://img.shields.io/badge/hardware-Waveshare%20ESP32--S3%20Touch--AMOLED--1.8%20(V2)-orange.svg)](docs/hardware/board.md)
 [![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v5.3%2B-green.svg)](https://docs.espressif.com/)
+[![Firmware](https://github.com/jcrvlh/kit/actions/workflows/firmware.yml/badge.svg)](https://github.com/jcrvlh/kit/actions/workflows/firmware.yml)
+[![Tools SDK](https://github.com/jcrvlh/kit/actions/workflows/tools-sdk.yml/badge.svg)](https://github.com/jcrvlh/kit/actions/workflows/tools-sdk.yml)
 
 **KIT** é uma plataforma modular de hardware e software para noites de jogos (*game nights*), jogos de mesa, sorteios e tomada de decisões em grupo. Funciona como um **canivete suíço digital**, permitindo a instalação dinâmica de ferramentas independentes chamadas **Tools**.
 

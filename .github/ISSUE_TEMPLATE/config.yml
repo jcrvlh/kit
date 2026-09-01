@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Vulnerabilidade de segurança
+    url: https://github.com/jcrvlh/kit/security/advisories/new
+    about: Não abra issue pública. Use o Advisory Privado — ver SECURITY.md.
+  - name: Dúvidas e ideias
+    url: https://github.com/jcrvlh/kit/discussions
+    about: Para perguntas de uso e discussão aberta, use as Discussions.
