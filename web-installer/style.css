@@ -88,13 +88,6 @@ main > section:first-child { border-top: 0; }
 
 /* ---------- Hero ---------- */
 .hero { padding-top: 2rem; padding-bottom: 4rem; }
-.kicker {
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    font-size: 0.78rem;
-    color: var(--yellow);
-    margin-bottom: 1.5rem;
-}
 .hero h1 {
     font-family: var(--display);
     font-size: clamp(2.2rem, 6vw, 4rem);
@@ -109,6 +102,25 @@ main > section:first-child { border-top: 0; }
     color: #cfcabd;
 }
 .hero-cta { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 2.25rem; }
+
+/* ---------- Manifesto ---------- */
+.manifesto { padding-top: 3.5rem; padding-bottom: 3.5rem; }
+.manifesto-body { max-width: 40rem; }
+.manifesto-body p { margin-bottom: 1.15rem; color: #b7b2a6; font-size: 1rem; }
+.manifesto-body p:last-child { margin-bottom: 0; }
+.manifesto-body .manifesto-lead {
+    font-family: var(--display);
+    font-size: clamp(1.3rem, 3.6vw, 1.9rem);
+    line-height: 1.25;
+    color: var(--text);
+    margin-bottom: 1.6rem;
+}
+.manifesto-body .manifesto-close {
+    color: var(--text);
+    border-left: 3px solid var(--yellow);
+    padding-left: 1rem;
+    margin-top: 1.6rem;
+}
 
 /* ---------- Buttons ---------- */
 .btn {
