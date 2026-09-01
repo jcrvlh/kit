@@ -205,7 +205,7 @@ static void draw_tick_cb(lv_timer_t *t)
     lv_obj_set_style_opa(s_go_btn, LV_OPA_COVER, 0);
 
     const kit_api_table_t *a = api();
-    if (a && a->audio) a->audio->beep(900, 35);   // um bipe só, no fim
+    if (a && a->audio) a->audio->sfx(KIT_SFX_REVEAL);   // duas notas subindo, no fim
 }
 
 void kit_primeiro_draw(void)

@@ -223,10 +223,17 @@ static void arrow_draw_cb(lv_event_t *e)
 
 static void spin_tick_cb(lv_timer_t *t);
 
+// "Tick" da catraca a cada ~30° que a seta primária percorre. Como o giro
+// desacelera, os ticks naturalmente espaçam — som de roleta, sincronizado com
+// a animação (sem SFX de duração fixa que continuava depois da seta parar).
+#define B_SND_NOTCH   3000
+static int32_t s_snd_accum = 0;
+
 static void do_spin(void)
 {
     if (s_spinning || !s_arrow) return;
     s_spinning = true;
+    s_snd_accum = 0;
 
     for (int i = 0; i < s_count; i++) {
         s_omega[i] = B_OMEGA_MIN + rnd_range(0, B_OMEGA_SPAN);
@@ -251,6 +258,17 @@ static void spin_tick_cb(lv_timer_t *t)
         s_omega[i] = ((s_omega[i] * s_decay[i]) >> 10) - B_FRICTION;
         any = true;
     }
+
+    // catraca: acumula o giro da seta 0 e solta um tick a cada entalhe
+    if (any) {
+        s_snd_accum += s_omega[0];
+        if (s_snd_accum >= B_SND_NOTCH) {
+            s_snd_accum %= B_SND_NOTCH;
+            const kit_api_table_t *a = api();
+            if (a && a->audio) a->audio->beep(2600, 7);
+        }
+    }
+
     lv_obj_invalidate(s_arrow);
     if (any) return;
 

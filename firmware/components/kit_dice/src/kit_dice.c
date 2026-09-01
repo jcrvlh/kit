@@ -88,8 +88,9 @@ static int       s_face_built = 0;
 
 static const kit_api_table_t *api(void) { return kit_api_get_table(); }
 
-// Sem áudio nesta Tool: kit_audio->beep é síncrono (bloqueia a task do LVGL) e
-// travava a rolagem. Reavaliar quando o áudio tiver um caminho assíncrono.
+// Áudio: só o SFX assíncrono de rolagem (audio->sfx). A task de áudio renderiza
+// fora do callback do LVGL, então não trava a animação como o beep síncrono
+// antigo travava.
 
 static int roll_one(int faces)
 {
@@ -293,6 +294,9 @@ static void do_roll(void)
 
     // rolar de qualquer página leva para a página do resultado
     lv_tileview_set_tile_by_index(s_tv, 1, 0, LV_ANIM_OFF);
+
+    const kit_api_table_t *t = api();
+    if (t && t->audio) t->audio->sfx(KIT_SFX_DICE_ROLL);
 
     s_roll_tick = 0;
     s_roll_timer = lv_timer_create(roll_tick_cb, ROLL_TICK_MS, NULL);

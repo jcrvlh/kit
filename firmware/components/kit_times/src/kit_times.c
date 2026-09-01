@@ -168,6 +168,21 @@ static void beep(uint16_t freq, uint16_t ms)
     if (t && t->audio) t->audio->beep(freq, ms);
 }
 
+// Cada revelação toca a próxima nota de uma escala maior, subindo em oitavas.
+static void reveal_note(void)
+{
+    static const uint16_t SCALE[] = {
+        523, 587, 659, 698, 784, 880, 988,          // C5 D5 E5 F5 G5 A5 B5
+        1047, 1175, 1319, 1397, 1568, 1760, 1976,   // C6..B6
+        2093, 2349, 2637, 2794, 3136,               // C7..G7
+    };
+    int n = s_reveal_ix - 1;
+    if (n < 0) n = 0;
+    if (n >= (int)(sizeof(SCALE) / sizeof(SCALE[0])))
+        n = (int)(sizeof(SCALE) / sizeof(SCALE[0])) - 1;
+    beep(SCALE[n], 95);
+}
+
 // ---------------------------------------------------------------------------
 // Persistência (Storage API)
 // ---------------------------------------------------------------------------
@@ -310,6 +325,7 @@ static void start_reveal(void)
     s_reveal_ix = 1;
     paint_reveal();
     lv_obj_clear_flag(s_reveal, LV_OBJ_FLAG_HIDDEN);
+    reveal_note();
 }
 
 static void advance_reveal(void)
@@ -321,7 +337,8 @@ static void advance_reveal(void)
     }
     s_reveal_ix++;
     paint_reveal();
-    beep(760, 25);
+    if (s_reveal_ix <= s_people) reveal_note();   // nota subindo por revelação
+    else                         beep(1046, 70);  // chegou no "PRONTO"
 }
 
 // ---------------------------------------------------------------------------
@@ -335,8 +352,7 @@ static void tick_cb(lv_timer_t *t)
 
     if (s_timer) { lv_timer_delete(s_timer); s_timer = NULL; }
     s_drawing = false;
-    beep(900, 35);
-    start_reveal();
+    start_reveal();   // já toca a 1ª nota da escala
 }
 
 static void start_draw(void)

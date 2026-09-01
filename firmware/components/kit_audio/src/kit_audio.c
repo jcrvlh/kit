@@ -1,6 +1,8 @@
 #include "kit_audio.h"
 #include "kit_power.h"
+#include "kit_config.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
@@ -19,20 +21,24 @@ static esp_codec_dev_handle_t s_speaker = NULL;
 #define AUDIO_FRAME_COUNT   256
 #define AUDIO_TWO_PI        6.28318530717958647692f
 
-// O bipe roda numa task própria: escrever no I2S é síncrono (bloqueia até o
+// O som roda numa task própria: escrever no I2S é síncrono (bloqueia até o
 // codec drenar o buffer) e, chamado direto do callback do LVGL, travava a task
-// `main` (a rolagem da Dice Tool, a navegação do Launcher). Agora kit_audio_beep_impl
-// só enfileira e volta na hora; a task audio_task renderiza e toca.
+// `main` (a rolagem da Dice Tool, a navegação do Launcher). kit_audio_beep_impl
+// e kit_audio_sfx_impl só enfileiram e voltam na hora; audio_task renderiza.
 typedef struct {
+    int16_t  sfx;         // <0 = tom puro (usa freq/dur); >=0 = kit_sfx_t
     uint16_t freq_hz;
     uint16_t duration_ms;
 } kit_beep_req_t;
 
 static QueueHandle_t s_beep_queue = NULL;
 
-static void render_tone(uint16_t freq_hz, uint16_t duration_ms)
+// Amplitude "cheia" de um tom (~73% do fundo de escala 16-bit).
+#define AUDIO_AMP_FULL   12000.0f
+
+static void render_tone(uint16_t freq_hz, uint16_t duration_ms, float amp)
 {
-    if (!s_speaker) return;
+    if (!s_speaker || duration_ms == 0) return;
 
     int16_t samples[AUDIO_FRAME_COUNT];
     float phase = 0.0f;
@@ -40,6 +46,8 @@ static void render_tone(uint16_t freq_hz, uint16_t duration_ms)
 
     uint32_t total_samples = (AUDIO_SAMPLE_RATE * (uint32_t)duration_ms) / 1000;
     uint32_t sent = 0;
+    int write_fails = 0;
+    int last_err = ESP_CODEC_DEV_OK;
     while (sent < total_samples) {
         uint32_t remaining = total_samples - sent;
         int chunk = remaining < AUDIO_FRAME_COUNT ? (int)remaining : AUDIO_FRAME_COUNT;
@@ -50,14 +58,124 @@ static void render_tone(uint16_t freq_hz, uint16_t duration_ms)
             const uint32_t ramp = AUDIO_SAMPLE_RATE / 500; // ~2 ms
             if (idx < ramp)                      env = (float)idx / (float)ramp;
             else if (idx > total_samples - ramp) env = (float)(total_samples - idx) / (float)ramp;
-            samples[i] = (int16_t)(sinf(phase) * 12000.0f * env);
+            samples[i] = (int16_t)(sinf(phase) * amp * env);
             phase += step;
             if (phase >= AUDIO_TWO_PI) {
                 phase -= AUDIO_TWO_PI;
             }
         }
-        esp_codec_dev_write(s_speaker, samples, (size_t)chunk * sizeof(int16_t));
+        int w = esp_codec_dev_write(s_speaker, samples, (size_t)chunk * sizeof(int16_t));
+        if (w != ESP_CODEC_DEV_OK) {
+            write_fails++;
+            last_err = w;
+        }
         sent += (uint32_t)chunk;
+    }
+    if (write_fails > 0) {
+        ESP_LOGW(TAG, "render_tone: %d escrita(s) I2S falharam (último código %d)",
+                 write_fails, last_err);
+    }
+}
+
+// Silêncio ativo entre os "ticks" de um SFX: alimenta zeros para o DMA não
+// esvaziar (evita estalos) e mantém a temporização firme.
+static void render_silence(uint16_t duration_ms)
+{
+    if (!s_speaker || duration_ms == 0) return;
+    static const int16_t zeros[AUDIO_FRAME_COUNT] = { 0 };
+    uint32_t total = (AUDIO_SAMPLE_RATE * (uint32_t)duration_ms) / 1000;
+    uint32_t sent = 0;
+    while (sent < total) {
+        uint32_t remaining = total - sent;
+        int chunk = remaining < AUDIO_FRAME_COUNT ? (int)remaining : AUDIO_FRAME_COUNT;
+        esp_codec_dev_write(s_speaker, (void *)zeros, (size_t)chunk * sizeof(int16_t));
+        sent += (uint32_t)chunk;
+    }
+}
+
+static inline uint32_t rnd(uint32_t n) { return esp_random() % n; }
+
+static void render_sfx(kit_sfx_t sfx)
+{
+    switch (sfx) {
+    case KIT_SFX_CLICK:
+        render_tone(2400, 8,  6500.0f);
+        render_tone(1500, 12, 4500.0f);
+        break;
+
+    case KIT_SFX_BACK:
+        render_tone(1300, 12, 6500.0f);
+        render_tone(850,  16, 5000.0f);
+        break;
+
+    case KIT_SFX_CONFIRM:
+        render_tone(1200, 45, 10000.0f);
+        render_tone(1800, 65, 10000.0f);
+        break;
+
+    case KIT_SFX_DICE_ROLL: {
+        // "Tombo": ~8 batidinhas de tom variável, desacelerando, e um assento.
+        static const uint16_t base[] = { 900, 1300, 780, 1500, 1000, 720, 1250, 940 };
+        for (int i = 0; i < 8; i++) {
+            render_tone((uint16_t)(base[i] + rnd(140)), 22, 7000.0f);
+            render_silence((uint16_t)(14 + i * 5));
+        }
+        render_tone(1150, 60, 11000.0f);
+        break;
+    }
+
+    case KIT_SFX_ROULETTE: {
+        // Catraca desacelerando: o intervalo entre "ticks" cresce em ease-out.
+        int gap = 22;
+        for (int i = 0; i < 24; i++) {
+            render_tone(2600, 6, 5500.0f);
+            render_silence((uint16_t)gap);
+            gap += 3 + i;
+            if (gap > 175) gap = 175;
+        }
+        render_tone(680, 75, 9500.0f);   // parou
+        break;
+    }
+
+    case KIT_SFX_COIN: {
+        // Moeda girando no ar: tremular rápido entre dois tons, depois um "ding".
+        for (int i = 0; i < 12; i++) {
+            render_tone((i & 1) ? 1650 : 2150, 14, 5500.0f);
+            render_silence((uint16_t)(6 + i));
+        }
+        render_tone(2637, 110, 11000.0f);   // E7
+        render_tone(3520, 70,  9000.0f);    // A7
+        break;
+    }
+
+    case KIT_SFX_TIMER_DONE:
+        // Alarme: três batidas de dois tons e um toque final mais longo.
+        for (int i = 0; i < 3; i++) {
+            render_tone(1200, 90, 12000.0f);
+            render_tone(1650, 90, 12000.0f);
+            render_silence(70);
+        }
+        render_tone(1650, 220, 12000.0f);
+        break;
+
+    case KIT_SFX_REVEAL:
+        // Duas notas subindo, macio.
+        render_tone(880,  70,  8500.0f);
+        render_tone(1320, 120, 9500.0f);
+        break;
+
+    case KIT_SFX_BINGO_BALL: {
+        // Chocalho: ~14 estalos curtos de tom aleatório (bolinhas quicando)...
+        for (int i = 0; i < 14; i++) {
+            render_tone((uint16_t)(1200 + rnd(1400)), 12, 6000.0f);
+            render_silence((uint16_t)(8 + rnd(22)));
+        }
+        render_tone(1568, 150, 11000.0f);   // ...e a bolinha saindo (G6)
+        break;
+    }
+
+    default:
+        break;
     }
 }
 
@@ -67,7 +185,11 @@ static void audio_task(void *arg)
     kit_beep_req_t req;
     while (1) {
         if (xQueueReceive(s_beep_queue, &req, portMAX_DELAY) == pdTRUE) {
-            render_tone(req.freq_hz, req.duration_ms);
+            if (req.sfx < 0) {
+                render_tone(req.freq_hz, req.duration_ms, AUDIO_AMP_FULL);
+            } else {
+                render_sfx((kit_sfx_t)req.sfx);
+            }
         }
     }
 }
@@ -185,16 +307,20 @@ kit_err_t kit_audio_init(void)
         .sample_rate = AUDIO_SAMPLE_RATE,
         .mclk_multiple = 256,
     };
-    if (esp_codec_dev_open(s_speaker, &fs) != ESP_CODEC_DEV_OK) {
-        ESP_LOGE(TAG, "Falha ao abrir dispositivo de reprodução");
+    int oret = esp_codec_dev_open(s_speaker, &fs);
+    if (oret != ESP_CODEC_DEV_OK) {
+        ESP_LOGE(TAG, "Falha ao abrir dispositivo de reprodução (código %d)", oret);
         return KIT_FAIL;
     }
-    esp_codec_dev_set_out_vol(s_speaker, s_volume);
+    int vret = esp_codec_dev_set_out_vol(s_speaker, s_volume);
+    if (vret != ESP_CODEC_DEV_OK) {
+        ESP_LOGW(TAG, "esp_codec_dev_set_out_vol retornou %d", vret);
+    }
 
     // Task + fila do bipe assíncrono.
     s_beep_queue = xQueueCreate(6, sizeof(kit_beep_req_t));
     if (!s_beep_queue ||
-        xTaskCreate(audio_task, "kit_audio", 3072, NULL, 5, NULL) != pdPASS) {
+        xTaskCreate(audio_task, "kit_audio", 4096, NULL, 5, NULL) != pdPASS) {
         ESP_LOGE(TAG, "Falha ao criar a task de áudio");
         return KIT_FAIL;
     }
@@ -209,9 +335,47 @@ kit_err_t kit_audio_beep_impl(uint16_t freq_hz, uint16_t duration_ms)
         ESP_LOGW(TAG, "Áudio não inicializado, ignorando bipe.");
         return KIT_FAIL;
     }
-    kit_beep_req_t req = { .freq_hz = freq_hz, .duration_ms = duration_ms };
+    if (!kit_config_get_sound_enabled()) return KIT_OK;
+
+    kit_beep_req_t req = { .sfx = -1, .freq_hz = freq_hz, .duration_ms = duration_ms };
     // Não espera: se a fila estiver cheia (bipes muito seguidos), descarta.
     if (xQueueSend(s_beep_queue, &req, 0) != pdTRUE) {
+        return KIT_FAIL;
+    }
+    return KIT_OK;
+}
+
+kit_err_t kit_audio_sfx_impl(kit_sfx_t sfx)
+{
+    if (!s_speaker || !s_beep_queue) return KIT_FAIL;
+    if (!kit_config_get_sound_enabled()) return KIT_OK;
+
+    kit_beep_req_t req = { .sfx = (int16_t)sfx, .freq_hz = 0, .duration_ms = 0 };
+    if (xQueueSend(s_beep_queue, &req, 0) != pdTRUE) {
+        return KIT_FAIL;
+    }
+    return KIT_OK;
+}
+
+kit_err_t kit_audio_selftest_impl(void)
+{
+    if (!s_speaker || !s_beep_queue) {
+        ESP_LOGE(TAG, "Self-test: subsistema de áudio não inicializado.");
+        return KIT_FAIL;
+    }
+
+    // Identidade do ES8311 (esperado ID1=0x83, ID2=0x11) e trilha analógica.
+    uint8_t id1 = 0, id2 = 0, aldo1 = 0;
+    kit_i2c_read_reg(ES8311_I2C_ADDR, 0xFD, &id1);
+    kit_i2c_read_reg(ES8311_I2C_ADDR, 0xFE, &id2);
+    kit_i2c_read_reg(AXP2101_I2C_ADDR, 0x92, &aldo1); // AXP2101 ALDO1 voltage
+    ESP_LOGI(TAG, "Self-test: ES8311 ID=0x%02X%02X%s, AVDD(ALDO1)~%d mV",
+             id1, id2, (id1 == 0x83 && id2 == 0x11) ? " (OK)" : " (?)",
+             500 + (aldo1 & 0x1F) * 100);
+
+    kit_beep_req_t tone = { .sfx = -1, .freq_hz = 1000, .duration_ms = 600 };
+    if (xQueueSend(s_beep_queue, &tone, 0) != pdTRUE) {
+        ESP_LOGW(TAG, "Self-test: fila cheia, tom descartado.");
         return KIT_FAIL;
     }
     return KIT_OK;

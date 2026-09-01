@@ -97,9 +97,24 @@ typedef struct {
     void      (*delay_ms)(uint32_t ms);
 } kit_time_api_t;
 
+// Efeitos sonoros prontos do KIT (sequências curtas renderizadas pela task de
+// áudio, respeitam a flag "Som" dos Ajustes).
+typedef enum {
+    KIT_SFX_CLICK = 0,     // toque sutil — navegação, abrir um app
+    KIT_SFX_BACK,          // voltar / fechar
+    KIT_SFX_CONFIRM,       // confirmação positiva
+    KIT_SFX_DICE_ROLL,     // "tombo" de rolagem de dados (~0,5 s)
+    KIT_SFX_ROULETTE,      // catraca de roleta desacelerando (~1,4 s)
+    KIT_SFX_COIN,          // giro de moeda no ar terminando num "ding"
+    KIT_SFX_TIMER_DONE,    // alarme do fim do timer
+    KIT_SFX_REVEAL,        // sorteio revelado (Primeiro, Quebra-gelo)
+    KIT_SFX_BINGO_BALL,    // chocalho das bolinhas e o número saindo
+} kit_sfx_t;
+
 typedef struct {
     kit_err_t (*beep)(uint16_t freq_hz, uint16_t duration_ms);
     kit_err_t (*set_volume)(uint8_t percentage);
+    kit_err_t (*sfx)(kit_sfx_t sfx);
 } kit_audio_api_t;
 
 typedef struct {

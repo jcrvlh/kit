@@ -40,6 +40,7 @@ static lv_obj_t *s_feedback_screen = NULL;
 extern const lv_image_dsc_t kit_icon_triangle_a8;
 
 static lv_obj_t *s_brightness_val_lbl = NULL;
+static lv_obj_t *s_sound_val_lbl = NULL;
 static lv_obj_t *s_batt_lbl = NULL;
 static lv_obj_t *s_batt_fill = NULL;
 static lv_obj_t *s_toast = NULL;
@@ -148,7 +149,7 @@ static void open_about_cb(lv_event_t *e);
 static void close_about_cb(lv_event_t *e);
 static void brightness_slider_cb(lv_event_t *e);
 static void brightness_released_cb(lv_event_t *e);
-static void test_sound_cb(lv_event_t *e);
+static void sound_toggle_cb(lv_event_t *e);
 static void run_test_tool_cb(lv_event_t *e);
 static void home_tile_cb(lv_event_t *e);
 
@@ -828,6 +829,47 @@ static void build_home(lv_obj_t *s)
 // Ajustes
 // ---------------------------------------------------------------------------
 
+// Linha de liga/desliga do som: rótulo à esquerda, estado à direita (sem
+// chevron). Toca no próprio rótulo para alternar, sem trocar de tela.
+static void sync_sound_row(void)
+{
+    if (!s_sound_val_lbl) return;
+    bool on = kit_config_get_sound_enabled();
+    lv_label_set_text(s_sound_val_lbl, on ? "LIGADO" : "DESLIGADO");
+    lv_obj_set_style_text_color(s_sound_val_lbl,
+        lv_color_hex(on ? KIT_COLOR_GREEN : KIT_COLOR_TEXT_MUTED), 0);
+}
+
+static void make_sound_row(lv_obj_t *parent)
+{
+    lv_obj_t *row = lv_obj_create(parent);
+    lv_obj_set_size(row, KIT_CONTENT, KIT_ROW_H);
+    lv_obj_set_style_bg_color(row, lv_color_hex(KIT_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_width(row, 0, 0);
+    lv_obj_set_style_radius(row, 24, 0);
+    lv_obj_set_style_pad_all(row, 0, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(row, 6);
+    lv_obj_add_event_cb(row, sound_toggle_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *l = add_label(row, "Som", KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_obj_align(l, LV_ALIGN_LEFT_MID, 24, 0);
+
+    s_sound_val_lbl = add_label(row, "", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_obj_align(s_sound_val_lbl, LV_ALIGN_RIGHT_MID, -20, 0);
+    sync_sound_row();
+}
+
+static void sound_toggle_cb(lv_event_t *e)
+{
+    (void)e;
+    bool now_on = !kit_config_get_sound_enabled();
+    kit_config_set_sound_enabled(now_on);
+    sync_sound_row();
+    if (now_on) kit_audio_sfx_impl(KIT_SFX_CLICK);   // confirma que voltou
+}
+
 static void open_settings_cb(lv_event_t *e)
 {
     (void)e;
@@ -841,8 +883,8 @@ static void open_settings_cb(lv_event_t *e)
     make_row(body, NULL, 0, "Brilho",           false, open_brightness_cb, NULL);
     make_row(body, NULL, 0, "Repouso da tela",  false, open_sleep_cb,      NULL);
     make_row(body, NULL, 0, "Desligar sozinho", false, open_poweroff_cb,   NULL);
-    make_row(body, NULL, 0, "Test Tool",        false, run_test_tool_cb,   NULL);
-    make_row(body, NULL, 0, "Testar som",       false, test_sound_cb,      NULL);
+    make_sound_row(body);
+    make_row(body, NULL, 0, "Testes",           false, run_test_tool_cb,   NULL);
     make_row(body, NULL, 0, "Sobre o KIT",      false, open_about_cb,      NULL);
 }
 
@@ -853,6 +895,7 @@ static void close_settings_cb(lv_event_t *e)
     if (s_settings_screen) {
         lv_obj_delete(s_settings_screen);
         s_settings_screen = NULL;
+        s_sound_val_lbl = NULL;
     }
 }
 
@@ -1094,12 +1137,6 @@ static void close_about_cb(lv_event_t *e)
 // Ações
 // ---------------------------------------------------------------------------
 
-static void test_sound_cb(lv_event_t *e)
-{
-    (void)e;
-    kit_audio_beep_impl(1500, 80);
-}
-
 static void home_tile_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
@@ -1112,7 +1149,7 @@ static void home_tile_cb(lv_event_t *e)
         return;
     }
 
-    kit_audio_beep_impl(1200, 40);
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
     ESP_LOGI(TAG, "Abrindo Tool '%s'...", tool->id);
     if (s_toast) { lv_obj_delete(s_toast); s_toast = NULL; }
     home_mru_touch(i);   // sobe pro topo da recência (deck reconstrói ao voltar)
@@ -1143,7 +1180,8 @@ void kit_launcher_go_home(void)
     if (s_poweroff_screen)   { lv_obj_delete(s_poweroff_screen);   s_poweroff_screen = NULL; }
     if (s_brightness_screen) { lv_obj_delete(s_brightness_screen); s_brightness_screen = NULL;
                                s_brightness_val_lbl = NULL; }
-    if (s_settings_screen)   { lv_obj_delete(s_settings_screen);   s_settings_screen = NULL; }
+    if (s_settings_screen)   { lv_obj_delete(s_settings_screen);   s_settings_screen = NULL;
+                               s_sound_val_lbl = NULL; }
     if (s_splash_screen)     { lv_obj_delete(s_splash_screen);     s_splash_screen = NULL; }
     if (s_toast)             { lv_obj_delete(s_toast);             s_toast = NULL; }
 

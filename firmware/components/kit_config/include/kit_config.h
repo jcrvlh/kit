@@ -34,6 +34,11 @@ void     kit_config_set_screen_sleep_s(uint32_t seconds);
 uint32_t kit_config_get_auto_poweroff_s(void);
 void     kit_config_set_auto_poweroff_s(uint32_t seconds);
 
+// -- Som: liga/desliga todos os bipes e efeitos sonoros. Padrão ligado.
+//    Lido pela kit_audio a cada bipe/SFX. --
+bool kit_config_get_sound_enabled(void);
+void kit_config_set_sound_enabled(bool enabled);
+
 // -- Acesso genérico a NVS (namespace "kit_sys"), sem passar pelo cache. --
 kit_err_t kit_config_get_u8(const char *key, uint8_t *out_val, uint8_t default_val);
 kit_err_t kit_config_set_u8(const char *key, uint8_t val);

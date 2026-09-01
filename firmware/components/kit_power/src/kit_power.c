@@ -142,19 +142,20 @@ kit_err_t kit_power_init(void)
         return KIT_FAIL;
     }
 
-    // 2. Configura tensões do PMIC AXP2101 conforme especificação oficial Waveshare AMOLED 1.8"
-    // ALDO1 (DVDD 1.8V) -> 0x0D
-    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_ALDO1_VOLT, 0x0D);
-    // ALDO2 (DVDD 2.8V) -> 0x17
-    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_ALDO2_VOLT, 0x17);
-    // ALDO3 (Touch VDD 3.3V) -> 0x1C
-    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_ALDO3_VOLT, 0x1C);
-    // ALDO4 (AVDD 3.3V) -> 0x1C
-    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_ALDO4_VOLT, 0x1C);
-    // BLDO1 (OLED VDD 3.3V) -> 0x1C
-    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_BLDO1_VOLT, 0x1C);
-    // BLDO2 (MIC/Audio VDD 3.3V) -> 0x1C
-    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_BLDO2_VOLT, 0x1C);
+    // 2. Tensões das trilhas do PMIC AXP2101 conforme o esquemático oficial da
+    // Waveshare ESP32-S3-Touch-AMOLED-1.8 (tabela "Parameter Set"). Fórmula
+    // ALDO/BLDO: V = 500 mV + (reg & 0x1F) * 100 mV.
+    //
+    // Os valores anteriores estavam copiados de uma placa com câmera
+    // (ALDO1 "CAM DVDD 1.8V", ALDO2 "CAM DVDD 2.8V"). Nesta placa a ALDO1
+    // alimenta o AVDD analógico do codec ES8311 + o microfone e precisa de
+    // 3.3 V — em 1.8 V o DAC respondia no I2C mas não saía áudio nenhum.
+    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_ALDO1_VOLT, 0x1C); // 3.3 V — ES8311 AVDD + MIC
+    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_ALDO2_VOLT, 0x1C); // 3.3 V
+    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_ALDO3_VOLT, 0x19); // 3.0 V
+    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_ALDO4_VOLT, 0x0D); // 1.8 V
+    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_BLDO1_VOLT, 0x1C); // 3.3 V — OLED VDD
+    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_BLDO2_VOLT, 0x17); // 2.8 V
 
     // Habilita as saídas LDO (ALDO1-4, BLDO1-2, DLDO1-2)
     uint8_t ldo_state = 0;

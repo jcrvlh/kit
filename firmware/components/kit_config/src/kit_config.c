@@ -10,20 +10,24 @@ static const char *NVS_NAMESPACE = "kit_sys";
 #define KEY_BRIGHTNESS   "brightness"
 #define KEY_SCR_SLEEP    "scr_sleep_s"
 #define KEY_PWR_OFF      "pwr_off_s"
+#define KEY_SOUND        "sound_en"
 
 // Padrões
 #define DEF_BRIGHTNESS   80
 #define DEF_SCR_SLEEP    120     // 2 min
 #define DEF_PWR_OFF      0       // nunca
+#define DEF_SOUND        1       // ligado
 
 static struct {
     uint8_t  brightness;
     uint32_t screen_sleep_s;
     uint32_t auto_poweroff_s;
+    uint8_t  sound_enabled;
 } s_cache = {
     .brightness      = DEF_BRIGHTNESS,
     .screen_sleep_s  = DEF_SCR_SLEEP,
     .auto_poweroff_s = DEF_PWR_OFF,
+    .sound_enabled   = DEF_SOUND,
 };
 
 kit_err_t kit_config_get_u8(const char *key, uint8_t *out_val, uint8_t default_val)
@@ -90,11 +94,13 @@ kit_err_t kit_config_init(void)
 
     kit_config_get_u32(KEY_SCR_SLEEP, &s_cache.screen_sleep_s, DEF_SCR_SLEEP);
     kit_config_get_u32(KEY_PWR_OFF,   &s_cache.auto_poweroff_s, DEF_PWR_OFF);
+    kit_config_get_u8(KEY_SOUND, &s_cache.sound_enabled, DEF_SOUND);
 
-    ESP_LOGI(TAG, "Config: brilho=%d%%, repouso=%lus, desliga=%lus",
+    ESP_LOGI(TAG, "Config: brilho=%d%%, repouso=%lus, desliga=%lus, som=%s",
              s_cache.brightness,
              (unsigned long)s_cache.screen_sleep_s,
-             (unsigned long)s_cache.auto_poweroff_s);
+             (unsigned long)s_cache.auto_poweroff_s,
+             s_cache.sound_enabled ? "on" : "off");
     return KIT_OK;
 }
 
@@ -125,4 +131,14 @@ void kit_config_set_auto_poweroff_s(uint32_t seconds)
     if (seconds == s_cache.auto_poweroff_s) return;
     s_cache.auto_poweroff_s = seconds;
     kit_config_set_u32(KEY_PWR_OFF, seconds);
+}
+
+bool kit_config_get_sound_enabled(void) { return s_cache.sound_enabled != 0; }
+
+void kit_config_set_sound_enabled(bool enabled)
+{
+    uint8_t v = enabled ? 1 : 0;
+    if (v == s_cache.sound_enabled) return;
+    s_cache.sound_enabled = v;
+    kit_config_set_u8(KEY_SOUND, v);
 }

@@ -26,6 +26,7 @@ extern void      kit_time_delay_ms_impl(uint32_t ms);
 
 extern kit_err_t kit_audio_beep_impl(uint16_t freq_hz, uint16_t duration_ms);
 extern kit_err_t kit_audio_set_volume_impl(uint8_t percentage);
+extern kit_err_t kit_audio_sfx_impl(kit_sfx_t sfx);
 
 extern kit_err_t kit_power_keep_awake_impl(bool enable);
 
@@ -70,6 +71,7 @@ static const kit_time_api_t s_time_api = {
 static const kit_audio_api_t s_audio_api = {
     .beep = kit_audio_beep_impl,
     .set_volume = kit_audio_set_volume_impl,
+    .sfx = kit_audio_sfx_impl,
 };
 
 static const kit_power_api_t s_power_api = {

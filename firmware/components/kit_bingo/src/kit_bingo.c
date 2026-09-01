@@ -515,7 +515,6 @@ static void tick_cb(lv_timer_t *t)
 
     s_in[s_pick] = true;
     s_drawn[s_ndrawn++] = s_pick;
-    beep(880, 35);
     save_prefs();
     sync_globo();
     paint_board();
@@ -539,6 +538,10 @@ static void start_draw(void)
     lv_obj_set_style_text_font(s_num_lbl, &kit_display_120, 0);
     lv_obj_set_style_text_color(s_num_lbl, lv_color_hex(KIT_COLOR_TEXT), 0);
     lv_label_set_text(s_letter_lbl, "");
+
+    const kit_api_table_t *t = api();
+    if (t && t->audio) t->audio->sfx(KIT_SFX_BINGO_BALL);   // chocalho → número saindo
+
     s_timer = lv_timer_create(tick_cb, SHUF_TICK_MS, NULL);
 }
 

@@ -374,6 +374,9 @@ static void do_flip(void)
     s_flipping = true;
     s_final_result = flip_one();
 
+    const kit_api_table_t *at = api();
+    if (at && at->audio) at->audio->sfx(KIT_SFX_COIN);   // giro no ar → "ding"
+
     lv_obj_add_flag(s_hint_lbl, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(s_winner_lbl, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_style_text_color(s_result_lbl, lv_color_hex(s_accent), 0);

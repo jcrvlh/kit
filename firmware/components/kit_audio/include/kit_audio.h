@@ -28,6 +28,17 @@ kit_err_t kit_audio_init(void);
 kit_err_t kit_audio_beep_impl(uint16_t freq_hz, uint16_t duration_ms);
 kit_err_t kit_audio_set_volume_impl(uint8_t percentage);
 
+/**
+ * Toca um efeito sonoro pronto (sequência curta). Respeita a flag "Som".
+ */
+kit_err_t kit_audio_sfx_impl(kit_sfx_t sfx);
+
+/**
+ * Diagnóstico: re-sonda o ES8311 no I2C, loga o estado do pipeline e toca
+ * um tom longo e contínuo (1,5 s). Usado pela linha "SOM" da tela Testes.
+ */
+kit_err_t kit_audio_selftest_impl(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1,6 +1,7 @@
 #include "kit_tool_manager.h"
 #include "kit_api.h"
 #include "kit_runtime.h"
+#include "kit_audio.h"
 #include "kit_dice.h"
 #include "kit_bottle.h"
 #include "kit_coin.h"
@@ -63,6 +64,34 @@ static lv_obj_t *tt_row(lv_obj_t *parent, const char *key, const char *val,
     return v;
 }
 
+// Linha "SOM" do diagnóstico: toca ao tocar. Re-sonda o ES8311 e emite um
+// tom longo e contínuo (era o botão "Testar som" dos Ajustes).
+static void test_tool_sound_cb(lv_event_t *e)
+{
+    (void)e;
+    ESP_LOGI(TAG, "Test Tool: teste de som.");
+    kit_audio_selftest_impl();
+}
+
+static void tt_sound_row(lv_obj_t *parent)
+{
+    lv_obj_t *r = lv_obj_create(parent);
+    lv_obj_remove_style_all(r);
+    lv_obj_set_size(r, TT_CONTENT, 52);
+    lv_obj_set_style_border_width(r, 1, 0);
+    lv_obj_set_style_border_side(r, LV_BORDER_SIDE_BOTTOM, 0);
+    lv_obj_set_style_border_color(r, lv_color_hex(KIT_COLOR_LINE), 0);
+    lv_obj_clear_flag(r, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(r, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(r, 6);
+    lv_obj_add_event_cb(r, test_tool_sound_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *k = tt_label(r, "SOM", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_obj_align(k, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_t *v = tt_label(r, "TOCAR TOM", KIT_COLOR_GREEN, &kit_mono_16, 0);
+    lv_obj_align(v, LV_ALIGN_RIGHT_MID, 0, 0);
+}
+
 static void test_tool_exit_cb(lv_event_t *e)
 {
     (void)e;
@@ -105,7 +134,7 @@ static kit_err_t run_internal_test_tool(void)
     lv_obj_add_event_cb(s_test_tool_screen, test_tool_touch_cb, LV_EVENT_CLICKED, NULL);
 
     // Cabeçalho — a saída é o botão SAIR ou o botão físico BOOT.
-    lv_obj_t *ttl = tt_label(s_test_tool_screen, "TEST TOOL", KIT_COLOR_TEXT, &kit_mono_26, 3);
+    lv_obj_t *ttl = tt_label(s_test_tool_screen, "TESTES", KIT_COLOR_TEXT, &kit_mono_26, 3);
     lv_obj_align(ttl, LV_ALIGN_TOP_LEFT, TT_PAD, 30);
     lv_obj_t *sub = tt_label(s_test_tool_screen, "DIAGNOSTICO DO SISTEMA",
                              KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
@@ -144,6 +173,7 @@ static kit_err_t run_internal_test_tool(void)
            storage_ok ? KIT_COLOR_GREEN : KIT_COLOR_RED);
     s_random_val_lbl = tt_row(body, "RANDOM", rnd, KIT_COLOR_TEXT);
     tt_row(body, "BATERIA", batt, KIT_COLOR_TEXT);
+    tt_sound_row(body);
 
     // Pílula "SAIR" — ação destrutiva (vermelho), alvo confortável.
     lv_obj_t *exit_btn = lv_obj_create(s_test_tool_screen);

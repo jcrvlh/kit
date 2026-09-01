@@ -111,6 +111,7 @@ static lv_obj_t *s_fin_icon   = NULL;
 static lv_obj_t *s_fin_word   = NULL;
 static lv_obj_t *s_fin_hint   = NULL;
 static bool     s_fin_on      = false;
+static uint32_t s_fin_ticks   = 0;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -460,11 +461,20 @@ static void fin_paint(bool green)
     }
 }
 
+static void play_alarm(void)
+{
+    const kit_api_table_t *t = api();
+    if (t && t->audio) t->audio->sfx(KIT_SFX_TIMER_DONE);
+}
+
 static void fin_tick_cb(lv_timer_t *t)
 {
     (void)t;
     s_fin_on = !s_fin_on;
     fin_paint(s_fin_on);
+
+    // Re-toca o alarme a cada ~8 ticks (~3,4 s) enquanto a tela de fim está no ar.
+    if (++s_fin_ticks % 8 == 0) play_alarm();
 }
 
 static void trigger_finish(void)
@@ -477,9 +487,11 @@ static void trigger_finish(void)
 
     if (s_tv) lv_tileview_set_tile_by_index(s_tv, 1, 0, LV_ANIM_OFF);
     s_fin_on = true;
+    s_fin_ticks = 0;
     fin_paint(true);
     lv_obj_clear_flag(s_finish, LV_OBJ_FLAG_HIDDEN);
     sync_keep_awake();
+    play_alarm();
 
     if (s_fin_timer) lv_timer_delete(s_fin_timer);
     s_fin_timer = lv_timer_create(fin_tick_cb, FIN_TICK_MS, NULL);
