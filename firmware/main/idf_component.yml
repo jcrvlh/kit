@@ -1,0 +1,8 @@
+dependencies:
+  espressif/esp_lcd_co5300: "^1.0.0"
+  lvgl/lvgl: "^9.2.0"
+  espressif/elf_loader: "^1.0.0"
+  joltwallet/littlefs: "^1.14.0"
+  espressif/esp_codec_dev: "^1.5.0"
+
+

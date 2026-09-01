@@ -1,0 +1,17 @@
+menu "Configurações do KIT Core"
+
+    config KIT_VERSION_STR
+        string "Versão do KIT Runtime"
+        default "0.1.0"
+
+    config KIT_DEFAULT_BRIGHTNESS
+        int "Brilho Padrão do AMOLED (1-100)"
+        default 80
+        range 1 100
+
+    config KIT_SCREEN_TIMEOUT_SEC
+        int "Tempo de Inatividade para Dimmed/Sleep (segundos)"
+        default 30
+        range 5 300
+
+endmenu

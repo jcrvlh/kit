@@ -1,0 +1,17 @@
+{
+  "manifest_version": 1,
+  "id": "com.kit.example.counter",
+  "name": "Contador",
+  "version": "1.0.0",
+  "version_code": 1,
+  "min_runtime": "0.1.0",
+  "max_runtime": "1.0.0",
+  "author": "KIT Core Team",
+  "description": "Contador com persistência — exemplo intermediário do SDK.",
+  "icon": "icon.bin",
+  "entry_point": "tool.elf",
+  "arch": "xtensa-esp32s3",
+  "permissions": ["display", "input", "storage", "audio"],
+  "api_level": 1,
+  "assets": []
+}

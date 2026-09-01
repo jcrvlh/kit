@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KIT Web Installer</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- JSZip for client-side zip extraction -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>KIT INSTALLER</h1>
+            <p class="subtitle">Instale Tools no seu KIT diretamente pelo navegador usando Web Serial.</p>
+        </header>
+
+        <main>
+            <section id="connection-panel" class="panel">
+                <div class="status-indicator" id="status-dot"></div>
+                <h2 id="status-text">DESCONECTADO</h2>
+                <button id="btn-connect" class="btn btn-primary">CONECTAR AO KIT</button>
+            </section>
+
+            <section id="upload-panel" class="panel disabled">
+                <div id="drop-zone" class="drop-zone">
+                    <p>ARRASTE UM ARQUIVO <strong>.KIT</strong> AQUI</p>
+                    <p class="small-text">Ou clique para selecionar</p>
+                    <input type="file" id="file-input" accept=".kit,.zip" style="display: none;">
+                </div>
+                
+                <div id="progress-container" class="hidden">
+                    <h3 id="progress-title">NOME DA TOOL</h3>
+                    <div class="progress-bar">
+                        <div id="progress-fill" class="progress-fill"></div>
+                    </div>
+                    <p id="progress-status">Preparando...</p>
+                </div>
+            </section>
+
+            <section id="log-panel" class="panel">
+                <h3>LOGS DO SISTEMA</h3>
+                <div id="log-console" class="console"></div>
+            </section>
+        </main>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

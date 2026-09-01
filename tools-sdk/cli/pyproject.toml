@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kit-cli"
+version = "0.2.0"
+description = "KIT Tool SDK CLI — Ferramenta oficial para criar, validar, compilar, empacotar e instalar Tools para o KIT."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "GPL-3.0" }
+authors = [
+    { name = "KIT Project Team" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "click>=8.0",
+    "rich>=13.0",
+    "pyserial>=3.5",
+]
+
+[project.scripts]
+kit-cli = "kit_cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

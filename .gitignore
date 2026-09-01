@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────
+# Sistema operacional / editor
+# ─────────────────────────────────────────────────────────────
+.DS_Store
+*.swp
+*~
+.idea/
+# .vscode/ é versionado (só settings.json compartilhado); ignore local overrides:
+.vscode/settings.local.json
+.vscode/*.log
+
+# ─────────────────────────────────────────────────────────────
+# ESP-IDF / firmware (artefatos de build — regeneráveis)
+# ─────────────────────────────────────────────────────────────
+build/
+managed_components/
+.cache/
+sdkconfig
+sdkconfig.old
+sdkconfig.defaults.old
+*.bak
+
+# Binários flasháveis gerados — distribuídos via GitHub Releases, não no repo
+firmware/bin/
+
+# Mantidos no repo (não ignorar):
+#   firmware/sdkconfig.defaults
+#   firmware/dependencies.lock
+#   firmware/partitions.csv
+#   **/idf_component.yml
+
+# ─────────────────────────────────────────────────────────────
+# Python / kit-cli
+# ─────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+.pytest_cache/
+.tox/
+.venv/
+venv/
+.coverage
+htmlcov/
+
+# ─────────────────────────────────────────────────────────────
+# Tools SDK — saídas de empacotamento (regeneráveis via kit-cli)
+# ─────────────────────────────────────────────────────────────
+*.kit
+tools-sdk/examples/**/tool.elf
+tools-sdk/examples/**/build/
+
+# ─────────────────────────────────────────────────────────────
+# Rascunhos / trabalho local
+# ─────────────────────────────────────────────────────────────
+/scratchpad/
+
+# ─────────────────────────────────────────────────────────────
+# Material interno — racionínio de projeto e notas de bring-up.
+# Fica na cópia local, fora do repo público.
+# ─────────────────────────────────────────────────────────────
+/docs/decisions/
+/ROADMAP.md
+/HARDWARE_STATUS.md
+/CHANGELOG.internal.md

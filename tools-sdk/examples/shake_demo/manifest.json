@@ -1,0 +1,17 @@
+{
+  "manifest_version": 1,
+  "id": "com.kit.example.shake",
+  "name": "Shake Demo",
+  "version": "1.0.0",
+  "version_code": 1,
+  "min_runtime": "0.1.0",
+  "max_runtime": "1.0.0",
+  "author": "KIT Core Team",
+  "description": "Demonstração do sensor de chacoalhar (IMU) — exemplo do SDK.",
+  "icon": "icon.bin",
+  "entry_point": "tool.elf",
+  "arch": "xtensa-esp32s3",
+  "permissions": ["display", "input", "storage", "random", "audio", "imu"],
+  "api_level": 1,
+  "assets": []
+}

@@ -1,0 +1,149 @@
+#pragma once
+
+#include <stdint.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdio.h>
+#include "lvgl.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Códigos de Retorno Padronizados do KIT
+typedef enum {
+    KIT_OK = 0,
+    KIT_FAIL = -1,
+    KIT_ERR_NO_MEM = -2,
+    KIT_ERR_INVALID_ARG = -3,
+    KIT_ERR_NOT_FOUND = -4,
+    KIT_ERR_TIMEOUT = -5,
+    KIT_ERR_PERMISSION_DENIED = -6,
+    KIT_ERR_STORAGE = -7,
+    KIT_ERR_NOT_SUPPORTED = -8
+} kit_err_t;
+
+// Tipos de Eventos de Entrada
+typedef enum {
+    KIT_INPUT_TOUCH_DOWN,
+    KIT_INPUT_TOUCH_UP,
+    KIT_INPUT_TAP,
+    KIT_INPUT_LONG_PRESS,
+    KIT_INPUT_SWIPE_UP,
+    KIT_INPUT_SWIPE_DOWN,
+    KIT_INPUT_SWIPE_LEFT,
+    KIT_INPUT_SWIPE_RIGHT
+} kit_input_event_type_t;
+
+typedef struct {
+    kit_input_event_type_t type;
+    int16_t x;
+    int16_t y;
+    uint32_t duration_ms;
+} kit_input_event_t;
+
+typedef void (*kit_input_callback_t)(const kit_input_event_t *event, void *user_data);
+
+// Estrutura de Data e Hora
+typedef struct {
+    uint16_t year;
+    uint8_t  month;
+    uint8_t  day;
+    uint8_t  hour;
+    uint8_t  minute;
+    uint8_t  second;
+} kit_datetime_t;
+
+// Informações do Sistema
+typedef struct {
+    uint8_t  battery_percentage;
+    bool     is_charging;
+    uint32_t free_psram_bytes;
+    uint32_t free_flash_bytes;
+    char     device_id[16];
+    char     runtime_version[16];
+} kit_system_info_t;
+
+// Tabelas de APIs Individuais
+typedef struct {
+    lv_obj_t *(*get_screen)(void);
+    kit_err_t (*refresh)(void);
+    kit_err_t (*set_brightness)(uint8_t percentage);
+    uint8_t   (*get_brightness)(void);
+} kit_display_api_t;
+
+typedef struct {
+    kit_err_t (*register_callback)(kit_input_callback_t cb, void *user_data);
+} kit_input_api_t;
+
+typedef struct {
+    kit_err_t (*set_str)(const char *key, const char *value);
+    kit_err_t (*get_str)(const char *key, char *buffer, size_t max_len);
+    kit_err_t (*set_i32)(const char *key, int32_t value);
+    kit_err_t (*get_i32)(const char *key, int32_t *out_value);
+    FILE     *(*open_file)(const char *filename, const char *mode);
+} kit_storage_api_t;
+
+typedef struct {
+    uint32_t  (*u32)(void);
+    int32_t   (*range)(int32_t min, int32_t max);
+    kit_err_t (*bytes)(uint8_t *buffer, size_t length);
+    float     (*get_float)(void);
+} kit_random_api_t;
+
+typedef struct {
+    uint64_t  (*get_millis)(void);
+    kit_err_t (*get_datetime)(kit_datetime_t *dt);
+    void      (*delay_ms)(uint32_t ms);
+} kit_time_api_t;
+
+typedef struct {
+    kit_err_t (*beep)(uint16_t freq_hz, uint16_t duration_ms);
+    kit_err_t (*set_volume)(uint8_t percentage);
+} kit_audio_api_t;
+
+typedef struct {
+    kit_err_t (*keep_awake)(bool enable);
+} kit_power_api_t;
+
+typedef struct {
+    kit_err_t (*get_info)(kit_system_info_t *info);
+    void      (*exit)(void);
+} kit_system_api_t;
+
+typedef void (*kit_shake_callback_t)(void *user_data);
+
+typedef struct {
+    kit_err_t (*register_shake_callback)(kit_shake_callback_t cb, void *user_data);
+} kit_imu_api_t;
+
+// Export Table Consolidada
+typedef struct {
+    const kit_display_api_t *display;
+    const kit_input_api_t   *input;
+    const kit_storage_api_t *storage;
+    const kit_random_api_t  *random;
+    const kit_time_api_t    *time;
+    const kit_audio_api_t   *audio;
+    const kit_power_api_t   *power;
+    const kit_system_api_t  *system;
+    const kit_imu_api_t     *imu;
+} kit_api_table_t;
+
+// Contexto passado para cada Tool em tool_init
+typedef struct {
+    const char *tool_id;
+    const char *data_path;
+    const kit_api_table_t *api;
+} kit_tool_ctx_t;
+
+// Protótipos obrigatórios que a Tool deve exportar
+typedef kit_err_t (*kit_tool_init_fn)(kit_tool_ctx_t *ctx);
+typedef void (*kit_tool_destroy_fn)(void);
+
+// Obtenção da Export Table no Runtime
+const kit_api_table_t *kit_api_get_table(void);
+
+#ifdef __cplusplus
+}
+#endif
