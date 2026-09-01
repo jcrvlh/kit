@@ -7,8 +7,8 @@ O modelo de segurança do KIT foi projetado para garantir a integridade do siste
 ## 🔒 Camadas de Proteção
 
 ### 1. Validação de Pacotes de Tool (`.kit`)
-- **Checksum SHA-256:** O `manifest.json` contém o hash SHA-256 de `tool.elf` e de cada asset. O Tool Manager valida os hashes antes de qualquer extração ou carregamento, e reconfere o hash de `tool.elf` antes da relocação em PSRAM.
-- **Assinatura Ed25519:** Pacotes distribuídos pelo [catálogo](../tools/registry.md) incluem `signature.bin` — assinatura Ed25519 sobre os bytes canônicos do `manifest.json`, que por sua vez cobre `tool.elf` e os assets. O firmware embute as chaves públicas de release do projeto e recusa instalar pacotes cuja assinatura não confira.
+- **Checksum SHA-256:** O `manifest.json` contém o hash SHA-256 de `tool.so` e de cada asset. O Tool Manager valida os hashes antes de qualquer extração ou carregamento, e reconfere o hash de `tool.so` antes da relocação em PSRAM.
+- **Assinatura Ed25519:** Pacotes distribuídos pelo [catálogo](../tools/registry.md) incluem `signature.bin` — assinatura Ed25519 sobre os bytes canônicos do `manifest.json`, que por sua vez cobre `tool.so` e os assets. O firmware embute as chaves públicas de release do projeto e recusa instalar pacotes cuja assinatura não confira.
 - **Trilhas de confiança:** *Oficial* e *Comunidade* (ambas assinadas e revisadas) instalam sem atrito; *Sideload* (arquivo `.kit` local, fora do catálogo) só com **Modo Desenvolvedor** ligado e confirmação explícita.
 
 ### 2. Recursos Nativos de Hardware (ESP32-S3)

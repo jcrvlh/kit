@@ -44,14 +44,8 @@
  * @copyright GNU General Public License v3.0 (GPL-3.0)
  */
 
-#ifdef KIT_SDK_STUBS
-/* Compilação desktop (stubs): fontes LVGL padrão serão usadas.
- * Os ponteiros são declarados mas resolvidos nos stubs. */
-#include <stdint.h>
-typedef struct { uint8_t _placeholder; } lv_font_t;
-#else
-#include "lvgl.h"
-#endif
+/* `lv_font_t` vem de kit_lvgl.h (opaco no build nativo, real no Xtensa). */
+#include "kit_lvgl.h"
 
 #ifdef __cplusplus
 extern "C" {

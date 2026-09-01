@@ -143,18 +143,15 @@ typedef struct {
 } kit_system_info_t;
 
 /* -----------------------------------------------------------------------
- * Tipo opaco para integração gráfica LVGL
+ * Integração gráfica LVGL
  * ----------------------------------------------------------------------- */
 
-/**
- * @brief Tipo opaco que representa um objeto LVGL.
- *
- * No firmware real, é o `lv_obj_t` do LVGL v9. Neste header do SDK,
- * é declarado como `void` para evitar dependência direta da biblioteca LVGL
- * durante a compilação offline. Todos os widgets LVGL (labels, botões,
- * tileviews) são criados usando as funções LVGL sobre este ponteiro.
+/*
+ * `lv_obj_t`, `lv_color_t`, `lv_font_t` e (no build real) todo o LVGL vêm de
+ * kit_lvgl.h — opacos no build nativo, `lvgl.h` de verdade no build Xtensa.
+ * Ver kit_lvgl.h e tools-sdk/docs/tool_lvgl_runtime.md.
  */
-typedef void lv_obj_t;
+#include "kit_lvgl.h"
 
 /* -----------------------------------------------------------------------
  * Callback de chacoalhar (IMU)

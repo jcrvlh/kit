@@ -1,6 +1,7 @@
 """
 kit_cli.builder — Compilação de Tools (desktop com stubs ou cross-compile Xtensa).
 """
+from __future__ import annotations
 
 import os
 import shutil
@@ -23,9 +24,30 @@ def _find_sdk_root() -> Path:
     return sdk_root
 
 
+XTENSA_CC = "xtensa-esp32s3-elf-gcc"
+XTENSA_STRIP = "xtensa-esp32s3-elf-strip"
+
+
 def _has_idf() -> bool:
-    """Verifica se o ESP-IDF está configurado no ambiente."""
-    return bool(os.environ.get("IDF_PATH")) and shutil.which("xtensa-esp32s3-elf-gcc")
+    """Verifica se o toolchain Xtensa está no PATH (via export.sh do ESP-IDF)."""
+    return shutil.which(XTENSA_CC) is not None
+
+
+def _find_lvgl(sdk_root: Path) -> Path | None:
+    """Localiza os headers do LVGL para o build da Tool.
+
+    Ordem: $KIT_LVGL_DIR → managed_components do firmware (após um build IDF) →
+    None. A Tool só usa handles opacos do LVGL, então a config (lv_conf.h) do
+    diretório encontrado não afeta o binário: basta ser a mesma versão do
+    firmware (9.5.x).
+    """
+    env = os.environ.get("KIT_LVGL_DIR")
+    if env and (Path(env) / "lvgl.h").exists():
+        return Path(env)
+    cand = sdk_root.parent / "firmware" / "managed_components" / "lvgl__lvgl"
+    if (cand / "lvgl.h").exists():
+        return cand
+    return None
 
 
 def _detect_target(requested: str) -> str:
@@ -105,60 +127,59 @@ def _build_native(source_dir: Path, build_dir: Path, sdk_root: Path) -> Tuple[bo
 
 def _build_xtensa(source_dir: Path, build_dir: Path, sdk_root: Path) -> Tuple[bool, str]:
     """Compila com toolchain Xtensa (ESP-IDF) para gerar tool.elf."""
-    idf_path = os.environ.get("IDF_PATH")
-    if not idf_path:
+    if not shutil.which(XTENSA_CC):
         return False, (
-            "ESP-IDF não encontrado. Configure $IDF_PATH e execute:\n"
-            "  source $IDF_PATH/export.sh\n\n"
-            "Ou use '--target native' para compilar em modo desktop."
+            f"'{XTENSA_CC}' não está no PATH. Rode '. $IDF_PATH/export.sh'.\n"
+            "Ou use '--target native' para compilar a lógica em modo desktop."
         )
 
-    toolchain_file = Path(idf_path) / "tools" / "cmake" / "toolchain-esp32s3.cmake"
-    if not toolchain_file.exists():
-        # Tenta localizar via componentes
-        toolchain_file = None
+    lvgl = _find_lvgl(sdk_root)
+    if lvgl is None:
+        return False, (
+            "Headers do LVGL não encontrados. Defina $KIT_LVGL_DIR apontando "
+            "para um checkout do lvgl/lvgl 9.5.x, ou rode um build do firmware "
+            "uma vez (popula firmware/managed_components/lvgl__lvgl)."
+        )
+
+    srcs = sorted(str(p) for p in (source_dir / "src").glob("*.c"))
+    if not srcs:
+        return False, f"Nenhum .c em '{source_dir / 'src'}'."
+
+    out = source_dir / "tool.so"
+    build_dir.mkdir(parents=True, exist_ok=True)
+
+    # Espelha tools-sdk/examples/hello_sd/build.sh (recipe validada em HW):
+    # PIC + -shared + sem libc/CRT, só tool_init/tool_destroy no .dynsym.
+    cflags = [
+        "-std=gnu17", "-Os", "-mlongcalls",
+        "-fPIC", "-shared", "-nostdlib", "-nostartfiles",
+        "-ffunction-sections", "-fdata-sections", "-fvisibility=hidden",
+        "-Wall", "-Wextra",
+        f"-I{sdk_root / 'include'}",
+        f"-I{lvgl}", f"-I{lvgl / 'src'}",
+        "-DLV_CONF_SKIP=1",
+    ]
+    ldflags = ["-Wl,--gc-sections", "-Wl,--strip-all", "-Wl,--allow-shlib-undefined"]
 
     try:
-        cmake_args = [
-            "cmake",
-            "-B", str(build_dir),
-            "-S", str(source_dir),
-            f"-DCMAKE_PREFIX_PATH={sdk_root}",
-        ]
+        r = subprocess.run([XTENSA_CC, *cflags, *srcs, *ldflags, "-o", str(out)],
+                           capture_output=True, text=True, cwd=str(source_dir))
+        if r.returncode != 0:
+            return False, f"Compilação Xtensa falhou:\n{r.stderr}"
 
-        if toolchain_file:
-            cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={toolchain_file}")
-        else:
-            # Usa o compilador Xtensa diretamente
-            cmake_args.extend([
-                "-DCMAKE_C_COMPILER=xtensa-esp32s3-elf-gcc",
-                "-DCMAKE_SYSTEM_NAME=Generic",
-                "-DCMAKE_SYSTEM_PROCESSOR=xtensa",
-            ])
+        if shutil.which(XTENSA_STRIP):
+            subprocess.run(
+                [XTENSA_STRIP, "--strip-unneeded",
+                 "--remove-section=.comment", "--remove-section=.got.loc",
+                 "--remove-section=.dynamic", "--remove-section=.xt.lit",
+                 "--remove-section=.xt.prop", "--remove-section=.xtensa.info",
+                 str(out)],
+                capture_output=True, text=True,
+            )
 
-        result = subprocess.run(
-            cmake_args,
-            capture_output=True,
-            text=True,
-            cwd=str(source_dir),
-        )
+        return True, f"Build Xtensa concluído: {out}"
 
-        if result.returncode != 0:
-            return False, f"CMake configure (Xtensa) falhou:\n{result.stderr}"
-
-        result = subprocess.run(
-            ["cmake", "--build", str(build_dir)],
-            capture_output=True,
-            text=True,
-            cwd=str(source_dir),
-        )
-
-        if result.returncode != 0:
-            return False, f"Compilação Xtensa falhou:\n{result.stderr}"
-
-        return True, f"Build Xtensa (ESP32-S3) concluído em: {build_dir}"
-
-    except FileNotFoundError:
-        return False, "cmake não encontrado. Instale o CMake 3.16+."
-    except Exception as e:
+    except FileNotFoundError as e:
+        return False, f"Ferramenta ausente: {e}"
+    except Exception as e:  # noqa: BLE001
         return False, f"Erro durante o build Xtensa: {e}"

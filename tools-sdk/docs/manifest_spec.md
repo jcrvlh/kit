@@ -16,7 +16,7 @@ Toda Tool para o KIT deve possuir um arquivo `manifest.json` na raiz do seu proj
   "author": "Seu Nome",
   "description": "Uma breve descrição do que a Tool faz.",
   "icon": "icon.bin",
-  "entry_point": "tool.elf",
+  "entry_point": "tool.so",
   "arch": "xtensa-esp32s3",
   "permissions": ["display", "input", "random"],
   "api_level": 1
@@ -37,7 +37,7 @@ Toda Tool para o KIT deve possuir um arquivo `manifest.json` na raiz do seu proj
 | `author` | **string** | Nome do autor ou organização. | `"KIT Team"` |
 | `description` | **string** | Descrição curta da funcionalidade (máx. 120 caracteres recomendado). | `"Rola múltiplos dados."` |
 | `icon` | **string** | Caminho para o ícone no pacote. Atualmente reservado para o futuro (use `"icon.bin"`). | `"icon.bin"` |
-| `entry_point` | **string** | Nome do binário compilado. Deve ser sempre `"tool.elf"`. | `"tool.elf"` |
+| `entry_point` | **string** | Nome do objeto compartilhado carregado pelo dispositivo. Deve ser `"tool.so"` (gerado por `kit-cli build --target xtensa`). | `"tool.so"` |
 | `arch` | **string** | Arquitetura alvo. Deve ser `"xtensa-esp32s3"`. | `"xtensa-esp32s3"` |
 | `permissions` | **Array[string]** | Lista de APIs de hardware que a Tool deseja acessar. | `["display", "audio"]` |
 
@@ -77,7 +77,7 @@ kit-cli pack /caminho/para/projeto -o minha_tool.kit
 ```
 
 O arquivo gerado (`.kit`) é um arquivo `.zip` padrão que contém o `manifest.json`
-(com os hashes SHA-256 dos artefatos), o binário `tool.elf`, a pasta `assets/` e —
+(com os hashes SHA-256 dos artefatos), o objeto `tool.so`, a pasta `assets/` e —
 em pacotes do catálogo — a `signature.bin` (assinatura Ed25519). Ele tem um limite
 máximo rígido de **7 MB**. Ver [Formato de Pacote](../../docs/tools/package-format.md)
 e [Catálogo Comunitário de Tools](../../docs/tools/registry.md).
