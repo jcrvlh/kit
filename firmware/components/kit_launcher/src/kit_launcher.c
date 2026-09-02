@@ -2798,6 +2798,32 @@ static void catalog_confirm_do_cb(lv_event_t *e)
 // Ações
 // ---------------------------------------------------------------------------
 
+// Id da Tool a abrir no próximo ciclo do LVGL (ver launch_pending_tool_cb).
+static char s_pending_tool_id[40];
+
+// Abre a Tool pedida DEPOIS de liberar o slideshow da Home. O deck (tileview +
+// slides com fontes grandes e ícones) ocupa uma fatia gorda do pool de 64 KB
+// do LVGL; enquanto ele está montado, o tool_init de uma Tool pesada pode não
+// achar memória e falhar ("não abre até reiniciar a placa"). Roda via
+// lv_async_call porque home_tile_cb é o evento de um filho do próprio deck —
+// apagá-lo ali dentro seria use-after-free. A Home reconstrói o deck ao voltar.
+static void launch_pending_tool_cb(void *unused)
+{
+    (void)unused;
+    if (!s_home_deck) return;   // deck já liberado: um launch já está em curso
+
+    home_clear_deck();
+    s_home_deck_dirty = true;
+
+    if (kit_tool_manager_start(s_pending_tool_id) == KIT_OK) return;
+
+    // Não abriu: reconstrói o deck aqui mesmo (ainda estamos na Home).
+    kit_audio_beep_impl(400, 60);
+    home_build_deck();
+    s_home_deck_dirty = false;
+    show_toast("NAO ABRIU");
+}
+
 static void home_tile_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
@@ -2814,10 +2840,8 @@ static void home_tile_cb(lv_event_t *e)
     ESP_LOGI(TAG, "Abrindo Tool '%s'...", tool->id);
     if (s_toast) { lv_obj_delete(s_toast); s_toast = NULL; }
     home_mru_touch(i);   // sobe pro topo da recência (deck reconstrói ao voltar)
-    if (kit_tool_manager_start(tool->id) != KIT_OK) {
-        kit_audio_beep_impl(400, 60);
-        show_toast("NAO ABRIU");
-    }
+    snprintf(s_pending_tool_id, sizeof s_pending_tool_id, "%s", tool->id);
+    lv_async_call(launch_pending_tool_cb, NULL);
 }
 
 static void run_test_tool_cb(lv_event_t *e)
@@ -2835,6 +2859,12 @@ static void run_test_tool_cb(lv_event_t *e)
 // ---------------------------------------------------------------------------
 // Navegação e polling da bateria
 // ---------------------------------------------------------------------------
+
+void kit_launcher_release_home_deck(void)
+{
+    if (s_home_deck) home_clear_deck();
+    s_home_deck_dirty = true;   // kit_launcher_go_home reconstrói ao voltar
+}
 
 void kit_launcher_go_home(void)
 {

@@ -237,7 +237,13 @@ static void poll_system_buttons(void)
         if (s_is_in_tool) {
             kit_system_exit_impl();
         } else {
-            kit_tool_manager_start_last();
+            // Libera o slideshow da Home antes de relançar a última Tool (mais
+            // RAM para o tool_init). Sem última Tool ou falha ao abrir:
+            // kit_launcher_go_home reconstrói a Home.
+            kit_launcher_release_home_deck();
+            if (kit_tool_manager_start_last() != KIT_OK) {
+                kit_launcher_go_home();
+            }
         }
     }
     s_boot_prev = lvl;

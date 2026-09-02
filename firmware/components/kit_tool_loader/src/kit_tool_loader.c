@@ -3,10 +3,39 @@
 
 #include "esp_dlfcn.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
 #include "lvgl.h"
+#include <stdint.h>
 #include <string.h>
 
 static const char *TAG = "KIT_TOOL_LOADER";
+
+// --- Realocação da Tool: só o código executável fica na RAM interna --------
+//
+// O elf_loader chama esp_elf_malloc(n, exec) para TUDO: o arquivo .so lido do
+// cartão, as structs internas e a tabela de símbolos (exec=false), e o
+// segmento executável relocado (exec=true). Sem interposição, carregar uma
+// Tool de ~25 KB exige um pico de ~50 KB de RAM interna contígua — o arquivo
+// e o segmento ficam vivos ao mesmo tempo dentro de esp_elf_relocate() — e
+// falha por fragmentação depois de um tempo de uso (a Tool "não abre até
+// reiniciar a placa").
+//
+// Aqui as alocações não-executáveis vão para a PSRAM; só o segmento com
+// código continua na RAM interna (única que o barramento de instruções
+// alcança sem remap). Interposto via -Wl,--wrap=esp_elf_malloc (CMakeLists).
+extern void *__real_esp_elf_malloc(uint32_t n, bool exec);
+
+void *__wrap_esp_elf_malloc(uint32_t n, bool exec)
+{
+    if (!exec) {
+        void *p = heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (p) {
+            return p;
+        }
+        // PSRAM cheia/indisponível: cai no comportamento original.
+    }
+    return __real_esp_elf_malloc(n, exec);
+}
 
 typedef kit_err_t (*tool_init_fn)(kit_tool_ctx_t *ctx);
 typedef void      (*tool_destroy_fn)(void);

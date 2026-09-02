@@ -73,6 +73,16 @@ CONFIG_ESP_WIFI_CACHE_TX_BUFFER_NUM=16
 CONFIG_ESP_WIFI_IRAM_OPT=n
 CONFIG_ESP_WIFI_RX_IRAM_OPT=n
 
+# Buffers do Wi-Fi/LWIP na PSRAM. A pilha esp_wifi picotava a RAM interna
+# EXECUTÁVEL (~7 KB de maior bloco livre depois de um HTTPS do catálogo) e o
+# .text de uma Tool .so (~10 KB, relocado na RAM interna) não cabia mais — a
+# Tool "não abria até reiniciar". Com os buffers na PSRAM a RAM interna exec
+# fica livre para as Tools. O KIT só faz HTTPS pontual (catálogo/OTA/NTP), não
+# streaming, então o custo de latência é irrelevante. Rede de segurança:
+# kit_tool_manager derruba a pilha (esp_wifi_deinit) e tenta de novo se ainda
+# assim faltar RAM.
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+
 # Catálogo por HTTPS: o esp_http_client + TLS adicionam ~165 KB de flash. O
 # bundle de CAs "comum" (~40 raizões) cobre GitHub Pages (Let's Encrypt / ISRG)
 # e as Releases (DigiCert) e poupa flash vs. o FULL.

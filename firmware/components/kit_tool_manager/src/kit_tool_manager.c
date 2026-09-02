@@ -14,7 +14,11 @@
 #include "kit_theme.h"
 #include "kit_tool_loader.h"
 #include "kit_pkg.h"
+#include "kit_network.h"
 #include "esp_log.h"
+#include "esp_heap_caps.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "lvgl.h"
 #include "cJSON.h"
 #include "mbedtls/sha256.h"
@@ -45,6 +49,7 @@ typedef struct {
     uint32_t accent;      // cor do card na Home (0xRRGGBB), 0 = não declarada
     char icon[16];        // nome do ícone da Home, "" = genérico
     bool is_game;         // manifest "kind":"game" -> mini-jogo
+    bool wants_network;   // manifest "permissions" contém rede/wifi/internet
 } kit_tool_catalog_entry_t;
 
 static kit_tool_catalog_entry_t s_catalog[KIT_TOOL_CATALOG_MAX];
@@ -53,6 +58,10 @@ static kit_tool_catalog_changed_cb_t s_catalog_changed_cb = NULL;
 
 static char s_current_tool[40] = {0};
 static char s_last_tool[40] = {0};
+
+// A recuperação de memória ao abrir uma Tool (ext_tool_start_with_reclaim) pode
+// ter desligado o Wi-Fi; religa quando a Tool sai.
+static bool s_net_stopped_for_tool = false;
 static lv_obj_t *s_test_tool_screen = NULL;
 static lv_obj_t *s_touch_val_lbl = NULL;
 static lv_obj_t *s_random_val_lbl = NULL;
@@ -399,6 +408,7 @@ static void load_manifest(const char *dirname)
     cJSON *acc_j   = cJSON_GetObjectItemCaseSensitive(root, "accent");
     cJSON *hicon_j = cJSON_GetObjectItemCaseSensitive(root, "home_icon");
     cJSON *kind_j  = cJSON_GetObjectItemCaseSensitive(root, "kind");
+    cJSON *perms_j = cJSON_GetObjectItemCaseSensitive(root, "permissions");
 
     if (!cJSON_IsString(id_j) || !id_j->valuestring[0] ||
         !cJSON_IsString(name_j) || !name_j->valuestring[0]) {
@@ -463,6 +473,19 @@ static void load_manifest(const char *dirname)
                  (strcasecmp(kind_j->valuestring, "game") == 0 ||
                   strcasecmp(kind_j->valuestring, "minigame") == 0 ||
                   strcasecmp(kind_j->valuestring, "minijogo") == 0);
+    e->wants_network = false;
+    if (cJSON_IsArray(perms_j)) {
+        cJSON *perm;
+        cJSON_ArrayForEach(perm, perms_j) {
+            if (cJSON_IsString(perm) &&
+                (strcasecmp(perm->valuestring, "network")  == 0 ||
+                 strcasecmp(perm->valuestring, "wifi")     == 0 ||
+                 strcasecmp(perm->valuestring, "internet") == 0)) {
+                e->wants_network = true;
+                break;
+            }
+        }
+    }
     s_catalog_n++;
 
     ESP_LOGI(TAG, "Tool no cartão: '%s' (%s) v%s -> %s",
@@ -548,6 +571,55 @@ kit_err_t kit_tool_manager_get_entry(uint32_t index, kit_tool_entry_t *entry)
     return KIT_OK;
 }
 
+// Uma Tool externa não carregou de primeira: quase sempre é fragmentação da
+// RAM interna (o segmento .so precisa de um bloco contíguo de ~25-30 KB e o
+// Wi-Fi come a maior parte do que sobra). Em vez de exigir um reboot, devolve
+// o que dá e tenta mais uma vez.
+static kit_err_t ext_tool_start_with_reclaim(const char *so_path,
+                                             kit_tool_ctx_t *ctx,
+                                             const kit_tool_catalog_entry_t *entry,
+                                             kit_err_t first_err)
+{
+    ESP_LOGW(TAG, "Tool '%s' não abriu (err=%d). Interna: %u B livres (maior %u) · "
+             "exec: %u B livres (maior %u).", ctx->tool_id, first_err,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_EXEC),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_EXEC));
+
+    // A pilha Wi-Fi (esp_wifi/lwip) é a maior mordida de RAM interna. Se a
+    // Tool não pede rede e o rádio está ligado, derruba a pilha INTEIRA
+    // (esp_wifi_deinit, ~40 KB) e tenta de novo; religa quando a Tool sair
+    // (kit_tool_manager_stop_current) — ou agora mesmo, se nem assim abrir.
+    bool net_up = kit_network_get_state() != KIT_NET_OFF;
+    bool tool_wants_net = entry && entry->wants_network;
+    if (!net_up || tool_wants_net) {
+        return first_err;   // nada a recuperar
+    }
+
+    ESP_LOGW(TAG, "Derrubando a pilha Wi-Fi para abrir a Tool...");
+    kit_network_teardown();
+    s_net_stopped_for_tool = true;
+    vTaskDelay(pdMS_TO_TICKS(250));   // deixa o driver soltar os buffers
+
+    ESP_LOGW(TAG, "Após liberar o Wi-Fi — exec: %u B livres (maior %u).",
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_EXEC),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_EXEC));
+
+    kit_err_t err = kit_tool_loader_start(so_path, ctx);
+    if (err == KIT_OK) {
+        ESP_LOGI(TAG, "Tool '%s' abriu após liberar o Wi-Fi.", ctx->tool_id);
+        return KIT_OK;
+    }
+
+    ESP_LOGE(TAG, "Tool '%s' ainda não abriu (err=%d, maior bloco %u B).",
+             ctx->tool_id, err,
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    kit_network_start();            // não abriu: religa já, ficamos na Home
+    s_net_stopped_for_tool = false;
+    return err;
+}
+
 kit_err_t kit_tool_manager_start(const char *tool_id)
 {
     ESP_LOGI(TAG, "Iniciando Tool '%s'...", tool_id);
@@ -608,6 +680,9 @@ kit_err_t kit_tool_manager_start(const char *tool_id)
             snprintf(so_path, sizeof(so_path), "tools/%s/tool.so", tool_id);
         }
         err = kit_tool_loader_start(so_path, &ext_ctx);
+        if (err != KIT_OK) {
+            err = ext_tool_start_with_reclaim(so_path, &ext_ctx, found, err);
+        }
     }
 
     if (err == KIT_OK) {
@@ -619,11 +694,10 @@ kit_err_t kit_tool_manager_start(const char *tool_id)
     return err;
 }
 
-void kit_tool_manager_start_last(void)
+kit_err_t kit_tool_manager_start_last(void)
 {
-    if (s_last_tool[0] != '\0') {
-        kit_tool_manager_start(s_last_tool);
-    }
+    if (s_last_tool[0] == '\0') return KIT_ERR_NOT_FOUND;
+    return kit_tool_manager_start(s_last_tool);
 }
 
 void kit_tool_manager_stop_current(void)
@@ -652,6 +726,14 @@ void kit_tool_manager_stop_current(void)
     } else if (s_test_tool_screen) {
         lv_obj_delete(s_test_tool_screen);
         s_test_tool_screen = NULL;
+    }
+
+    // O Wi-Fi foi desligado para abrir esta Tool (ext_tool_start_with_reclaim)?
+    // Religa agora que ela saiu.
+    if (s_net_stopped_for_tool) {
+        ESP_LOGI(TAG, "Religando o Wi-Fi (desligado para abrir a Tool).");
+        kit_network_start();
+        s_net_stopped_for_tool = false;
     }
 
     s_current_tool[0] = '\0';
