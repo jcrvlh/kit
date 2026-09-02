@@ -116,6 +116,7 @@ typedef enum {
     KIT_SFX_LOCK,          // tela apagada: cadeado fechando (estalo + trinco grave)
     KIT_SFX_UNLOCK,        // tela ligada: cadeado abrindo (trinco solta + estalo subindo)
     KIT_SFX_BOTTLE_SPIN,   // Garrafa: catraca de madeira desacelerando (~2,2 s) e um "assentou"
+    KIT_SFX_CATALOG_DONE,  // Catálogo: download de uma Tool concluído — arpejo alegre e saltitante
 } kit_sfx_t;
 
 typedef struct {

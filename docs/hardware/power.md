@@ -10,7 +10,8 @@ Especificação do controle de alimentação do KIT.
 * **Interface:** I2C (Endereço `0x34`)
 * **Conector de Bateria:** MX1.25 de 2 pinos
 * **Suporte de Carga:** Carga linear de baterias Li-ion / LiPo de 3.7V (corrente de carga configurável de 100 mA a 1000 mA).
-* **Medição de Bateria (E-Gauge):** ADC integrado de 14-bit que reporta percentual de carga, tensão instantânea e status de carregamento via USB.
+* **Medição de Bateria:** ADC integrado de 14-bit (tensão da bateria, VBUS e VSYS) + detecção de bateria e status de carregamento via USB. Os canais de ADC nascem desligados após o reset — `kit_power_init` habilita `0x30` (ADC) e `0x68` (detecção).
+* **Percentual de carga:** o gauge interno do AXP2101 (registrador `0xA4`) fica travado em 0 nesta placa — problema conhecido do chip, cujo estimador de SoC depende de uma curva de caracterização da célula que a Waveshare não carrega. `kit_power_get_battery_percentage()` estima o percentual a partir da tensão da bateria (curva Li-ion em `kit_power_soc_from_mv`), usando `0xA4` apenas se ele devolver um valor plausível.
 
 ---
 

@@ -99,6 +99,14 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   com exFAT o modo pen drive funciona em qualquer sistema sem reformatar.
 
 ### Alterado
+- **Ajustes reorganizados:** os itens soltos viraram grupos — **Tela** (brilho +
+  repouso), **Som** (liga/desliga + volume), **Bateria** (nível + estado +
+  "Desligar sozinho") e **Armazenamento** (que absorveu o **Modo pen drive**).
+  **Testes** foi para dentro de **Sobre o KIT**. A Home passou a se redesenhar
+  via `lv_async_call` quando o catálogo muda (instalar/remover pelo Catálogo),
+  sem empilhar objetos por cima de um overlay aberto.
+- **Catálogo:** som próprio ao concluir um download (`KIT_SFX_CATALOG_DONE`,
+  arpejo alegre), distinto do `CONFIRM` usado na remoção.
 - **Energia — repouso da tela vira meia-hibernação:** ao apagar a tela (manual
   ou por inatividade), o Runtime desliga o acelerômetro do QMI8658, suspende o
   áudio (efeitos novos são descartados até acordar) e habilita o *light sleep*
@@ -110,5 +118,29 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 - **Áudio:** o codec/PA do ES8311 agora desliga sozinho após ~3 s sem som
   (e religa no próximo bipe), eliminando o chiado contínuo no alto-falante e
   a corrente de repouso do amplificador de 5 V.
+- **Áudio — primeiro toque mudo:** depois do codec dormir, o primeiro efeito
+  curto saía enquanto o `PA_EN` ainda subia e sumia (só do 2º toque em diante
+  se ouvia). `audio_codec_wake()` passou a inserir ~80 ms de silêncio antes do
+  primeiro tom.
+- **Bateria:** o percentual ficava preso em 0% — o gauge interno do AXP2101
+  (registrador `0xA4`) não funciona nesta placa da Waveshare. Agora é estimado
+  pela tensão da bateria (curva Li-ion), com os canais de ADC do PMIC ligados
+  no `kit_power_init`; a detecção de carga passou a ler os bits de sentido de
+  corrente da `STATUS2`.
+- **Display sob Wi-Fi:** um `esp_lcd_panel_draw_bitmap` que falhava ao ser
+  enfileirado (disputa de barramento com o Wi-Fi) deixava o LVGL preso para
+  sempre em `wait_for_flushing`; agora o flush é liberado na mão. Os
+  framebuffers foram para a PSRAM e a sessão TLS do mbedTLS foi realocada para
+  a PSRAM (`CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC`), liberando IRAM contígua para o
+  catálogo (`mbedtls_ssl_setup` falhava com `-0x7F00`) e para relocar o `.so`
+  das Tools.
+- **Catálogo:** a barra de progresso ficava em 0% a download inteiro quando o
+  `index.json` não trazia `size` — agora usa o `Content-Length` da resposta.
+  Travessão, reticências e aspas curvas vindas do `index.json` viravam um
+  retângulo vazado na tela; agora são convertidas para ASCII.
+- **Remover Tool:** o `rm_rf` pulava entradas (o FatFs não garante um `readdir`
+  consistente enquanto a pasta é modificada) e a Tool ressurgia no próximo
+  scan; agora a pasta é reaberta a cada remoção e o `.kit` de origem também é
+  apagado.
 
 _Projeto ainda pré-lançamento; a primeira release marcará a v0.1.0._

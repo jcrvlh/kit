@@ -17,7 +17,8 @@
 #include <string.h>
 
 // Launcher do KIT — linguagem "Brutalist Bauhaus" (ver docs/design/design-language.md).
-// Telas: splash "INICIANDO", Home (sem tools), Ajustes, Brilho, Sobre, e um
+// Telas: splash "INICIANDO", Home (sem tools), Ajustes (Tela > brilho/repouso,
+// Som > volume/liga-desliga, Armazenamento > pen drive), Sobre, e um
 // overlay de feedback reutilizável (ex: carga iniciada).
 //
 // Os botões físicos (PWR liga/desliga a tela, BOOT volta para a Home) são
@@ -35,9 +36,11 @@ static const char *TAG = "KIT_LAUNCHER";
 static lv_obj_t *s_launcher_screen = NULL;
 static lv_obj_t *s_splash_screen = NULL;
 static lv_obj_t *s_settings_screen = NULL;
+static lv_obj_t *s_display_screen = NULL;        // Ajustes > Tela (brilho + repouso)
 static lv_obj_t *s_brightness_screen = NULL;
-static lv_obj_t *s_volume_screen = NULL;
+static lv_obj_t *s_volume_screen = NULL;         // Ajustes > Som (volume + liga/desliga)
 static lv_obj_t *s_sleep_screen = NULL;
+static lv_obj_t *s_battery_screen = NULL;        // Ajustes > Bateria (nível + desligar sozinho)
 static lv_obj_t *s_poweroff_screen = NULL;
 static lv_obj_t *s_about_screen = NULL;
 static lv_obj_t *s_storage_screen = NULL;       // Ajustes > Armazenamento
@@ -220,11 +223,15 @@ static void home_mru_touch(int idx)
 
 static void open_settings_cb(lv_event_t *e);
 static void close_settings_cb(lv_event_t *e);
+static void open_display_cb(lv_event_t *e);
+static void close_display_cb(lv_event_t *e);
 static void open_brightness_cb(lv_event_t *e);
 static void close_brightness_cb(lv_event_t *e);
-static void open_volume_cb(lv_event_t *e);
-static void close_volume_cb(lv_event_t *e);
+static void open_sound_cb(lv_event_t *e);
+static void close_sound_cb(lv_event_t *e);
 static void open_sleep_cb(lv_event_t *e);
+static void open_battery_cb(lv_event_t *e);
+static void close_battery_cb(lv_event_t *e);
 static void open_poweroff_cb(lv_event_t *e);
 static void open_about_cb(lv_event_t *e);
 static void close_about_cb(lv_event_t *e);
@@ -390,9 +397,9 @@ static lv_obj_t *make_button(lv_obj_t *parent, const char *txt, lv_event_cb_t cb
     return b;
 }
 
-static void make_row(lv_obj_t *parent, const char *shape, uint32_t shape_color,
-                     const char *label, bool selected, lv_event_cb_t cb,
-                     void *user_data)
+static lv_obj_t *make_row(lv_obj_t *parent, const char *shape, uint32_t shape_color,
+                          const char *label, bool selected, lv_event_cb_t cb,
+                          void *user_data)
 {
     lv_obj_t *row = lv_obj_create(parent);
     lv_obj_set_size(row, KIT_CONTENT, KIT_ROW_H);
@@ -424,6 +431,7 @@ static void make_row(lv_obj_t *parent, const char *shape, uint32_t shape_color,
     lv_obj_t *ch = add_label(row, KIT_ICON_CHEVRON,
                              selected ? KIT_COLOR_BG : KIT_COLOR_TEXT_MUTED, &kit_mono_26, 0);
     lv_obj_align(ch, LV_ALIGN_RIGHT_MID, -20, 0);
+    return row;
 }
 
 static void make_spec(lv_obj_t *parent, const char *k, const char *v)
@@ -835,7 +843,9 @@ static void make_catalog_tile(lv_obj_t *grid)
     lv_obj_set_style_pad_all(badge, 0, 0);
     lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_align(badge, LV_ALIGN_TOP_LEFT, 14, 14);
-    lv_obj_t *g = add_label(badge, KIT_ICON_PLUS, KIT_COLOR_TEXT_MUTED, &kit_display_44, 0);
+    // kit_mono_26 (não kit_display_44): o "+" no tamanho grande passava bem dos
+    // ícones desenhados (~24 px) das outras Tools e do anel do Ajustes.
+    lv_obj_t *g = add_label(badge, KIT_ICON_PLUS, KIT_COLOR_TEXT_MUTED, &kit_mono_26, 0);
     lv_obj_center(g);
 
     lv_obj_t *lbl = add_label(tile, "Cat\xC3\xA1logo", KIT_COLOR_TEXT_MUTED, &kit_sans_22, 0);
@@ -1027,17 +1037,45 @@ static void build_home(lv_obj_t *s)
     home_build_deck();
 }
 
-// Recallback do Tool Manager: o catálogo do cartão mudou (formatou, montou um
-// cartão novo, recarregou). Refaz a grade e o slideshow da Home na hora — sem
-// reboot. Roda sempre na task LVGL (disparado por um toque nos Ajustes).
-static void launcher_catalog_changed(void)
+// Há alguma tela (overlay) por cima da Home agora?
+static bool home_is_covered(void)
 {
-    ESP_LOGI(TAG, "Cat\xC3\xA1logo de Tools mudou — refazendo a Home.");
-    build_home_tools();
+    return s_settings_screen || s_display_screen || s_brightness_screen || s_volume_screen ||
+           s_sleep_screen || s_battery_screen || s_poweroff_screen || s_about_screen ||
+           s_storage_screen || s_sd_format_screen || s_usbmsc_screen ||
+           s_wifi_screen || s_wifi_portal_screen || s_catalog_screen ||
+           s_catalog_detail_screen || s_catalog_busy_screen ||
+           s_catalog_confirm_screen || s_onboarding_screen || s_feedback_screen;
+}
+
+// Recallback do Tool Manager: o catálogo do cartão mudou (instalou/removeu Tool,
+// formatou, montou um cartão novo). Roda sempre na task LVGL (via lv_async_call).
+static void launcher_catalog_changed_impl(void *unused)
+{
+    (void)unused;
+    ESP_LOGI(TAG, "Cat\xC3\xA1logo de Tools mudou.");
+    build_home_tools();   // só dados — sem objetos LVGL
     home_mru_load();
+
+    // O deck da Home (tileview + dots) é filho do s_launcher_screen; recriá-lo
+    // agora joga objetos novos POR CIMA de qualquer overlay aberto (o usuário
+    // instalou pelo Catálogo => a tela "TOOL"/"CATÁLOGO" está na frente). Adia:
+    // o kit_launcher_go_home() reconstrói o deck quando o usuário voltar.
+    if (home_is_covered()) {
+        s_home_deck_dirty = true;
+        return;
+    }
     home_clear_deck();
     home_build_deck();
     s_home_deck_dirty = false;
+}
+
+// O kit_tool_manager pode chamar isso de qualquer task (kit_catalog na
+// instalação pelo catálogo, kit_comms no upload serial) — o refaz da Home
+// mexe em dezenas de objetos LVGL, então empurra pra thread do LVGL.
+static void launcher_catalog_changed(void)
+{
+    lv_async_call(launcher_catalog_changed_impl, NULL);
 }
 
 // ---------------------------------------------------------------------------
@@ -1190,7 +1228,6 @@ static void repeat_onboarding_cb(lv_event_t *e)
     if (s_settings_screen) {
         lv_obj_delete(s_settings_screen);
         s_settings_screen = NULL;
-        s_sound_val_lbl = NULL;
     }
 
     lv_obj_t *bye = make_overlay(KIT_COLOR_BG);
@@ -1216,7 +1253,7 @@ static void sync_sound_row(void)
         lv_color_hex(on ? KIT_COLOR_GREEN : KIT_COLOR_TEXT_MUTED), 0);
 }
 
-static void make_sound_row(lv_obj_t *parent)
+static lv_obj_t *make_sound_row(lv_obj_t *parent)
 {
     lv_obj_t *row = lv_obj_create(parent);
     lv_obj_set_size(row, KIT_CONTENT, KIT_ROW_H);
@@ -1235,6 +1272,7 @@ static void make_sound_row(lv_obj_t *parent)
     s_sound_val_lbl = add_label(row, "", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
     lv_obj_align(s_sound_val_lbl, LV_ALIGN_RIGHT_MID, -20, 0);
     sync_sound_row();
+    return row;
 }
 
 static void sound_toggle_cb(lv_event_t *e)
@@ -1256,17 +1294,13 @@ static void open_settings_cb(lv_event_t *e)
     make_titlebar(s_settings_screen, "AJUSTES", close_settings_cb);
 
     lv_obj_t *body = make_scroll_body(s_settings_screen, 0);
-    make_row(body, NULL, 0, "Brilho",           false, open_brightness_cb, NULL);
-    make_row(body, NULL, 0, "Volume",           false, open_volume_cb,     NULL);
-    make_row(body, NULL, 0, "Repouso da tela",  false, open_sleep_cb,      NULL);
-    make_row(body, NULL, 0, "Desligar sozinho", false, open_poweroff_cb,   NULL);
-    make_sound_row(body);
-    make_row(body, NULL, 0, "Wi-Fi",            false, open_wifi_cb,        NULL);
-    make_row(body, NULL, 0, "Testes",           false, run_test_tool_cb,   NULL);
+    make_row(body, NULL, 0, "Tela",             false, open_display_cb,   NULL);
+    make_row(body, NULL, 0, "Som",              false, open_sound_cb,     NULL);
+    make_row(body, NULL, 0, "Wi-Fi",            false, open_wifi_cb,      NULL);
+    make_row(body, NULL, 0, "Armazenamento",    false, open_storage_cb,   NULL);
+    make_row(body, NULL, 0, "Bateria",          false, open_battery_cb,   NULL);
     make_row(body, NULL, 0, "Repetir introdu\xC3\xA7\xC3\xA3o", false, repeat_onboarding_cb, NULL);
-    make_row(body, NULL, 0, "Armazenamento",    false, open_storage_cb,    NULL);
-    make_row(body, NULL, 0, "Modo pen drive",   false, open_usbmsc_cb,     NULL);
-    make_row(body, NULL, 0, "Sobre o KIT",      false, open_about_cb,      NULL);
+    make_row(body, NULL, 0, "Sobre o KIT",      false, open_about_cb,     NULL);
 }
 
 static void close_settings_cb(lv_event_t *e)
@@ -1276,7 +1310,34 @@ static void close_settings_cb(lv_event_t *e)
     if (s_settings_screen) {
         lv_obj_delete(s_settings_screen);
         s_settings_screen = NULL;
-        s_sound_val_lbl = NULL;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tela  (Ajustes > Tela: brilho + repouso da tela)
+// ---------------------------------------------------------------------------
+
+static void open_display_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_display_screen) return;
+
+    s_display_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_display_screen, "TELA", close_display_cb);
+
+    lv_obj_t *body = make_scroll_body(s_display_screen, 0);
+    make_row(body, NULL, 0, "Brilho",          false, open_brightness_cb, NULL);
+    make_row(body, NULL, 0, "Repouso da tela", false, open_sleep_cb,      NULL);
+}
+
+static void close_display_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_display_screen) {
+        lv_obj_delete(s_display_screen);
+        s_display_screen = NULL;
     }
 }
 
@@ -1374,28 +1435,21 @@ static void brightness_released_cb(lv_event_t *e)
 }
 
 // ---------------------------------------------------------------------------
-// Volume
+// Som  (Ajustes > Som: liga/desliga + volume)
 // ---------------------------------------------------------------------------
 
-static void open_volume_cb(lv_event_t *e)
+static void open_sound_cb(lv_event_t *e)
 {
     (void)e;
     kit_audio_sfx_impl(KIT_SFX_CLICK);
     if (s_volume_screen) return;
 
     s_volume_screen = make_overlay(KIT_COLOR_BG);
-    make_titlebar(s_volume_screen, "VOLUME", close_volume_cb);
+    make_titlebar(s_volume_screen, "SOM", close_sound_cb);
 
-    lv_obj_t *spk = lv_obj_create(s_volume_screen);
-    lv_obj_set_size(spk, 112, 112);
-    lv_obj_set_style_bg_color(spk, lv_color_hex(KIT_COLOR_GREEN), 0);
-    lv_obj_set_style_border_width(spk, 0, 0);
-    lv_obj_set_style_radius(spk, 28, 0);
-    lv_obj_set_style_pad_all(spk, 0, 0);
-    lv_obj_clear_flag(spk, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(spk, LV_ALIGN_CENTER, 0, -84);
-    lv_obj_t *ico = add_label(spk, KIT_ICON_BARS, KIT_COLOR_BG, &kit_display_44, 0);
-    lv_obj_center(ico);
+    // Liga/desliga: mesma linha usada antes nos Ajustes.
+    lv_obj_t *srow = make_sound_row(s_volume_screen);
+    lv_obj_align(srow, LV_ALIGN_TOP_MID, 0, KIT_TITLEBAR + 12);
 
     uint8_t cur = kit_config_get_volume();
 
@@ -1403,7 +1457,7 @@ static void open_volume_cb(lv_event_t *e)
     lv_slider_set_range(slider, 0, 100);
     lv_slider_set_value(slider, cur, LV_ANIM_OFF);
     lv_obj_set_size(slider, KIT_DISPLAY_WIDTH - 64, 22);
-    lv_obj_align(slider, LV_ALIGN_CENTER, 0, 14);
+    lv_obj_align(slider, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_ext_click_area(slider, 24);
     lv_obj_set_style_bg_color(slider, lv_color_hex(KIT_COLOR_SURFACE), LV_PART_MAIN);
     lv_obj_set_style_radius(slider, 11, LV_PART_MAIN);
@@ -1423,13 +1477,13 @@ static void open_volume_cb(lv_event_t *e)
     char buf[8];
     snprintf(buf, sizeof(buf), "%d%%", cur);
     s_volume_val_lbl = add_label(s_volume_screen, buf, KIT_COLOR_GREEN, &kit_display_44, 0);
-    lv_obj_align(s_volume_val_lbl, LV_ALIGN_CENTER, 0, 84);
+    lv_obj_align(s_volume_val_lbl, LV_ALIGN_CENTER, 0, 92);
 
-    lv_obj_t *back = make_button(s_volume_screen, "VOLTAR", close_volume_cb, false);
+    lv_obj_t *back = make_button(s_volume_screen, "VOLTAR", close_sound_cb, false);
     lv_obj_align(back, LV_ALIGN_BOTTOM_MID, 0, -14);
 }
 
-static void close_volume_cb(lv_event_t *e)
+static void close_sound_cb(lv_event_t *e)
 {
     (void)e;
     kit_audio_sfx_impl(KIT_SFX_BACK);
@@ -1437,6 +1491,7 @@ static void close_volume_cb(lv_event_t *e)
         lv_obj_delete(s_volume_screen);
         s_volume_screen = NULL;
         s_volume_val_lbl = NULL;
+        s_sound_val_lbl = NULL;
     }
 }
 
@@ -1566,6 +1621,42 @@ static void open_poweroff_cb(lv_event_t *e)
 }
 
 // ---------------------------------------------------------------------------
+// Bateria  (Ajustes > Bateria: nível + "Desligar sozinho")
+// ---------------------------------------------------------------------------
+
+static void open_battery_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_battery_screen) return;
+
+    s_battery_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_battery_screen, "BATERIA", close_battery_cb);
+
+    lv_obj_t *body = make_scroll_body(s_battery_screen, 0);
+
+    char pct[8];
+    snprintf(pct, sizeof(pct), "%u%%", kit_power_get_battery_percentage());
+    make_spec(body, "N\xC3\x8DVEL", pct);
+    make_spec(body, "ESTADO",
+              kit_power_is_charging()      ? "carregando"
+              : kit_power_is_usb_connected() ? "na tomada"
+                                             : "na bateria");
+
+    make_row(body, NULL, 0, "Desligar sozinho", false, open_poweroff_cb, NULL);
+}
+
+static void close_battery_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_battery_screen) {
+        lv_obj_delete(s_battery_screen);
+        s_battery_screen = NULL;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Sobre
 // ---------------------------------------------------------------------------
 
@@ -1592,6 +1683,8 @@ static void open_about_cb(lv_event_t *e)
     make_spec(body, "HARDWARE", "ESP32-S3 V2");
     make_spec(body, "FLASH", "16 MB \xC2\xB7 7 MB LFS");
     make_spec(body, "LICEN\xC3\x87""A", "GPL-3.0");
+
+    make_row(body, NULL, 0, "Testes", false, run_test_tool_cb, NULL);
 
     lv_obj_t *sig = add_label(body, "JCRVLH EXPERIMENT", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 4);
     lv_obj_set_style_pad_top(sig, 14, 0);
@@ -1621,13 +1714,39 @@ static void fmt_size(char *buf, size_t n, uint64_t bytes)
     else              snprintf(buf, n, "%.0f MB", mb);
 }
 
+// Linha de armazenamento em duas alturas: rótulo miúdo em cima, valor em
+// fonte maior embaixo. Antes era uma linha só (make_spec) e o valor longo
+// batia no rótulo.
+static void storage_line(lv_obj_t *body, const char *key, const char *val)
+{
+    lv_obj_t *r = lv_obj_create(body);
+    lv_obj_set_size(r, KIT_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_style_bg_opa(r, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(r, 1, 0);
+    lv_obj_set_style_border_side(r, LV_BORDER_SIDE_BOTTOM, 0);
+    lv_obj_set_style_border_color(r, lv_color_hex(KIT_COLOR_LINE), 0);
+    lv_obj_set_style_radius(r, 0, 0);
+    lv_obj_set_style_pad_all(r, 0, 0);
+    lv_obj_set_style_pad_top(r, 4, 0);
+    lv_obj_set_style_pad_bottom(r, 12, 0);
+    lv_obj_set_style_pad_row(r, 5, 0);
+    lv_obj_clear_flag(r, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_flex_flow(r, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(r, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+
+    add_label(r, key, KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_obj_t *lv_val = add_label(r, val, KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(lv_val, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(lv_val, KIT_CONTENT);
+}
+
 static void storage_spec(lv_obj_t *body, const char *key, uint64_t total, uint64_t freeb)
 {
     char t[16], f[16], v[48];
     fmt_size(t, sizeof(t), total);
     fmt_size(f, sizeof(f), freeb);
-    snprintf(v, sizeof(v), "%s livre de %s", f, t);
-    make_spec(body, key, v);
+    snprintf(v, sizeof(v), "%s livres de %s", f, t);
+    storage_line(body, key, v);
 }
 
 static void build_storage_body(void)
@@ -1644,13 +1763,13 @@ static void build_storage_body(void)
     if (kit_storage_get_info(&lfs_total, &lfs_free) == KIT_OK)
         storage_spec(body, "INTERNO", lfs_total, lfs_free);
     else
-        make_spec(body, "INTERNO", "indispon\xC3\xADvel");
+        storage_line(body, "INTERNO", "indispon\xC3\xADvel");
 
     if (sd) {
         storage_spec(body, "CART\xC3\x83O SD", sd_total, sd_free);
         char tv[16];
         snprintf(tv, sizeof(tv), "%lu", (unsigned long)kit_tool_manager_get_count());
-        make_spec(body, "TOOLS NO CART\xC3\x83O", tv);
+        storage_line(body, "TOOLS NO CART\xC3\x83O", tv);
 
         lv_obj_t *rl = make_button(s_storage_screen, "RECARREGAR TOOLS", sd_scan_cb, false);
         lv_obj_align(rl, LV_ALIGN_BOTTOM_MID, 0, -(14 + KIT_BTN_H + 12));
@@ -1661,12 +1780,16 @@ static void build_storage_body(void)
         lv_obj_t *lbl = lv_obj_get_child(fmt, 0);
         if (lbl) lv_obj_set_style_text_color(lbl, lv_color_hex(KIT_COLOR_RED), 0);
     } else {
-        make_spec(body, "CART\xC3\x83O SD", "n\xC3\xA3o encontrado");
+        storage_line(body, "CART\xC3\x83O SD", "n\xC3\xA3o encontrado");
         // Cartão inserido depois do boot: monta agora e recarrega o catálogo,
         // sem exigir reiniciar o KIT.
         lv_obj_t *scan = make_button(s_storage_screen, "PROCURAR CART\xC3\x83O", sd_scan_cb, false);
         lv_obj_align(scan, LV_ALIGN_BOTTOM_MID, 0, -14);
     }
+
+    // Modo pen drive: liga o cartão no PC via USB. Vive aqui dentro de
+    // Armazenamento (antes era um item solto nos Ajustes).
+    make_row(body, NULL, 0, "Modo pen drive", false, open_usbmsc_cb, NULL);
 }
 
 static void sd_scan_cb(lv_event_t *e)
@@ -2286,6 +2409,7 @@ static void wifi_portal_close_cb(lv_event_t *e)
 static lv_timer_t *s_catalog_poll = NULL;
 static int         s_catalog_last_state = -1;
 static char        s_catalog_sel_id[40] = {0};
+static bool        s_catalog_op_was_install = false;   // último trabalho: baixar (true) x remover
 
 static void catalog_list_rebuild(void);
 static void catalog_detail_rebuild(void);
@@ -2443,7 +2567,7 @@ static void catalog_poll_cb(lv_timer_t *t)
         break;
     case KIT_CAT_WORK_OK:
         catalog_busy_hide();
-        kit_audio_sfx_impl(KIT_SFX_CONFIRM);
+        kit_audio_sfx_impl(s_catalog_op_was_install ? KIT_SFX_CATALOG_DONE : KIT_SFX_CONFIRM);
         show_toast("PRONTO");
         catalog_list_rebuild();
         if (s_catalog_detail_screen) catalog_detail_rebuild();
@@ -2498,6 +2622,16 @@ static void close_catalog_cb(lv_event_t *e)
     if (s_catalog_confirm_screen) { lv_obj_delete(s_catalog_confirm_screen); s_catalog_confirm_screen = NULL; }
     if (s_catalog_detail_screen)  { lv_obj_delete(s_catalog_detail_screen);  s_catalog_detail_screen = NULL; }
     if (s_catalog_screen)         { lv_obj_delete(s_catalog_screen);         s_catalog_screen = NULL; }
+
+    // Instalou/removeu Tool com o Catálogo aberto? O deck da Home ficou pendente
+    // (ver launcher_catalog_changed_impl) — reconstrói agora que a grade "VER
+    // TODOS" volta a aparecer, senão a Tool nova/removida só aparece no próximo
+    // go_home.
+    if (s_home_deck_dirty && !home_is_covered()) {
+        s_home_deck_dirty = false;
+        home_clear_deck();
+        home_build_deck();
+    }
 }
 
 static void catalog_refresh_cb(lv_event_t *e)
@@ -2606,6 +2740,7 @@ static void catalog_action_cb(lv_event_t *e)
     (void)e;
     kit_audio_sfx_impl(KIT_SFX_CLICK);
     s_catalog_last_state = -1;
+    s_catalog_op_was_install = true;
     if (kit_catalog_install(s_catalog_sel_id) != KIT_OK) {
         show_toast("OCUPADO");
         return;
@@ -2657,6 +2792,7 @@ static void catalog_confirm_do_cb(lv_event_t *e)
     (void)e;
     if (s_catalog_confirm_screen) { lv_obj_delete(s_catalog_confirm_screen); s_catalog_confirm_screen = NULL; }
     s_catalog_last_state = -1;
+    s_catalog_op_was_install = false;
     if (kit_catalog_uninstall(s_catalog_sel_id) != KIT_OK) { show_toast("OCUPADO"); return; }
     catalog_busy_show("REMOVENDO");
 }
@@ -2691,10 +2827,10 @@ static void run_test_tool_cb(lv_event_t *e)
 {
     (void)e;
     kit_audio_beep_impl(2000, 50);
-    if (s_settings_screen) {
-        lv_obj_delete(s_settings_screen);
-        s_settings_screen = NULL;
-    }
+    // "Testes" agora vive dentro de Sobre; fecha os dois overlays antes de
+    // entrar na Tool pra não deixar ponteiro solto pro go_home.
+    if (s_about_screen)    { lv_obj_delete(s_about_screen);    s_about_screen = NULL; }
+    if (s_settings_screen) { lv_obj_delete(s_settings_screen); s_settings_screen = NULL; }
     ESP_LOGI(TAG, "Iniciando Test Tool...");
     kit_tool_manager_start("com.kit.test");
 }
@@ -2733,12 +2869,13 @@ void kit_launcher_go_home(void)
     if (s_storage_screen)    { lv_obj_delete(s_storage_screen);    s_storage_screen = NULL; }
     if (s_sleep_screen)      { lv_obj_delete(s_sleep_screen);      s_sleep_screen = NULL; }
     if (s_poweroff_screen)   { lv_obj_delete(s_poweroff_screen);   s_poweroff_screen = NULL; }
+    if (s_battery_screen)    { lv_obj_delete(s_battery_screen);    s_battery_screen = NULL; }
     if (s_brightness_screen) { lv_obj_delete(s_brightness_screen); s_brightness_screen = NULL;
                                s_brightness_val_lbl = NULL; }
     if (s_volume_screen)     { lv_obj_delete(s_volume_screen);     s_volume_screen = NULL;
-                               s_volume_val_lbl = NULL; }
-    if (s_settings_screen)   { lv_obj_delete(s_settings_screen);   s_settings_screen = NULL;
-                               s_sound_val_lbl = NULL; }
+                               s_volume_val_lbl = NULL; s_sound_val_lbl = NULL; }
+    if (s_display_screen)    { lv_obj_delete(s_display_screen);    s_display_screen = NULL; }
+    if (s_settings_screen)   { lv_obj_delete(s_settings_screen);   s_settings_screen = NULL; }
     if (s_onboarding_screen) { lv_obj_delete(s_onboarding_screen); s_onboarding_screen = NULL;
                                kit_config_set_u8("onboarded", 1); }  // saiu pelo BOTÃO físico: não repete no próximo boot
     if (s_splash_screen)     { lv_obj_delete(s_splash_screen);     s_splash_screen = NULL; }
