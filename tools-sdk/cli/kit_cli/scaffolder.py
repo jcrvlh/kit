@@ -34,7 +34,7 @@ def scaffold_new_tool(name: str, tool_id: str, target_dir: Path) -> Tuple[bool, 
             "kind": "tool",
             "accent": "#4C6EF5",
             "home_icon": "card",
-            "entry_point": "tool.elf",
+            "entry_point": "tool.so",
             "arch": "xtensa-esp32s3",
             "permissions": ["display", "input", "random", "storage"],
             "api_level": 1,
@@ -156,24 +156,30 @@ Versão: `1.0.0`
 3. Compile, valide e gere o pacote `.kit`:
 
 ```bash
-# Compilar (desktop — testes sem hardware)
+# Testar a lógica no desktop (stubs, sem UI)
 kit-cli build . --target native
 
-# Validar manifesto
-kit-cli validate .
+# Compilar o objeto da Tool para o KIT (precisa do toolchain do ESP-IDF)
+kit-cli build . --target xtensa        # gera tool.so
 
-# Empacotar
-kit-cli pack .
+# Validar manifesto e empacotar
+kit-cli validate .
+kit-cli pack .                          # empacota tool.so + manifest + icon
 
 # Enviar para o KIT via serial
 kit-cli flash {name.lower().replace(' ', '_')}.kit
 ```
+
+Toda a UI em LVGL deve ficar atrás de `#ifndef KIT_SDK_STUBS` — ver
+`kit_lvgl.h` e a lista de funções LVGL suportadas em
+[tool_lvgl_runtime.md](https://github.com/jcrvlh/kit/tree/main/tools-sdk/docs/tool_lvgl_runtime.md).
 
 ## 📖 Referência
 
 - [Guia do SDK](https://github.com/jcrvlh/kit/tree/main/tools-sdk/docs/sdk_guide.md)
 - [Referência de API](https://github.com/jcrvlh/kit/tree/main/tools-sdk/docs/api_reference.md)
 - [Especificação do Manifesto](https://github.com/jcrvlh/kit/tree/main/tools-sdk/docs/manifest_spec.md)
+- [Runtime LVGL das Tools](https://github.com/jcrvlh/kit/tree/main/tools-sdk/docs/tool_lvgl_runtime.md)
 """
         with open(project_dir / "README.md", "w", encoding="utf-8") as f:
             f.write(readme_content)

@@ -44,7 +44,7 @@ Tools oficiais, só o **Bingo** é `game`; as outras sete são `tool`.
 ## 📦 Como uma Tool é Carregada
 
 1. **Descoberta:** O `kit_tool_manager` varre o diretório `/tools` no sistema de arquivos LittleFS procurando por subpastas com `manifest.json` válido.
-2. **Validação:** Checa versão de API compatível (`min_runtime <= runtime_version <= max_runtime`), permissões requeridas e integridade do arquivo `tool.elf`.
+2. **Validação:** Checa versão de API compatível (`min_runtime <= runtime_version <= max_runtime`), permissões requeridas e integridade do arquivo `tool.so`.
 3. **Alocação e Relocação:** Ao selecionar a Tool no Launcher, o Runtime utiliza o `espressif/elf_loader` para alocar espaço na memória PSRAM externa e efetuar a relocação dos símbolos da Tool contra a tabela de exportação (`kit_api`).
 4. **Execução:** O ponto de entrada da Tool (`tool_init`) é invocado, recebendo uma estrutura de contexto `kit_tool_ctx_t` com ponteiros seguros para as APIs permitidas.
 

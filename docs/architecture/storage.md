@@ -34,7 +34,7 @@ A partição `tools` é formatada em **LittleFS**, oferecendo wear-leveling din�
 ├── .installed_registry.json     # Índice rápido de Tools instaladas
 ├── com.kit.dice/
 │   ├── manifest.json
-│   ├── tool.elf
+│   ├── tool.so
 │   ├── icon.bin
 │   ├── assets/
 │   │   └── dice_faces.bin
@@ -42,6 +42,6 @@ A partição `tools` é formatada em **LittleFS**, oferecendo wear-leveling din�
 │       └── stats.json
 └── com.kit.bingo/
     ├── manifest.json
-    ├── tool.elf
+    ├── tool.so
     └── ...
 ```

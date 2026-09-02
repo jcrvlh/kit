@@ -366,14 +366,17 @@ void kit_runtime_run(void)
             poll_inactivity();
         }
 
-        // Chacoalhar (IMU): só dentro de uma Tool, ~a cada 60 ms. Dispara a
-        // mesma "ação principal" da Tool que o botão PWR (na Dice Tool, rolar).
-        if (s_screen_on && s_is_in_tool && s_tool_primary_action &&
-            now - last_imu_us >= 60000) {
+        // Chacoalhar (IMU): dentro de qualquer Tool, ~a cada 60 ms.
+        //  - Tool built-in: dispara a "ação principal" (mesma do botão PWR).
+        //  - Tool externa (.so): despacha o callback que a Tool registrou
+        //    via kit_api.imu->register_shake_callback (ela não tem
+        //    primary_action). kit_imu_dispatch_shake() é no-op sem callback.
+        if (s_screen_on && s_is_in_tool && now - last_imu_us >= 60000) {
             last_imu_us = now;
             if (kit_imu_poll_shake()) {
                 note_activity();
-                s_tool_primary_action();
+                if (s_tool_primary_action) s_tool_primary_action();
+                kit_imu_dispatch_shake();
             }
         }
 
@@ -395,7 +398,10 @@ bool kit_runtime_is_in_tool(void)
 void kit_runtime_set_in_tool(bool in_tool)
 {
     s_is_in_tool = in_tool;
-    if (!in_tool) s_tool_primary_action = NULL;
+    if (!in_tool) {
+        s_tool_primary_action = NULL;
+        kit_imu_clear_shake_callback();   // não deixa callback órfão de Tool externa
+    }
 }
 
 void kit_runtime_set_tool_primary_action(void (*action)(void))
