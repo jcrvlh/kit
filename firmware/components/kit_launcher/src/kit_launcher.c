@@ -18,7 +18,7 @@
 
 // Launcher do KIT — linguagem "Brutalist Bauhaus" (ver docs/design/design-language.md).
 // Telas: splash "INICIANDO", Home (sem tools), Ajustes (Tela > brilho/repouso,
-// Som > volume/liga-desliga, Armazenamento > pen drive), Sobre, e um
+// Som > volume/liga-desliga, Armazenamento, Modo pen drive), Sobre, e um
 // overlay de feedback reutilizável (ex: carga iniciada).
 //
 // Os botões físicos (PWR liga/desliga a tela, BOOT volta para a Home) são
@@ -1298,6 +1298,7 @@ static void open_settings_cb(lv_event_t *e)
     make_row(body, NULL, 0, "Som",              false, open_sound_cb,     NULL);
     make_row(body, NULL, 0, "Wi-Fi",            false, open_wifi_cb,      NULL);
     make_row(body, NULL, 0, "Armazenamento",    false, open_storage_cb,   NULL);
+    make_row(body, NULL, 0, "Modo pen drive",   false, open_usbmsc_cb,    NULL);
     make_row(body, NULL, 0, "Bateria",          false, open_battery_cb,   NULL);
     make_row(body, NULL, 0, "Repetir introdu\xC3\xA7\xC3\xA3o", false, repeat_onboarding_cb, NULL);
     make_row(body, NULL, 0, "Sobre o KIT",      false, open_about_cb,     NULL);
@@ -1786,10 +1787,6 @@ static void build_storage_body(void)
         lv_obj_t *scan = make_button(s_storage_screen, "PROCURAR CART\xC3\x83O", sd_scan_cb, false);
         lv_obj_align(scan, LV_ALIGN_BOTTOM_MID, 0, -14);
     }
-
-    // Modo pen drive: liga o cartão no PC via USB. Vive aqui dentro de
-    // Armazenamento (antes era um item solto nos Ajustes).
-    make_row(body, NULL, 0, "Modo pen drive", false, open_usbmsc_cb, NULL);
 }
 
 static void sd_scan_cb(lv_event_t *e)
@@ -1976,7 +1973,7 @@ static void open_usbmsc_cb(lv_event_t *e)
         "Liga o cart\xC3\xA3o do KIT no computador como um pen drive, pra voc\xC3\xAA "
         "copiar e organizar os arquivos .kit sem tirar o cart\xC3\xA3o.\n\n"
         "Enquanto estiver ligado o KIT fica em espera e o cabo n\xC3\xA3o serve "
-        "de console. Ao terminar, ejete no computador e toque em SAIR \xE2\x80\x94 "
+        "de console. Ao terminar, ejete no computador e toque em SAIR: "
         "o KIT reinicia e l\xC3\xAA as Tools novas.",
         KIT_COLOR_TEXT, &kit_sans_22, 0);
     lv_label_set_long_mode(tx, LV_LABEL_LONG_WRAP);
@@ -2056,7 +2053,7 @@ static void usbmsc_exit_cb(lv_event_t *e)
     lv_label_set_long_mode(q, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(q, KIT_CONTENT);
 
-    lv_obj_t *ok = make_button(s_usbmsc_screen, "J\xC3\x81 EJETEI \xE2\x80\x94 SAIR", usbmsc_do_exit_cb, true);
+    lv_obj_t *ok = make_button(s_usbmsc_screen, "J\xC3\x81 EJETEI, SAIR", usbmsc_do_exit_cb, true);
     lv_obj_set_style_bg_color(ok, lv_color_hex(KIT_COLOR_RED), 0);
     lv_obj_t *okl = lv_obj_get_child(ok, 0);
     if (okl) lv_obj_set_style_text_color(okl, lv_color_hex(KIT_COLOR_ON_COLOR), 0);
