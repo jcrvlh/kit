@@ -7,9 +7,10 @@ extern "C" {
 #endif
 
 typedef struct {
-    char id[32];
+    char id[40];
     char name[32];
     char version[16];
+    uint32_t version_code; // manifest "version_code"; 0 = ausente
     char description[64];
     uint32_t size_bytes;
     uint32_t accent;      // cor do card na Home (0xRRGGBB); 0 = sem cor no manifest
@@ -27,7 +28,16 @@ kit_err_t kit_tool_manager_get_entry(uint32_t index, kit_tool_entry_t *entry);
 kit_err_t kit_tool_manager_start(const char *tool_id);
 void      kit_tool_manager_start_last(void);
 void      kit_tool_manager_stop_current(void);
-kit_err_t kit_tool_manager_install(const char *pkg_path);
+const char *kit_tool_manager_current(void);   // id da Tool rodando, "" se nenhuma
+
+// Instala (ou atualiza) uma Tool a partir de um pacote `.kit` já baixado:
+// remove `/sdcard/tools/<tool_id>` se existir, extrai o pacote para lá, apaga
+// o `.kit` e recarrega o catálogo. Não faz verificação de assinatura (o
+// chamador já conferiu o SHA-256 do download).
+kit_err_t kit_tool_manager_install(const char *kit_path, const char *tool_id);
+
+// Remove `/sdcard/tools/<tool_id>` e recarrega o catálogo. Recusa se a Tool
+// estiver rodando.
 kit_err_t kit_tool_manager_uninstall(const char *tool_id);
 void      kit_tool_manager_reload_catalog(void);
 void      kit_tool_manager_set_catalog_changed_cb(kit_tool_catalog_changed_cb_t cb);

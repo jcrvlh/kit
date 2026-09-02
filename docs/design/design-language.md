@@ -401,7 +401,10 @@ resto. Atualiza a cada 2 s (`batt_tick_cb`).
 
 **Feedback** (`show_feedback(bg, icone, rótulo)`) — fundo na cor de contexto,
 disco preto central com o ícone na cor do fundo, rótulo em mono caixa alta.
-Usado pelo evento de carga iniciada: verde + raio + `CARREGANDO`.
+Usado pelo evento de carga iniciada (verde + raio + `CARREGANDO`), pela
+associação de Wi-Fi (verde + sinal + `CONECTADO`) e pelo aviso de bateria baixa
+(amarelo + triângulo + `BATERIA BAIXA`, dispara uma vez ao cair a ≤ 20 %
+descarregando; rearma acima de 25 % ou ao ligar na tomada).
 
 **Sobre** — a logo (trio + wordmark `KIT`), a tabela de specs (`DISPOSITIVO`
 vem de `kit_power_get_device_id()`) e a assinatura `JCRVLH EXPERIMENT` no fim.

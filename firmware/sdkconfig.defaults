@@ -60,6 +60,24 @@ CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
 # Bootloader & OTA Rollback Support
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 
+# --- Conectividade Wi-Fi (kit_network) -----------------------------------
+# STA offline-first: a pilha (esp_wifi/lwip) só sobe quando o usuário liga o
+# Wi-Fi. Com CONFIG_PM_ENABLE o driver exige modem-sleep (WIFI_PS_MIN_MODEM,
+# em runtime). Buffers enxutos e IRAM-opt desligado — o KIT faz HTTPS pontual
+# (catálogo, OTA), não streaming — e a IRAM/RAM interna é disputada com o DMA
+# do display AMOLED (QSPI). Ver kit_network / ADR de conectividade.
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=6
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=12
+CONFIG_ESP_WIFI_STATIC_TX_BUFFER_NUM=8
+CONFIG_ESP_WIFI_CACHE_TX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_IRAM_OPT=n
+CONFIG_ESP_WIFI_RX_IRAM_OPT=n
+
+# Catálogo por HTTPS: o esp_http_client + TLS adicionam ~165 KB de flash. O
+# bundle de CAs "comum" (~40 raizões) cobre GitHub Pages (Let's Encrypt / ISRG)
+# e as Releases (DigiCert) e poupa flash vs. o FULL.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_CMN=y
+
 # FreeRTOS CPU Clock (240MHz) & Stack
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=240

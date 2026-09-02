@@ -26,8 +26,16 @@ kit_err_t kit_tool_loader_init(void);
 // Em caso de sucesso a Tool fica ativa até kit_tool_loader_stop().
 kit_err_t kit_tool_loader_start(const char *so_rel_path, kit_tool_ctx_t *ctx);
 
-// Encerra a Tool externa ativa: chama tool_destroy() (se existir) e libera o
-// objeto compartilhado da PSRAM. Seguro chamar sem Tool ativa.
+// Aponta qual tela LVGL (lv_obj_t*) pertence à Tool externa ativa, capturada
+// pelo Runtime logo ANTES de trocar de volta para o Launcher. kit_tool_loader_stop()
+// garante que essa tela seja liberada antes do dlclose — Tools que esquecem de
+// deletar a própria tela no tool_destroy deixariam callbacks apontando pra
+// código já desmapeado, travando o LVGL no próximo render. NULL limpa a marca.
+void kit_tool_loader_mark_tool_screen(void *screen);
+
+// Encerra a Tool externa ativa: chama tool_destroy() (se existir), libera a tela
+// marcada se ela sobreviveu, e devolve o objeto compartilhado da PSRAM. Seguro
+// chamar sem Tool ativa.
 void kit_tool_loader_stop(void);
 
 // true enquanto houver uma Tool externa carregada.

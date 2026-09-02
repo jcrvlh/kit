@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 static const char *TAG = "KIT_TOOL_MGR";
 
@@ -35,9 +36,10 @@ static const char *TAG = "KIT_TOOL_MGR";
 #define KIT_TOOL_SD_TOOLS_DIR "/sdcard/tools"
 
 typedef struct {
-    char id[32];
+    char id[40];
     char name[32];
     char version[16];
+    uint32_t version_code; // manifest "version_code", 0 = ausente
     char entry_rel[96];   // caminho pro dlopen, relativo à base ("/sdcard")
     uint32_t accent;      // cor do card na Home (0xRRGGBB), 0 = não declarada
     char icon[16];        // nome do ícone da Home, "" = genérico
@@ -48,8 +50,8 @@ static kit_tool_catalog_entry_t s_catalog[KIT_TOOL_CATALOG_MAX];
 static uint32_t s_catalog_n = 0;
 static kit_tool_catalog_changed_cb_t s_catalog_changed_cb = NULL;
 
-static char s_current_tool[32] = {0};
-static char s_last_tool[32] = {0};
+static char s_current_tool[40] = {0};
+static char s_last_tool[40] = {0};
 static lv_obj_t *s_test_tool_screen = NULL;
 static lv_obj_t *s_touch_val_lbl = NULL;
 static lv_obj_t *s_random_val_lbl = NULL;
@@ -387,6 +389,7 @@ static void load_manifest(const char *dirname)
     cJSON *id_j    = cJSON_GetObjectItemCaseSensitive(root, "id");
     cJSON *name_j  = cJSON_GetObjectItemCaseSensitive(root, "name");
     cJSON *ver_j   = cJSON_GetObjectItemCaseSensitive(root, "version");
+    cJSON *vc_j    = cJSON_GetObjectItemCaseSensitive(root, "version_code");
     cJSON *entry_j = cJSON_GetObjectItemCaseSensitive(root, "entry_point");
     cJSON *arch_j  = cJSON_GetObjectItemCaseSensitive(root, "arch");
     cJSON *min_j   = cJSON_GetObjectItemCaseSensitive(root, "min_runtime");
@@ -448,6 +451,7 @@ static void load_manifest(const char *dirname)
     snprintf(e->id, sizeof(e->id), "%s", id_j->valuestring);
     snprintf(e->name, sizeof(e->name), "%s", name_j->valuestring);
     snprintf(e->version, sizeof(e->version), "%s", cJSON_IsString(ver_j) ? ver_j->valuestring : "");
+    e->version_code = cJSON_IsNumber(vc_j) && vc_j->valueint > 0 ? (uint32_t)vc_j->valueint : 0;
     snprintf(e->entry_rel, sizeof(e->entry_rel), "tools/%s/%s", dirname, entry_name);
     e->accent = cJSON_IsString(acc_j) ? parse_hex_color(acc_j->valuestring) : 0;
     if (cJSON_IsString(hicon_j) && hicon_j->valuestring[0])
@@ -534,6 +538,7 @@ kit_err_t kit_tool_manager_get_entry(uint32_t index, kit_tool_entry_t *entry)
     snprintf(entry->id, sizeof(entry->id), "%s", c->id);
     snprintf(entry->name, sizeof(entry->name), "%s", c->name);
     snprintf(entry->version, sizeof(entry->version), "%s", c->version);
+    entry->version_code = c->version_code;
     entry->description[0] = '\0';
     entry->size_bytes = 0;
     entry->accent = c->accent;
@@ -651,14 +656,76 @@ void kit_tool_manager_stop_current(void)
     s_current_tool[0] = '\0';
 }
 
-kit_err_t kit_tool_manager_install(const char *pkg_path)
+const char *kit_tool_manager_current(void)
 {
-    ESP_LOGI(TAG, "Instalando pacote .kit de '%s'...", pkg_path);
+    return s_current_tool;
+}
+
+// Apaga recursivamente um diretório do cartão (arquivos + subpastas).
+static void rm_rf(const char *path)
+{
+    DIR *d = opendir(path);
+    if (d) {
+        struct dirent *ent;
+        while ((ent = readdir(d)) != NULL) {
+            if (ent->d_name[0] == '.' &&
+                (ent->d_name[1] == '\0' ||
+                 (ent->d_name[1] == '.' && ent->d_name[2] == '\0'))) continue;
+            char child[400];
+            snprintf(child, sizeof(child), "%.256s/%.128s", path, ent->d_name);
+            struct stat st;
+            if (stat(child, &st) == 0 && S_ISDIR(st.st_mode)) rm_rf(child);
+            else unlink(child);
+        }
+        closedir(d);
+    }
+    rmdir(path);
+}
+
+kit_err_t kit_tool_manager_install(const char *kit_path, const char *tool_id)
+{
+    if (!kit_path || !tool_id || !tool_id[0]) return KIT_ERR_INVALID_ARG;
+
+    char dest[160];
+    snprintf(dest, sizeof(dest), "%s/%.96s", KIT_TOOL_SD_TOOLS_DIR, tool_id);
+
+    struct stat st;
+    if (stat(dest, &st) == 0) {
+        ESP_LOGI(TAG, "Atualizando '%s' — removendo versão anterior", tool_id);
+        rm_rf(dest);
+    }
+
+    ESP_LOGI(TAG, "Instalando '%s' de '%s' -> %s", tool_id, kit_path, dest);
+    kit_err_t r = kit_pkg_extract(kit_path, dest);
+    unlink(kit_path);   // o .kit já cumpriu o papel; libera o cartão
+
+    if (r != KIT_OK) {
+        ESP_LOGE(TAG, "Falha ao extrair '%s'", tool_id);
+        rm_rf(dest);    // não deixa uma instalação pela metade
+        return r;
+    }
+
+    kit_tool_manager_reload_catalog();
     return KIT_OK;
 }
 
 kit_err_t kit_tool_manager_uninstall(const char *tool_id)
 {
-    ESP_LOGI(TAG, "Desinstalando Tool '%s'...", tool_id);
+    if (!tool_id || !tool_id[0]) return KIT_ERR_INVALID_ARG;
+    if (strcmp(tool_id, s_current_tool) == 0) {
+        ESP_LOGW(TAG, "Não dá pra remover '%s': está rodando", tool_id);
+        return KIT_FAIL;
+    }
+
+    char dir[160];
+    snprintf(dir, sizeof(dir), "%s/%.96s", KIT_TOOL_SD_TOOLS_DIR, tool_id);
+    struct stat st;
+    if (stat(dir, &st) != 0) return KIT_ERR_NOT_FOUND;
+
+    ESP_LOGI(TAG, "Removendo Tool '%s' (%s)", tool_id, dir);
+    rm_rf(dir);
+
+    if (strcmp(tool_id, s_last_tool) == 0) s_last_tool[0] = '\0';
+    kit_tool_manager_reload_catalog();
     return KIT_OK;
 }
