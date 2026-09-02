@@ -12,6 +12,8 @@ idf_component_register(
         kit_storage 
         kit_tool_manager
         kit_tool_loader
+        kit_network
+        kit_catalog
         kit_launcher
         kit_random
         kit_power

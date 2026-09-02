@@ -8,6 +8,8 @@
 #include "kit_theme.h"
 #include "kit_storage.h"
 #include "kit_usb_msc.h"
+#include "kit_network.h"
+#include "kit_catalog.h"
 #include "esp_log.h"
 #include "lvgl.h"
 #include <stdio.h>
@@ -41,6 +43,12 @@ static lv_obj_t *s_about_screen = NULL;
 static lv_obj_t *s_storage_screen = NULL;       // Ajustes > Armazenamento
 static lv_obj_t *s_sd_format_screen = NULL;     // confirmação de formatar o cartão
 static lv_obj_t *s_usbmsc_screen = NULL;        // Ajustes > Modo pen drive (USB MSC)
+static lv_obj_t *s_wifi_screen = NULL;          // Ajustes > Wi-Fi
+static lv_obj_t *s_wifi_portal_screen = NULL;   // Wi-Fi > Configurar rede (portal)
+static lv_obj_t *s_catalog_screen = NULL;       // Catálogo de Tools
+static lv_obj_t *s_catalog_detail_screen = NULL;
+static lv_obj_t *s_catalog_busy_screen = NULL;
+static lv_obj_t *s_catalog_confirm_screen = NULL;
 static lv_obj_t *s_onboarding_screen = NULL;   // introdução do primeiro boot (repetível)
 static lv_obj_t *s_home_deck = NULL;       // lv_tileview horizontal — slideshow de Tools
 static lv_obj_t *s_home_dots_box = NULL;   // fileira de pontos de página (rodapé da Home)
@@ -53,9 +61,11 @@ static lv_obj_t *s_volume_val_lbl = NULL;
 static lv_obj_t *s_sound_val_lbl = NULL;
 static lv_obj_t *s_batt_lbl = NULL;
 static lv_obj_t *s_batt_fill = NULL;
+static lv_obj_t *s_wifi_icon = NULL;
 static lv_obj_t *s_toast = NULL;
 
 static bool s_was_charging = false;
+static bool s_low_batt_warned = false;   // aviso de "bateria baixa" já mostrado nesta descarga
 
 // Grade de Tools da Home. Cada Tool built-in só entra aqui quando já está
 // implementada (o campo `available` cobre o caso de uma Tool em
@@ -226,6 +236,14 @@ static void close_sd_format_cb(lv_event_t *e);
 static void do_sd_format_cb(lv_event_t *e);
 static void open_usbmsc_cb(lv_event_t *e);
 static void close_usbmsc_cb(lv_event_t *e);
+static void open_wifi_cb(lv_event_t *e);
+static void close_wifi_cb(lv_event_t *e);
+static void open_catalog_cb(lv_event_t *e);
+static void close_catalog_cb(lv_event_t *e);
+static void wifi_toggle_cb(lv_event_t *e);
+static void wifi_forget_cb(lv_event_t *e);
+static void wifi_portal_open_cb(lv_event_t *e);
+static void wifi_portal_close_cb(lv_event_t *e);
 static void usbmsc_activate_cb(lv_event_t *e);
 static void usbmsc_exit_cb(lv_event_t *e);
 static void usbmsc_do_exit_cb(lv_event_t *e);
@@ -433,6 +451,10 @@ static void make_battery(lv_obj_t *parent)
     lv_obj_set_style_pad_column(g, 6, 0);
     lv_obj_align(g, LV_ALIGN_TOP_RIGHT, -KIT_PAD, 34);
 
+    // Ícone de sinal Wi-Fi (0xF012) — só aparece com o rádio ligado.
+    s_wifi_icon = add_label(g, KIT_ICON_BARS, KIT_COLOR_TEXT_MUTED, &kit_mono_16, 0);
+    lv_obj_add_flag(s_wifi_icon, LV_OBJ_FLAG_HIDDEN);
+
     s_batt_lbl = add_label(g, "--%", KIT_COLOR_TEXT, &kit_mono_16, 1);
 
     lv_obj_t *body = lv_obj_create(g);
@@ -476,6 +498,28 @@ static void update_battery(void)
         lv_obj_set_width(s_batt_fill, lv_pct(p < 8 ? 8 : p));
         uint32_t c = charging ? KIT_COLOR_GREEN : (p <= 15 ? KIT_COLOR_RED : KIT_COLOR_TEXT);
         lv_obj_set_style_bg_color(s_batt_fill, lv_color_hex(c), 0);
+    }
+}
+
+// Ícone de Wi-Fi da barra de status: escondido com o rádio desligado; âmbar
+// enquanto procura/associa; verde conectado; apagado ligado-sem-rede.
+static void update_wifi_icon(void)
+{
+    if (!s_wifi_icon) return;
+    uint32_t c = KIT_COLOR_TEXT_MUTED;
+    bool show = true;
+    switch (kit_network_get_state()) {
+    case KIT_NET_CONNECTED:    c = KIT_COLOR_GREEN;  break;
+    case KIT_NET_CONNECTING:   c = KIT_COLOR_YELLOW; break;
+    case KIT_NET_PROVISIONING: c = KIT_COLOR_BLUE;   break;
+    case KIT_NET_DISCONNECTED: c = KIT_COLOR_TEXT_MUTED; break;
+    default:                   show = false; break;   // KIT_NET_OFF
+    }
+    if (show) {
+        lv_obj_set_style_text_color(s_wifi_icon, lv_color_hex(c), 0);
+        lv_obj_clear_flag(s_wifi_icon, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_wifi_icon, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -767,6 +811,37 @@ static void make_settings_tile(lv_obj_t *grid)
     lv_obj_align(lbl, LV_ALIGN_BOTTOM_LEFT, 14, -14);
 }
 
+// -- Card de Catálogo: ao lado de Ajustes na seção SISTEMA da grade. --
+static void make_catalog_tile(lv_obj_t *grid)
+{
+    lv_obj_t *tile = lv_obj_create(grid);
+    lv_obj_set_size(tile, 162, 118);
+    lv_obj_set_style_bg_color(tile, lv_color_hex(KIT_COLOR_SURFACE), 0);
+    lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(tile, 0, 0);
+    lv_obj_set_style_radius(tile, 20, 0);
+    lv_obj_set_style_pad_all(tile, 0, 0);
+    lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(tile, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(tile, 4);
+    lv_obj_add_event_cb(tile, open_catalog_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *badge = lv_obj_create(tile);
+    lv_obj_set_size(badge, 42, 42);
+    lv_obj_set_style_bg_color(badge, lv_color_hex(KIT_COLOR_TEXT_MUTED), 0);
+    lv_obj_set_style_bg_opa(badge, LV_OPA_20, 0);
+    lv_obj_set_style_border_width(badge, 0, 0);
+    lv_obj_set_style_radius(badge, 12, 0);
+    lv_obj_set_style_pad_all(badge, 0, 0);
+    lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(badge, LV_ALIGN_TOP_LEFT, 14, 14);
+    lv_obj_t *g = add_label(badge, KIT_ICON_PLUS, KIT_COLOR_TEXT_MUTED, &kit_display_44, 0);
+    lv_obj_center(g);
+
+    lv_obj_t *lbl = add_label(tile, "Cat\xC3\xA1logo", KIT_COLOR_TEXT_MUTED, &kit_sans_22, 0);
+    lv_obj_align(lbl, LV_ALIGN_BOTTOM_LEFT, 14, -14);
+}
+
 // -- Slide de destaque: uma Tool por tela, ocupando tudo na cor dela. `slot` é
 //    a posição no slideshow (marca-d'água "01".."04"). --
 static void make_tool_slide(lv_obj_t *tile, int index, int slot)
@@ -866,6 +941,7 @@ static void make_all_slide(lv_obj_t *tile)
 
     make_grid_header(grid, "SISTEMA", false);
     make_settings_tile(grid);
+    make_catalog_tile(grid);
 }
 
 // Ponto de página ativo = traço claro; os demais = fio.
@@ -1185,6 +1261,7 @@ static void open_settings_cb(lv_event_t *e)
     make_row(body, NULL, 0, "Repouso da tela",  false, open_sleep_cb,      NULL);
     make_row(body, NULL, 0, "Desligar sozinho", false, open_poweroff_cb,   NULL);
     make_sound_row(body);
+    make_row(body, NULL, 0, "Wi-Fi",            false, open_wifi_cb,        NULL);
     make_row(body, NULL, 0, "Testes",           false, run_test_tool_cb,   NULL);
     make_row(body, NULL, 0, "Repetir introdu\xC3\xA7\xC3\xA3o", false, repeat_onboarding_cb, NULL);
     make_row(body, NULL, 0, "Armazenamento",    false, open_storage_cb,    NULL);
@@ -1867,6 +1944,724 @@ static void usbmsc_exit_cb(lv_event_t *e)
 }
 
 // ---------------------------------------------------------------------------
+// Wi-Fi  (Ajustes > Wi-Fi)  +  portal de provisionamento
+// ---------------------------------------------------------------------------
+
+static lv_obj_t  *s_wifi_status_lbl = NULL;
+static lv_obj_t  *s_wifi_toggle_lbl = NULL;
+static lv_timer_t *s_wifi_poll = NULL;
+
+static lv_obj_t  *s_wifi_portal_status_lbl = NULL;
+static lv_timer_t *s_wifi_portal_poll = NULL;
+static int        s_wifi_portal_ticks = 0;
+static bool       s_wifi_portal_done = false;
+
+static lv_obj_t  *s_wifi_forget_screen = NULL;
+static char       s_wifi_forget_ssid[KIT_NET_SSID_MAX] = {0};
+
+static void wifi_screen_reload(void);
+static void wifi_forget_close_cb(lv_event_t *e);
+static void wifi_forget_do_cb(lv_event_t *e);
+
+static void wifi_poll_cb(lv_timer_t *t)
+{
+    (void)t;
+    if (!s_wifi_screen) return;
+
+    kit_net_state_t st = kit_network_get_state();
+
+    if (s_wifi_toggle_lbl) {
+        bool on = (st != KIT_NET_OFF);
+        lv_label_set_text(s_wifi_toggle_lbl, on ? "LIGADO" : "DESLIGADO");
+        lv_obj_set_style_text_color(s_wifi_toggle_lbl,
+            lv_color_hex(on ? KIT_COLOR_GREEN : KIT_COLOR_TEXT_MUTED), 0);
+    }
+
+    if (s_wifi_status_lbl) {
+        char buf[112];
+        switch (st) {
+        case KIT_NET_CONNECTED: {
+            char ssid[KIT_NET_SSID_MAX] = {0}, ip[16] = {0};
+            kit_network_get_ssid(ssid, sizeof(ssid));
+            kit_network_get_ip(ip, sizeof(ip));
+            snprintf(buf, sizeof(buf), "Conectado a %s\n%s", ssid, ip);
+            break;
+        }
+        case KIT_NET_CONNECTING:
+            snprintf(buf, sizeof(buf), "Procurando rede...");
+            break;
+        case KIT_NET_PROVISIONING:
+            snprintf(buf, sizeof(buf), "Portal de configura\xC3\xA7\xC3\xA3o ativo...");
+            break;
+        case KIT_NET_DISCONNECTED:
+            snprintf(buf, sizeof(buf), kit_network_saved_count() > 0
+                     ? "Nenhuma rede conhecida por perto."
+                     : "Nenhuma rede salva. Toque em CONFIGURAR REDE.");
+            break;
+        default:
+            snprintf(buf, sizeof(buf), "R\xC3\xA1""dio desligado.");
+            break;
+        }
+        lv_label_set_text(s_wifi_status_lbl, buf);
+    }
+}
+
+static void wifi_toggle_cb(lv_event_t *e)
+{
+    (void)e;
+    bool turn_on = (kit_network_get_state() == KIT_NET_OFF);
+    kit_config_set_u8("wifi_en", turn_on ? 1 : 0);
+    if (turn_on) {
+        kit_network_start();
+        kit_audio_sfx_impl(KIT_SFX_CLICK);
+    } else {
+        kit_network_stop();
+        kit_audio_sfx_impl(KIT_SFX_BACK);
+    }
+    wifi_poll_cb(NULL);
+}
+
+// Tocar numa rede salva abre a confirmação de esquecer (não esquece de cara).
+static void wifi_forget_cb(lv_event_t *e)
+{
+    size_t idx = (size_t)(intptr_t)lv_event_get_user_data(e);
+    if (kit_network_saved_ssid(idx, s_wifi_forget_ssid,
+                               sizeof(s_wifi_forget_ssid)) != KIT_OK) return;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_wifi_forget_screen) return;
+
+    s_wifi_forget_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_wifi_forget_screen, "ESQUECER", wifi_forget_close_cb);
+
+    lv_obj_t *body = make_scroll_body(s_wifi_forget_screen, 2 * KIT_BTN_H + 40);
+    lv_obj_t *q = add_label(body,
+        "Esquecer esta rede? O KIT n\xC3\xA3o vai mais conectar nela sozinho.",
+        KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(q, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(q, KIT_CONTENT);
+
+    lv_obj_t *name = add_label(body, s_wifi_forget_ssid, KIT_COLOR_YELLOW, &kit_sans_28, 1);
+    lv_label_set_long_mode(name, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(name, KIT_CONTENT);
+    lv_obj_set_style_pad_top(name, 6, 0);
+
+    lv_obj_t *ok = make_button(s_wifi_forget_screen, "ESQUECER", wifi_forget_do_cb, true);
+    lv_obj_set_style_bg_color(ok, lv_color_hex(KIT_COLOR_RED), 0);
+    lv_obj_t *okl = lv_obj_get_child(ok, 0);
+    if (okl) lv_obj_set_style_text_color(okl, lv_color_hex(KIT_COLOR_ON_COLOR), 0);
+    lv_obj_align(ok, LV_ALIGN_BOTTOM_MID, 0, -(14 + KIT_BTN_H + 12));
+
+    lv_obj_t *no = make_button(s_wifi_forget_screen, "CANCELAR", wifi_forget_close_cb, false);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_MID, 0, -14);
+}
+
+static void wifi_forget_close_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_wifi_forget_screen) { lv_obj_delete(s_wifi_forget_screen); s_wifi_forget_screen = NULL; }
+}
+
+static void wifi_forget_do_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_network_forget(s_wifi_forget_ssid);
+    kit_audio_sfx_impl(KIT_SFX_CONFIRM);
+    if (s_wifi_forget_screen) { lv_obj_delete(s_wifi_forget_screen); s_wifi_forget_screen = NULL; }
+    show_toast("REDE ESQUECIDA");
+    wifi_screen_reload();
+}
+
+// Linha de liga/desliga do Wi-Fi (mesma pegada da linha "Som").
+static void make_wifi_toggle_row(lv_obj_t *parent)
+{
+    lv_obj_t *row = lv_obj_create(parent);
+    lv_obj_set_size(row, KIT_CONTENT, KIT_ROW_H);
+    lv_obj_set_style_bg_color(row, lv_color_hex(KIT_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_width(row, 0, 0);
+    lv_obj_set_style_radius(row, 24, 0);
+    lv_obj_set_style_pad_all(row, 0, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(row, 6);
+    lv_obj_add_event_cb(row, wifi_toggle_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *l = add_label(row, "Wi-Fi", KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_obj_align(l, LV_ALIGN_LEFT_MID, 24, 0);
+
+    s_wifi_toggle_lbl = add_label(row, "", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_obj_align(s_wifi_toggle_lbl, LV_ALIGN_RIGHT_MID, -20, 0);
+}
+
+static void wifi_screen_populate(void)
+{
+    lv_obj_t *body = make_scroll_body(s_wifi_screen, KIT_BTN_H + 28);
+
+    make_wifi_toggle_row(body);
+
+    s_wifi_status_lbl = add_label(body, "", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_label_set_long_mode(s_wifi_status_lbl, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s_wifi_status_lbl, KIT_CONTENT);
+    lv_obj_set_style_pad_left(s_wifi_status_lbl, 6, 0);
+    lv_obj_set_style_pad_bottom(s_wifi_status_lbl, 4, 0);
+
+    size_t n = kit_network_saved_count();
+    if (n > 0) {
+        lv_obj_t *hdr = add_label(body, "REDES SALVAS", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 3);
+        lv_obj_set_style_pad_left(hdr, 6, 0);
+        lv_obj_set_style_pad_top(hdr, 8, 0);
+        for (size_t i = 0; i < n; i++) {
+            char ssid[KIT_NET_SSID_MAX] = {0};
+            if (kit_network_saved_ssid(i, ssid, sizeof(ssid)) != KIT_OK) continue;
+            make_row(body, NULL, 0, ssid, false, wifi_forget_cb, (void *)(intptr_t)i);
+        }
+        lv_obj_t *tip = add_label(body, "Toque numa rede para esquec\xC3\xAA-la.",
+                                  KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+        lv_label_set_long_mode(tip, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(tip, KIT_CONTENT);
+        lv_obj_set_style_pad_left(tip, 6, 0);
+    }
+
+    lv_obj_t *cfg = make_button(s_wifi_screen, "CONFIGURAR REDE", wifi_portal_open_cb, true);
+    lv_obj_align(cfg, LV_ALIGN_BOTTOM_MID, 0, -14);
+
+    wifi_poll_cb(NULL);
+}
+
+static void wifi_screen_reload(void)
+{
+    if (!s_wifi_screen) return;
+    s_wifi_status_lbl = NULL;
+    s_wifi_toggle_lbl = NULL;
+    lv_obj_clean(s_wifi_screen);
+    make_titlebar(s_wifi_screen, "WI-FI", close_wifi_cb);
+    wifi_screen_populate();
+}
+
+static void open_wifi_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_wifi_screen) return;
+
+    s_wifi_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_wifi_screen, "WI-FI", close_wifi_cb);
+    wifi_screen_populate();
+
+    s_wifi_poll = lv_timer_create(wifi_poll_cb, 1500, NULL);
+}
+
+static void close_wifi_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_wifi_poll) { lv_timer_delete(s_wifi_poll); s_wifi_poll = NULL; }
+    if (s_wifi_screen) {
+        lv_obj_delete(s_wifi_screen);
+        s_wifi_screen = NULL;
+        s_wifi_status_lbl = NULL;
+        s_wifi_toggle_lbl = NULL;
+    }
+}
+
+// Wi-Fi associou pelo portal: derruba o portal + a tela de Wi-Fi, solta o
+// keep-awake, volta para a Home e mostra o mesmo overlay curto do "carregando".
+static void wifi_portal_finish_connected(void)
+{
+    kit_audio_sfx_impl(KIT_SFX_CONFIRM);
+
+    if (s_wifi_portal_poll) { lv_timer_delete(s_wifi_portal_poll); s_wifi_portal_poll = NULL; }
+    if (s_wifi_poll)        { lv_timer_delete(s_wifi_poll);        s_wifi_poll = NULL; }
+
+    kit_network_portal_stop();
+    kit_power_keep_awake_impl(false);
+
+    if (s_wifi_portal_screen) {
+        lv_obj_delete(s_wifi_portal_screen);
+        s_wifi_portal_screen = NULL;
+        s_wifi_portal_status_lbl = NULL;
+    }
+    if (s_wifi_screen) {
+        lv_obj_delete(s_wifi_screen);
+        s_wifi_screen = NULL;
+        s_wifi_status_lbl = NULL;
+        s_wifi_toggle_lbl = NULL;
+    }
+
+    kit_launcher_go_home();
+    show_feedback(KIT_COLOR_GREEN, KIT_ICON_BARS, "CONECTADO");
+}
+
+static void wifi_portal_poll_cb(lv_timer_t *t)
+{
+    (void)t;
+    if (!s_wifi_portal_screen || !s_wifi_portal_status_lbl) return;
+
+    s_wifi_portal_ticks++;
+
+    if (kit_network_is_connected()) {
+        if (!s_wifi_portal_done) {
+            s_wifi_portal_done = true;
+            wifi_portal_finish_connected();
+        }
+        return;
+    }
+
+    lv_label_set_text(s_wifi_portal_status_lbl,
+        kit_network_get_state() == KIT_NET_CONNECTING
+            ? "Tentando conectar..."
+            : "Aguardando o celular...");
+
+    // Tempo limite: 4 min segurando a tela acesa é o bastante.
+    if (s_wifi_portal_ticks > 240) wifi_portal_close_cb(NULL);
+}
+
+static void wifi_portal_open_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_wifi_portal_screen) return;
+
+    kit_config_set_u8("wifi_en", 1);
+    kit_power_keep_awake_impl(true);
+    kit_network_portal_start(kit_power_get_device_id());
+
+    s_wifi_portal_ticks = 0;
+    s_wifi_portal_done = false;
+
+    s_wifi_portal_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_wifi_portal_screen, "CONFIGURAR", wifi_portal_close_cb);
+
+    lv_obj_t *body = make_scroll_body(s_wifi_portal_screen, 0);
+
+    add_label(body, "1  No celular, entre na rede Wi-Fi:",
+              KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_obj_t *ap = add_label(body, kit_power_get_device_id(),
+                             KIT_COLOR_YELLOW, &kit_sans_28, 1);
+    lv_obj_set_style_pad_bottom(ap, 6, 0);
+
+    lv_obj_t *s2 = add_label(body,
+        "2  A tela de configura\xC3\xA7\xC3\xA3o abre sozinha. Escolha a sua rede e "
+        "digite a senha.",
+        KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(s2, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s2, KIT_CONTENT);
+
+    lv_obj_t *s3 = add_label(body,
+        "N\xC3\xA3o abriu? V\xC3\xA1 no navegador em 192.168.4.1",
+        KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_label_set_long_mode(s3, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s3, KIT_CONTENT);
+    lv_obj_set_style_pad_bottom(s3, 10, 0);
+
+    s_wifi_portal_status_lbl = add_label(body, "Aguardando o celular...",
+                                         KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_label_set_long_mode(s_wifi_portal_status_lbl, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s_wifi_portal_status_lbl, KIT_CONTENT);
+
+    s_wifi_portal_poll = lv_timer_create(wifi_portal_poll_cb, 1000, NULL);
+}
+
+static void wifi_portal_close_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_wifi_portal_poll) { lv_timer_delete(s_wifi_portal_poll); s_wifi_portal_poll = NULL; }
+
+    kit_network_portal_stop();
+    kit_power_keep_awake_impl(false);
+
+    if (s_wifi_portal_screen) {
+        lv_obj_delete(s_wifi_portal_screen);
+        s_wifi_portal_screen = NULL;
+        s_wifi_portal_status_lbl = NULL;
+    }
+    if (s_wifi_screen) wifi_screen_reload();
+}
+
+// ---------------------------------------------------------------------------
+// Catálogo de Tools  (Home > VER TODOS > SISTEMA > Catálogo)
+// ---------------------------------------------------------------------------
+
+static lv_timer_t *s_catalog_poll = NULL;
+static int         s_catalog_last_state = -1;
+static char        s_catalog_sel_id[40] = {0};
+
+static void catalog_list_rebuild(void);
+static void catalog_detail_rebuild(void);
+static void catalog_row_cb(lv_event_t *e);
+static void catalog_refresh_cb(lv_event_t *e);
+static void catalog_action_cb(lv_event_t *e);
+static void catalog_remove_cb(lv_event_t *e);
+static void catalog_detail_close_cb(lv_event_t *e);
+static void catalog_confirm_close_cb(lv_event_t *e);
+static void catalog_confirm_do_cb(lv_event_t *e);
+static void catalog_goto_wifi_cb(lv_event_t *e);
+
+// -- Overlay de progresso (baixando / instalando) -------------------------
+static void catalog_busy_show(const char *title)
+{
+    if (s_catalog_busy_screen) return;
+    // Segura o repouso: um download em curso não pode ver a tela apagar (e o
+    // rádio Wi-Fi cair junto — ver kit_network_suspend).
+    kit_power_keep_awake_impl(true);
+    s_catalog_busy_screen = make_overlay(KIT_COLOR_BG);
+    lv_obj_t *col = make_group(s_catalog_busy_screen, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(col, 18, 0);
+    lv_obj_center(col);
+    add_label(col, title, KIT_COLOR_TEXT_MUTED, &kit_mono_20, 4);
+    // kit_display_72 só tem dígitos + A-Z; nada de "%" ou "." (viram retângulo).
+    lv_obj_t *pct = add_label(col, "", KIT_COLOR_TEXT, &kit_display_72, 0);
+    lv_obj_set_user_data(s_catalog_busy_screen, pct);
+}
+
+static void catalog_busy_update(void)
+{
+    if (!s_catalog_busy_screen) return;
+    lv_obj_t *pct = lv_obj_get_user_data(s_catalog_busy_screen);
+    if (!pct) return;
+    int p = kit_catalog_progress();
+    if (p < 0) lv_label_set_text(pct, "");
+    else       lv_label_set_text_fmt(pct, "%d", p);
+}
+
+static void catalog_busy_hide(void)
+{
+    if (s_catalog_busy_screen) { lv_obj_delete(s_catalog_busy_screen); s_catalog_busy_screen = NULL; }
+    kit_power_keep_awake_impl(false);
+}
+
+// -- Linha do catálogo: nome + versão + pílula de estado ------------------
+static const char *cat_status_text(kit_cat_install_t s)
+{
+    switch (s) {
+    case KIT_CAT_UPDATE:    return "ATUALIZAR";
+    case KIT_CAT_INSTALLED: return "INSTALADA";
+    default:                return "INSTALAR";
+    }
+}
+static uint32_t cat_status_color(kit_cat_install_t s)
+{
+    switch (s) {
+    case KIT_CAT_UPDATE:    return KIT_COLOR_GREEN;
+    case KIT_CAT_INSTALLED: return KIT_COLOR_TEXT_MUTED;
+    default:                return KIT_COLOR_YELLOW;
+    }
+}
+
+static void catalog_make_row(lv_obj_t *body, const kit_catalog_entry_t *e, int idx)
+{
+    lv_obj_t *row = lv_obj_create(body);
+    lv_obj_set_size(row, KIT_CONTENT, KIT_ROW_H);
+    lv_obj_set_style_bg_color(row, lv_color_hex(KIT_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_width(row, 0, 0);
+    lv_obj_set_style_radius(row, 24, 0);
+    lv_obj_set_style_pad_all(row, 0, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(row, 6);
+    lv_obj_add_event_cb(row, catalog_row_cb, LV_EVENT_CLICKED, (void *)(intptr_t)idx);
+
+    lv_obj_t *nm = add_label(row, e->name, KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_obj_align(nm, LV_ALIGN_LEFT_MID, 20, -10);
+    lv_obj_t *vs = add_label(row, e->version, KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_obj_align(vs, LV_ALIGN_LEFT_MID, 20, 14);
+
+    lv_obj_t *chip = add_label(row, cat_status_text(e->install),
+                               cat_status_color(e->install), &kit_mono_16, 2);
+    lv_obj_align(chip, LV_ALIGN_RIGHT_MID, -18, 0);
+}
+
+// Reconstrói o corpo da tela de lista conforme o estado do kit_catalog.
+static void catalog_list_rebuild(void)
+{
+    if (!s_catalog_screen) return;
+    lv_obj_clean(s_catalog_screen);
+    make_titlebar(s_catalog_screen, "CAT\xC3\x81LOGO", close_catalog_cb);
+
+    kit_catalog_state_t st = kit_catalog_get_state();
+
+    if (!kit_network_is_connected() || st == KIT_CAT_OFFLINE) {
+        lv_obj_t *body = make_scroll_body(s_catalog_screen, KIT_BTN_H + 28);
+        lv_obj_t *m = add_label(body,
+            "O cat\xC3\xA1logo precisa de Wi-Fi. Conecte o KIT a uma rede para ver e "
+            "baixar Tools.", KIT_COLOR_TEXT, &kit_sans_22, 0);
+        lv_label_set_long_mode(m, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(m, KIT_CONTENT);
+        lv_obj_t *b = make_button(s_catalog_screen, "IR PARA WI-FI", catalog_goto_wifi_cb, true);
+        lv_obj_align(b, LV_ALIGN_BOTTOM_MID, 0, -14);
+        return;
+    }
+
+    if (st == KIT_CAT_FETCHING) {
+        lv_obj_t *m = add_label(s_catalog_screen, "Buscando cat\xC3\xA1logo...",
+                                KIT_COLOR_TEXT_MUTED, &kit_mono_20, 3);
+        lv_obj_center(m);
+        return;
+    }
+
+    if (st == KIT_CAT_FETCH_ERR) {
+        lv_obj_t *body = make_scroll_body(s_catalog_screen, KIT_BTN_H + 28);
+        lv_obj_t *m = add_label(body, kit_catalog_last_error(), KIT_COLOR_TEXT, &kit_sans_22, 0);
+        lv_label_set_long_mode(m, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(m, KIT_CONTENT);
+        lv_obj_t *b = make_button(s_catalog_screen, "TENTAR DE NOVO", catalog_refresh_cb, true);
+        lv_obj_align(b, LV_ALIGN_BOTTOM_MID, 0, -14);
+        return;
+    }
+
+    // READY (ou WORK_OK/ERR — a lista segue visível)
+    lv_obj_t *body = make_scroll_body(s_catalog_screen, KIT_BTN_H + 28);
+    uint32_t n = kit_catalog_get_count();
+    if (n == 0) {
+        add_label(body, "Nenhuma Tool no cat\xC3\xA1logo ainda.",
+                  KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    }
+    for (uint32_t i = 0; i < n; i++) {
+        kit_catalog_entry_t e;
+        if (kit_catalog_get_entry(i, &e) == KIT_OK) catalog_make_row(body, &e, (int)i);
+    }
+    lv_obj_t *b = make_button(s_catalog_screen, "ATUALIZAR LISTA", catalog_refresh_cb, false);
+    lv_obj_align(b, LV_ALIGN_BOTTOM_MID, 0, -14);
+}
+
+static void catalog_poll_cb(lv_timer_t *t)
+{
+    (void)t;
+    if (!s_catalog_screen) return;
+
+    kit_catalog_state_t st = kit_catalog_get_state();
+    catalog_busy_update();
+
+    if ((int)st == s_catalog_last_state) return;
+    int prev = s_catalog_last_state;
+    s_catalog_last_state = (int)st;
+
+    switch (st) {
+    case KIT_CAT_WORKING:
+        if (!s_catalog_busy_screen) catalog_busy_show("BAIXANDO");
+        break;
+    case KIT_CAT_WORK_OK:
+        catalog_busy_hide();
+        kit_audio_sfx_impl(KIT_SFX_CONFIRM);
+        show_toast("PRONTO");
+        catalog_list_rebuild();
+        if (s_catalog_detail_screen) catalog_detail_rebuild();
+        s_home_deck_dirty = true;   // a Home muda quando a lista de Tools muda
+        break;
+    case KIT_CAT_WORK_ERR:
+        catalog_busy_hide();
+        kit_audio_beep_impl(400, 60);
+        show_toast(kit_catalog_last_error());
+        catalog_list_rebuild();
+        if (s_catalog_detail_screen) catalog_detail_rebuild();
+        break;
+    case KIT_CAT_READY:
+    case KIT_CAT_FETCH_ERR:
+    case KIT_CAT_OFFLINE:
+        if (prev == KIT_CAT_FETCHING || prev == -1 || prev == KIT_CAT_WORK_OK ||
+            prev == KIT_CAT_WORK_ERR) {
+            if (!s_catalog_detail_screen) catalog_list_rebuild();
+        }
+        break;
+    case KIT_CAT_FETCHING:
+        if (!s_catalog_detail_screen) catalog_list_rebuild();
+        break;
+    default: break;
+    }
+}
+
+static void open_catalog_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_catalog_screen) return;
+
+    s_catalog_screen = make_overlay(KIT_COLOR_BG);
+    s_catalog_last_state = -1;
+    catalog_list_rebuild();
+
+    kit_catalog_state_t st = kit_catalog_get_state();
+    if (kit_network_is_connected() &&
+        (st == KIT_CAT_IDLE || st == KIT_CAT_FETCH_ERR || st == KIT_CAT_OFFLINE)) {
+        kit_catalog_refresh();
+    }
+    s_catalog_poll = lv_timer_create(catalog_poll_cb, 400, NULL);
+}
+
+static void close_catalog_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_catalog_poll) { lv_timer_delete(s_catalog_poll); s_catalog_poll = NULL; }
+    catalog_busy_hide();
+    if (s_catalog_confirm_screen) { lv_obj_delete(s_catalog_confirm_screen); s_catalog_confirm_screen = NULL; }
+    if (s_catalog_detail_screen)  { lv_obj_delete(s_catalog_detail_screen);  s_catalog_detail_screen = NULL; }
+    if (s_catalog_screen)         { lv_obj_delete(s_catalog_screen);         s_catalog_screen = NULL; }
+}
+
+static void catalog_refresh_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    s_catalog_last_state = -1;
+    kit_catalog_refresh();
+    catalog_list_rebuild();
+}
+
+static void catalog_goto_wifi_cb(lv_event_t *e)
+{
+    close_catalog_cb(NULL);
+    open_wifi_cb(NULL);
+}
+
+// -- Tela de detalhe ----------------------------------------------------
+static bool catalog_find(const char *id, kit_catalog_entry_t *out)
+{
+    uint32_t n = kit_catalog_get_count();
+    for (uint32_t i = 0; i < n; i++) {
+        if (kit_catalog_get_entry(i, out) == KIT_OK && strcmp(out->id, id) == 0) return true;
+    }
+    return false;
+}
+
+static void catalog_detail_rebuild(void)
+{
+    if (!s_catalog_detail_screen) return;
+    lv_obj_clean(s_catalog_detail_screen);
+
+    kit_catalog_entry_t e;
+    if (!catalog_find(s_catalog_sel_id, &e)) { catalog_detail_close_cb(NULL); return; }
+
+    make_titlebar(s_catalog_detail_screen, "TOOL", catalog_detail_close_cb);
+
+    bool installed = (e.install != KIT_CAT_NOT_INSTALLED);
+    int reserve = KIT_BTN_H + 28 + (installed ? KIT_BTN_H + 12 : 0);
+    lv_obj_t *body = make_scroll_body(s_catalog_detail_screen, reserve);
+
+    lv_obj_t *nm = add_label(body, e.name, KIT_COLOR_TEXT, &kit_sans_28, 1);
+    lv_obj_set_width(nm, KIT_CONTENT);
+    lv_label_set_long_mode(nm, LV_LABEL_LONG_DOT);
+
+    char meta[80];
+    snprintf(meta, sizeof(meta), "%s%s\xC2\xB7 v%s",
+             e.author[0] ? e.author : "", e.author[0] ? " " : "", e.version);
+    lv_obj_t *mt = add_label(body, meta, KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_obj_set_style_pad_bottom(mt, 6, 0);
+
+    if (e.description[0]) {
+        lv_obj_t *ds = add_label(body, e.description, KIT_COLOR_TEXT, &kit_sans_22, 0);
+        lv_label_set_long_mode(ds, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(ds, KIT_CONTENT);
+    }
+
+    if (e.size) {
+        char sz[32];
+        snprintf(sz, sizeof(sz), "Download ~%lu KB", (unsigned long)((e.size + 512) / 1024));
+        lv_obj_t *szl = add_label(body, sz, KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+        lv_obj_set_style_pad_top(szl, 8, 0);
+    }
+    if (e.install == KIT_CAT_UPDATE) {
+        lv_obj_t *u = add_label(body, "Atualiza\xC3\xA7\xC3\xA3o dispon\xC3\xADvel",
+                                KIT_COLOR_GREEN, &kit_mono_16, 1);
+        lv_obj_set_style_pad_top(u, 8, 0);
+    }
+
+    const char *act = (e.install == KIT_CAT_UPDATE) ? "ATUALIZAR"
+                    : (e.install == KIT_CAT_INSTALLED) ? "REINSTALAR" : "INSTALAR";
+    lv_obj_t *b = make_button(s_catalog_detail_screen, act, catalog_action_cb, true);
+    lv_obj_align(b, LV_ALIGN_BOTTOM_MID, 0, installed ? -(14 + KIT_BTN_H + 12) : -14);
+
+    if (installed) {
+        lv_obj_t *rm = make_button(s_catalog_detail_screen, "REMOVER", catalog_remove_cb, false);
+        lv_obj_set_style_border_color(rm, lv_color_hex(KIT_COLOR_RED), 0);
+        lv_obj_t *rl = lv_obj_get_child(rm, 0);
+        if (rl) lv_obj_set_style_text_color(rl, lv_color_hex(KIT_COLOR_RED), 0);
+        lv_obj_align(rm, LV_ALIGN_BOTTOM_MID, 0, -14);
+    }
+}
+
+static void catalog_row_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    kit_catalog_entry_t ent;
+    if (kit_catalog_get_entry((uint32_t)i, &ent) != KIT_OK) return;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    strlcpy(s_catalog_sel_id, ent.id, sizeof(s_catalog_sel_id));
+    if (s_catalog_detail_screen) return;
+    s_catalog_detail_screen = make_overlay(KIT_COLOR_BG);
+    catalog_detail_rebuild();
+}
+
+static void catalog_detail_close_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_catalog_detail_screen) { lv_obj_delete(s_catalog_detail_screen); s_catalog_detail_screen = NULL; }
+    catalog_list_rebuild();
+}
+
+static void catalog_action_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    s_catalog_last_state = -1;
+    if (kit_catalog_install(s_catalog_sel_id) != KIT_OK) {
+        show_toast("OCUPADO");
+        return;
+    }
+    catalog_busy_show("BAIXANDO");
+}
+
+// -- Confirmação de remover -------------------------------------------
+static void catalog_remove_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_catalog_confirm_screen) return;
+
+    kit_catalog_entry_t ent;
+    if (!catalog_find(s_catalog_sel_id, &ent)) return;
+
+    s_catalog_confirm_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_catalog_confirm_screen, "REMOVER", catalog_confirm_close_cb);
+
+    lv_obj_t *body = make_scroll_body(s_catalog_confirm_screen, 2 * KIT_BTN_H + 40);
+    lv_obj_t *q = add_label(body,
+        "Remover esta Tool do KIT? Os dados dela no cart\xC3\xA3o s\xC3\xA3o apagados.",
+        KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(q, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(q, KIT_CONTENT);
+    lv_obj_t *nm = add_label(body, ent.name, KIT_COLOR_YELLOW, &kit_sans_28, 1);
+    lv_obj_set_style_pad_top(nm, 6, 0);
+
+    lv_obj_t *ok = make_button(s_catalog_confirm_screen, "REMOVER", catalog_confirm_do_cb, true);
+    lv_obj_set_style_bg_color(ok, lv_color_hex(KIT_COLOR_RED), 0);
+    lv_obj_t *okl = lv_obj_get_child(ok, 0);
+    if (okl) lv_obj_set_style_text_color(okl, lv_color_hex(KIT_COLOR_ON_COLOR), 0);
+    lv_obj_align(ok, LV_ALIGN_BOTTOM_MID, 0, -(14 + KIT_BTN_H + 12));
+
+    lv_obj_t *no = make_button(s_catalog_confirm_screen, "CANCELAR", catalog_confirm_close_cb, false);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_MID, 0, -14);
+}
+
+static void catalog_confirm_close_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_catalog_confirm_screen) { lv_obj_delete(s_catalog_confirm_screen); s_catalog_confirm_screen = NULL; }
+}
+
+static void catalog_confirm_do_cb(lv_event_t *e)
+{
+    (void)e;
+    if (s_catalog_confirm_screen) { lv_obj_delete(s_catalog_confirm_screen); s_catalog_confirm_screen = NULL; }
+    s_catalog_last_state = -1;
+    if (kit_catalog_uninstall(s_catalog_sel_id) != KIT_OK) { show_toast("OCUPADO"); return; }
+    catalog_busy_show("REMOVENDO");
+}
+
+// ---------------------------------------------------------------------------
 // Ações
 // ---------------------------------------------------------------------------
 
@@ -1915,6 +2710,23 @@ void kit_launcher_go_home(void)
     if (kit_usb_msc_is_active()) { kit_usb_msc_exit_reboot(); return; }
 
     if (s_feedback_screen)   { lv_obj_delete(s_feedback_screen);   s_feedback_screen = NULL; }
+    if (s_wifi_portal_poll)  { lv_timer_delete(s_wifi_portal_poll); s_wifi_portal_poll = NULL; }
+    if (s_wifi_poll)         { lv_timer_delete(s_wifi_poll);        s_wifi_poll = NULL; }
+    if (s_wifi_portal_screen) {
+        if (kit_network_portal_is_active()) kit_network_portal_stop();
+        kit_power_keep_awake_impl(false);
+        lv_obj_delete(s_wifi_portal_screen); s_wifi_portal_screen = NULL;
+        s_wifi_portal_status_lbl = NULL;
+    }
+    if (s_wifi_forget_screen) { lv_obj_delete(s_wifi_forget_screen); s_wifi_forget_screen = NULL; }
+    if (s_wifi_screen) { lv_obj_delete(s_wifi_screen); s_wifi_screen = NULL;
+                         s_wifi_status_lbl = NULL; s_wifi_toggle_lbl = NULL; }
+    if (s_catalog_poll)   { lv_timer_delete(s_catalog_poll); s_catalog_poll = NULL; }
+    if (s_catalog_busy_screen)    { lv_obj_delete(s_catalog_busy_screen);    s_catalog_busy_screen = NULL;
+                                    kit_power_keep_awake_impl(false); }
+    if (s_catalog_confirm_screen) { lv_obj_delete(s_catalog_confirm_screen); s_catalog_confirm_screen = NULL; }
+    if (s_catalog_detail_screen)  { lv_obj_delete(s_catalog_detail_screen);  s_catalog_detail_screen = NULL; }
+    if (s_catalog_screen)         { lv_obj_delete(s_catalog_screen);         s_catalog_screen = NULL; }
     if (s_usbmsc_screen)     { lv_obj_delete(s_usbmsc_screen);     s_usbmsc_screen = NULL; }
     if (s_about_screen)      { lv_obj_delete(s_about_screen);      s_about_screen = NULL; }
     if (s_sd_format_screen)  { lv_obj_delete(s_sd_format_screen);  s_sd_format_screen = NULL; }
@@ -1950,6 +2762,7 @@ static void batt_tick_cb(lv_timer_t *t)
 {
     (void)t;
     update_battery();
+    update_wifi_icon();
 
     bool charging = kit_power_is_charging();
     if (charging && !s_was_charging) {
@@ -1957,6 +2770,17 @@ static void batt_tick_cb(lv_timer_t *t)
         show_feedback(KIT_COLOR_GREEN, KIT_ICON_BOLT, "CARREGANDO");
     }
     s_was_charging = charging;
+
+    // Aviso de bateria baixa: dispara uma vez quando cai a <= 20% descarregando.
+    // Rearma só depois de carregar ou voltar acima de 25% (histerese).
+    uint8_t p = kit_power_get_battery_percentage();
+    if (charging || p > 25) {
+        s_low_batt_warned = false;
+    } else if (!s_low_batt_warned && p <= 20) {
+        s_low_batt_warned = true;
+        kit_audio_beep_impl(500, 90);
+        show_feedback(KIT_COLOR_YELLOW, KIT_ICON_TRIANGLE, "BATERIA BAIXA");
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1972,6 +2796,7 @@ kit_err_t kit_launcher_init(void)
     build_home(s_launcher_screen);
     kit_tool_manager_set_catalog_changed_cb(launcher_catalog_changed);
     update_battery();
+    update_wifi_icon();
     build_splash();
 
     kit_launcher_show();
