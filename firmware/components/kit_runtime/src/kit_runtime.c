@@ -425,8 +425,21 @@ kit_err_t kit_system_get_info_impl(kit_system_info_t *info)
 void kit_system_exit_impl(void)
 {
     ESP_LOGI(TAG, "Tool solicitou saída para o Launcher.");
+
+    // A tela do Launcher precisa voltar a ser a tela ATIVA do LVGL *antes* de
+    // destruir a Tool: kit_tool_manager_stop_current() deleta a tela da Tool, e
+    // deletar a tela ativa deixa o lv_display com um ponteiro solto que o
+    // lv_screen_load() seguinte ainda toca (use-after-free) — de vez em quando
+    // isso corrompia a Home e ela travava com só o cabeçalho vivo.
+    //
+    // Para Tools .so: marca a tela da Tool ANTES da troca, para o tool_loader
+    // liberá-la antes do dlclose (nem toda Tool deleta a própria tela no
+    // tool_destroy; depois do dlclose ela vira lixo e trava o LVGL).
+    if (kit_tool_loader_is_active()) {
+        kit_tool_loader_mark_tool_screen(lv_screen_active());
+    }
+
+    kit_launcher_go_home();
     kit_tool_manager_stop_current();
-    kit_launcher_show();
-    s_is_in_tool = false;
-    s_tool_primary_action = NULL;
+    kit_runtime_set_in_tool(false);   // limpa primary_action + callback de shake órfão
 }

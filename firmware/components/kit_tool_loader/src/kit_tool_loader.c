@@ -3,6 +3,7 @@
 
 #include "esp_dlfcn.h"
 #include "esp_log.h"
+#include "lvgl.h"
 #include <string.h>
 
 static const char *TAG = "KIT_TOOL_LOADER";
@@ -12,6 +13,7 @@ typedef void      (*tool_destroy_fn)(void);
 
 static void            *s_handle;   // handle do dlopen (objeto compartilhado)
 static tool_destroy_fn   s_destroy; // ponteiro para tool_destroy (pode ser NULL)
+static lv_obj_t         *s_tool_screen; // tela da Tool (marcada pelo Runtime na saída)
 
 kit_err_t kit_tool_loader_init(void)
 {
@@ -61,6 +63,11 @@ kit_err_t kit_tool_loader_start(const char *so_rel_path, kit_tool_ctx_t *ctx)
     return KIT_OK;
 }
 
+void kit_tool_loader_mark_tool_screen(void *screen)
+{
+    s_tool_screen = (lv_obj_t *)screen;
+}
+
 void kit_tool_loader_stop(void)
 {
     if (!s_handle) {
@@ -70,6 +77,19 @@ void kit_tool_loader_stop(void)
     if (s_destroy) {
         s_destroy();
     }
+
+    // Rede de segurança: a Tool deveria ter deletado a própria tela no
+    // tool_destroy. Se ela sobreviveu, precisa sumir AGORA — enquanto o .so
+    // ainda está mapeado e os LV_EVENT_DELETE dela resolvem. Depois do dlclose
+    // essa tela vira lixo (callbacks em código desmapeado) e o LVGL trava no
+    // próximo render.
+    if (s_tool_screen && lv_obj_is_valid(s_tool_screen) &&
+        s_tool_screen != lv_screen_active()) {
+        ESP_LOGW(TAG, "Tool não liberou a própria tela — removendo antes do dlclose.");
+        lv_obj_delete(s_tool_screen);
+    }
+    s_tool_screen = NULL;
+
     dlclose(s_handle);
     s_handle  = NULL;
     s_destroy = NULL;
