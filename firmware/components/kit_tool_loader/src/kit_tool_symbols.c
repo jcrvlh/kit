@@ -75,11 +75,23 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
     ESP_ELFSYM_EXPORT(lv_obj_set_style_text_align),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_text_letter_space),
 
+    ESP_ELFSYM_EXPORT(lv_obj_set_style_opa),
+    ESP_ELFSYM_EXPORT(lv_obj_set_style_text_line_space),
+    ESP_ELFSYM_EXPORT(lv_obj_set_style_min_width),
+    ESP_ELFSYM_EXPORT(lv_obj_update_layout),
+    ESP_ELFSYM_EXPORT(lv_pct),   /* lv_pct() virou função no LVGL 9 (era macro) */
+
     /* --- Label ------------------------------------------------------- */
     ESP_ELFSYM_EXPORT(lv_label_create),
     ESP_ELFSYM_EXPORT(lv_label_set_text),
     ESP_ELFSYM_EXPORT(lv_label_set_text_fmt),
     ESP_ELFSYM_EXPORT(lv_label_set_long_mode),
+
+    /* --- Tileview (páginas que deslizam na horizontal, padrão da Dice) - */
+    ESP_ELFSYM_EXPORT(lv_tileview_create),
+    ESP_ELFSYM_EXPORT(lv_tileview_add_tile),
+    ESP_ELFSYM_EXPORT(lv_tileview_set_tile_by_index),
+    ESP_ELFSYM_EXPORT(lv_tileview_get_tile_active),
 
     /* --- Eventos ---------------------------------------------------- */
     ESP_ELFSYM_EXPORT(lv_obj_add_event_cb),

@@ -42,11 +42,19 @@ do firmware + registrar aqui.
 **Flex:** `lv_obj_set_flex_flow` · `lv_obj_set_flex_align` · `lv_obj_set_flex_grow`
 **Scroll:** `lv_obj_set_scroll_dir` · `lv_obj_set_scrollbar_mode`
 **Estilos locais:** `lv_obj_set_style_bg_color` · `…_bg_opa` · `…_border_width` ·
-`…_shadow_width` · `…_radius` · `…_pad_top/bottom/left/right/row/column`
+`…_shadow_width` · `…_radius` · `…_opa` · `…_min_width` ·
+`…_pad_top/bottom/left/right/row/column`
 (`…_pad_all/hor/ver/gap` são `static inline` no 9.5 → expandem para essas) ·
-`…_text_color` · `…_text_font` · `…_text_align` · `…_text_letter_space`
+`…_text_color` · `…_text_font` · `…_text_align` · `…_text_letter_space` ·
+`…_text_line_space`
+**Layout:** `lv_obj_update_layout` (resolve tamanhos antes de `align_to`/medições) ·
+`lv_pct` (no LVGL 9 é função, não macro)
 **Label:** `lv_label_create` · `lv_label_set_text` · `lv_label_set_text_fmt` ·
 `lv_label_set_long_mode`
+**Tileview** (páginas que deslizam na horizontal — o padrão das Tools nativas
+Dados/Bingo): `lv_tileview_create` · `lv_tileview_add_tile` ·
+`lv_tileview_set_tile_by_index` · `lv_tileview_get_tile_active`. O evento de
+troca de página é `LV_EVENT_VALUE_CHANGED` no objeto do tileview.
 **Eventos:** `lv_obj_add_event_cb` · `lv_event_get_user_data`
 **Timers:** `lv_timer_create` · `lv_timer_delete` · `lv_timer_set_period` ·
 `lv_timer_set_repeat_count`
