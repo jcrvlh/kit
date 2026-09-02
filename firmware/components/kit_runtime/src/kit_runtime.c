@@ -17,6 +17,8 @@
 #include "kit_imu.h"
 #include "kit_tool_manager.h"
 #include "kit_tool_loader.h"
+#include "kit_network.h"
+#include "kit_catalog.h"
 #include "kit_launcher.h"
 
 #include "kit_theme.h"
@@ -62,9 +64,12 @@ static void screen_set_on(bool on)
     // para poupar bateria e religamos tudo ao acordar.
     //   - acelerômetro (gesto de chacoalhar não é usado com a tela apagada);
     //   - áudio (nenhum efeito novo é enfileirado);
+    //   - Wi-Fi: rádio desligado (o catálogo/OTA seguram keep-awake, então
+    //     nunca dormimos no meio de um download);
     //   - CPU: light sleep automático entre os polls (só na bateria).
     kit_imu_set_enabled(on);
     kit_audio_suspend(!on);
+    kit_network_suspend(!on);
     kit_power_set_screen_sleeping(!on);
 
     if (on) note_activity();
@@ -313,6 +318,21 @@ kit_err_t kit_runtime_init(void)
         ESP_LOGW(TAG, "Carregador de Tools externas indisponível");
     }
 
+    // 8c. Conectividade Wi-Fi (offline-first): só carrega mutex + lista de redes
+    //     do NVS. A pilha (esp_wifi/lwip, ~45 KB) e o rádio só sobem quando o
+    //     usuário liga o Wi-Fi. A religação automática às redes salvas é adiada
+    //     para depois do primeiro frame (ver kit_runtime_run) — subir a pilha
+    //     durante o bring-up disputa RAM interna com o DMA do display.
+    if (kit_network_init() != KIT_OK) {
+        ESP_LOGW(TAG, "Subsistema Wi-Fi indisponível");
+    }
+
+    // 8d. Catálogo de Tools no dispositivo (só cria a task de rede, ociosa até
+    //     a UI pedir um refresh).
+    if (kit_catalog_init() != KIT_OK) {
+        ESP_LOGW(TAG, "Catálogo de Tools indisponível");
+    }
+
     // 9. Inicializa Launcher UI
     err = kit_launcher_init();
     if (err != KIT_OK) {
@@ -340,11 +360,25 @@ void kit_runtime_run(void)
     int64_t last_imu_us = 0;
     int64_t last_inact_us = 0;
     int64_t last_wake_us = 0;
+    bool    wifi_autostart_done = false;
     while (1) {
         // Incrementa o tempo do LVGL e processa tarefas gráficas
         uint32_t delay_ms = kit_display_process();
 
         int64_t now = esp_timer_get_time();
+
+        // Religação automática do Wi-Fi às redes salvas — adiada ~3 s para o
+        // display já estar renderizando quando a pilha de rede sobe.
+        if (!wifi_autostart_done && now >= 3000000) {
+            wifi_autostart_done = true;
+            uint8_t wifi_en = 1;
+            kit_config_get_u8("wifi_en", &wifi_en, 1);
+            if (wifi_en && kit_network_saved_count() > 0) {
+                ESP_LOGI(TAG, "Wi-Fi: religando às redes memorizadas");
+                kit_network_start();
+            }
+        }
+
 
         // Confere os botões físicos ~a cada 200 ms (o AXP2101 mantém o evento
         // latcheado; poll raro evita disputa no barramento I2C compartilhado).
