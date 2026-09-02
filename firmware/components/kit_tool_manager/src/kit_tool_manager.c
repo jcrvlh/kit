@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -662,22 +663,40 @@ const char *kit_tool_manager_current(void)
 }
 
 // Apaga recursivamente um diretório do cartão (arquivos + subpastas).
+//
+// O FatFs do ESP-IDF não garante um readdir() consistente enquanto a própria
+// pasta é modificada: um f_unlink() no meio da varredura faz o próximo
+// f_readdir() pular entradas, então um rm_rf() ingênuo deixava metade dos
+// arquivos pra trás e o rmdir() final falhava (ENOTEMPTY). A Tool "some" da
+// lista mas ressurge no próximo scan. Aqui a gente reabre a pasta a cada
+// remoção: pega só a primeira entrada, fecha, apaga, repete até esvaziar.
 static void rm_rf(const char *path)
 {
-    DIR *d = opendir(path);
-    if (d) {
+    for (int guard = 0; guard < 4096; guard++) {
+        DIR *d = opendir(path);
+        if (!d) break;
+
+        char name[128] = {0};
         struct dirent *ent;
         while ((ent = readdir(d)) != NULL) {
             if (ent->d_name[0] == '.' &&
                 (ent->d_name[1] == '\0' ||
                  (ent->d_name[1] == '.' && ent->d_name[2] == '\0'))) continue;
-            char child[400];
-            snprintf(child, sizeof(child), "%.256s/%.128s", path, ent->d_name);
-            struct stat st;
-            if (stat(child, &st) == 0 && S_ISDIR(st.st_mode)) rm_rf(child);
-            else unlink(child);
+            strlcpy(name, ent->d_name, sizeof(name));
+            break;
         }
         closedir(d);
+
+        if (name[0] == '\0') break;   // pasta vazia
+
+        char child[400];
+        snprintf(child, sizeof(child), "%.256s/%.128s", path, name);
+        struct stat st;
+        if (stat(child, &st) == 0 && S_ISDIR(st.st_mode)) rm_rf(child);
+        else if (unlink(child) != 0) {
+            ESP_LOGW(TAG, "unlink('%s') falhou: errno=%d", child, errno);
+            break;   // não trava num arquivo que não sai
+        }
     }
     rmdir(path);
 }
@@ -724,6 +743,21 @@ kit_err_t kit_tool_manager_uninstall(const char *tool_id)
 
     ESP_LOGI(TAG, "Removendo Tool '%s' (%s)", tool_id, dir);
     rm_rf(dir);
+
+    // O pacote .kit que originou a Tool (sideload manual) pode ter ficado no
+    // cartão. Se sobrar, o extract_pending_kits() do próximo scan reinstala a
+    // Tool na hora — parece que "não removeu". Apaga o .kit junto.
+    char kit_file[176];
+    snprintf(kit_file, sizeof(kit_file), "%s/%.96s.kit", KIT_TOOL_SD_TOOLS_DIR, tool_id);
+    unlink(kit_file);
+    snprintf(kit_file, sizeof(kit_file), "/sdcard/%.96s.kit", tool_id);
+    unlink(kit_file);
+
+    if (stat(dir, &st) == 0) {
+        ESP_LOGE(TAG, "Tool '%s' não saiu do cartão (%s ainda existe)", tool_id, dir);
+        kit_tool_manager_reload_catalog();
+        return KIT_FAIL;
+    }
 
     if (strcmp(tool_id, s_last_tool) == 0) s_last_tool[0] = '\0';
     kit_tool_manager_reload_catalog();

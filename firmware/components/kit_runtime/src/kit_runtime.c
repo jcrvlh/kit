@@ -379,7 +379,6 @@ void kit_runtime_run(void)
             }
         }
 
-
         // Confere os botões físicos ~a cada 200 ms (o AXP2101 mantém o evento
         // latcheado; poll raro evita disputa no barramento I2C compartilhado).
         if (now - last_btn_us >= 200000) {

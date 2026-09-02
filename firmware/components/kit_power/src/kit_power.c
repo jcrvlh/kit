@@ -54,6 +54,16 @@ static i2c_master_dev_handle_t get_or_add_i2c_device(uint8_t dev_addr)
 #define AXP2101_REG_PMU_STATUS1     0x00
 #define AXP2101_REG_PMU_STATUS2     0x01
 #define AXP2101_REG_BAT_PERCENT     0xA4
+
+// Medição de bateria. Depois de um reset o AXP2101 sobe com todos os canais de
+// ADC desligados (0x30 = 0x00) — sem habilitá-los não há leitura de tensão.
+#define AXP2101_REG_ADC_CH_EN       0x30   // bit0 Vbat, bit1 TS, bit2 Vbus, bit3 Vsys, bit4 Tdie
+#define AXP2101_REG_VBAT_ADC_H      0x34   // Vbat: 14 bits em 0x34[5:0]:0x35, em mV
+#define AXP2101_REG_BAT_DET_CTRL    0x68   // bit0 = detecção de bateria
+#define AXP2101_ADC_EN_VBAT         0x01
+#define AXP2101_ADC_EN_VBUS         0x04
+#define AXP2101_ADC_EN_VSYS         0x08
+#define AXP2101_BAT_DET_EN          0x01
 #define AXP2101_REG_ALDO1_VOLT      0x92
 #define AXP2101_REG_ALDO2_VOLT      0x93
 #define AXP2101_REG_ALDO3_VOLT      0x94
@@ -204,6 +214,20 @@ kit_err_t kit_power_init(void)
     }
 
 
+    // 2b. Liga a medição de bateria. Depois de um reset o AXP2101 sobe com os
+    // canais de ADC desligados (0x30 = 0). Habilitamos Vbat + Vbus + Vsys e a
+    // detecção de bateria (0x68).
+    //
+    // O gauge interno de porcentagem (registrador 0xA4) desta placa nunca sai
+    // de 0 — é um problema conhecido do AXP2101, cujo estimador de SoC precisa
+    // de uma curva de caracterização da célula que a Waveshare não carrega.
+    // Por isso a porcentagem é estimada a partir da tensão da bateria
+    // (ver kit_power_get_battery_percentage), usando 0xA4 só se ele responder.
+    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_ADC_CH_EN,
+                      AXP2101_ADC_EN_VBAT | AXP2101_ADC_EN_VBUS | AXP2101_ADC_EN_VSYS);
+    kit_i2c_write_reg(AXP2101_I2C_ADDR, AXP2101_REG_BAT_DET_CTRL, AXP2101_BAT_DET_EN);
+    ESP_LOGI(TAG, "Medição de bateria habilitada (ADC Vbat/Vbus/Vsys + detecção).");
+
     // 3. Gera a Identidade Única do Dispositivo via MAC de fábrica
     uint8_t mac[6] = {0};
     if (esp_read_mac(mac, ESP_MAC_BASE) == ESP_OK) {
@@ -287,21 +311,71 @@ bool kit_power_is_pwr_pressed(void)
     return s_pwr_pressed;
 }
 
+// Tensão instantânea da bateria em mV (0 se a leitura falhar). Registrador de
+// resultado do ADC do AXP2101: 0x34[5:0] são os bits altos, 0x35 os baixos, o
+// valor já vem em mV (LSB = 1 mV).
+static uint16_t kit_power_read_vbat_mv(void)
+{
+    uint8_t raw[2] = {0};
+    if (kit_i2c_read_bytes(AXP2101_I2C_ADDR, AXP2101_REG_VBAT_ADC_H, raw, 2) != ESP_OK) {
+        return 0;
+    }
+    return (uint16_t)(((raw[0] & 0x3F) << 8) | raw[1]);
+}
+
+// Curva de descarga aproximada de uma célula Li-ion/LiPo (tensão sob carga leve
+// → % de carga). Interpolação linear entre os pontos.
+static uint8_t kit_power_soc_from_mv(uint16_t mv)
+{
+    static const struct { uint16_t mv; uint8_t pct; } curve[] = {
+        {4200, 100}, {4100, 90}, {4000, 80}, {3900, 65}, {3800, 55},
+        {3700, 42}, {3600, 27}, {3500, 14}, {3400, 6}, {3300, 2}, {3000, 0},
+    };
+    if (mv >= curve[0].mv) return 100;
+    size_t n = sizeof(curve) / sizeof(curve[0]);
+    if (mv <= curve[n - 1].mv) return 0;
+    for (size_t i = 1; i < n; i++) {
+        if (mv >= curve[i].mv) {
+            uint16_t hi_mv = curve[i - 1].mv, lo_mv = curve[i].mv;
+            uint8_t  hi_p  = curve[i - 1].pct, lo_p  = curve[i].pct;
+            return lo_p + (uint32_t)(mv - lo_mv) * (hi_p - lo_p) / (hi_mv - lo_mv);
+        }
+    }
+    return 0;
+}
+
 uint8_t kit_power_get_battery_percentage(void)
 {
-    uint8_t percent = 100;
-    if (kit_i2c_read_reg(AXP2101_I2C_ADDR, AXP2101_REG_BAT_PERCENT, &percent) == ESP_OK) {
-        if (percent > 100) percent = 100;
-        return percent;
+    // O gauge interno (0xA4) fica travado em 0 nesta placa; só o usamos se ele
+    // devolver algo plausível. Caso contrário, estimamos pela tensão.
+    uint8_t gauge = 0;
+    if (kit_i2c_read_reg(AXP2101_I2C_ADDR, AXP2101_REG_BAT_PERCENT, &gauge) == ESP_OK &&
+        gauge > 0 && gauge <= 100) {
+        return gauge;
     }
-    return 100; // Valor padrão se a leitura I2C falhar
+
+    uint16_t mv = kit_power_read_vbat_mv();
+    if (mv < 2500) {
+        return 100; // ADC ainda não converteu / sem leitura — não alarma o usuário
+    }
+
+    uint8_t pct = kit_power_soc_from_mv(mv);
+
+    // Sob carga a tensão sobe ~50–150 mV acima do repouso; desconta um pouco
+    // para o número não "pular" para 100% assim que o cabo entra.
+    if (kit_power_is_charging() && pct > 3) {
+        pct -= 3;
+    }
+    return pct;
 }
 
 bool kit_power_is_charging(void)
 {
     uint8_t status = 0;
     if (kit_i2c_read_reg(AXP2101_I2C_ADDR, AXP2101_REG_PMU_STATUS2, &status) == ESP_OK) {
-        return (status & 0x20) != 0; // Bit de status de carregamento ativo
+        // STATUS2 bits [6:5] = sentido da corrente da bateria:
+        // 00 = parada, 01 = carregando, 10 = descarregando.
+        return (status & 0x60) == 0x20;
     }
     return false;
 }

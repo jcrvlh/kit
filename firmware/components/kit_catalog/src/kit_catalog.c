@@ -77,8 +77,21 @@ typedef struct {
 
 static esp_err_t on_http_event(esp_http_client_event_t *evt)
 {
-    if (evt->event_id != HTTP_EVENT_ON_DATA) return ESP_OK;
     dl_ctx_t *d = evt->user_data;
+
+    // O catálogo pode não trazer package.size (index.json com "size": null). Nesse
+    // caso a barra ficava presa em "0" a download inteiro. Pega o tamanho do
+    // cabeçalho Content-Length da resposta final (após redirects do GitHub).
+    if (evt->event_id == HTTP_EVENT_ON_HEADER) {
+        if (d && d->expected == 0 && evt->header_key &&
+            strcasecmp(evt->header_key, "Content-Length") == 0 && evt->header_value) {
+            long cl = strtol(evt->header_value, NULL, 10);
+            if (cl > 0) d->expected = (size_t)cl;
+        }
+        return ESP_OK;
+    }
+
+    if (evt->event_id != HTTP_EVENT_ON_DATA) return ESP_OK;
 
     if (d->f) {
         if (fwrite(evt->data, 1, evt->data_len, d->f) != (size_t)evt->data_len) {
@@ -147,6 +160,30 @@ static void str_field(cJSON *obj, const char *key, char *dst, size_t cap)
     else dst[0] = '\0';
 }
 
+// As fontes do KIT só têm Latin-1 (+ • e alguns ícones FA). Textos do index.json
+// vêm de autores de Tools quaisquer e costumam ter travessão, reticências e
+// aspas curvas — que viram um retângulo vazado na tela. Troca in-place por
+// ASCII equivalente (todas as conversões encolhem ou empatam, nunca crescem).
+static void str_field_text(cJSON *obj, const char *key, char *dst, size_t cap)
+{
+    str_field(obj, key, dst, cap);
+    const unsigned char *r = (const unsigned char *)dst;
+    char *w = dst;
+    while (*r) {
+        if (r[0] == 0xE2 && r[1] == 0x80) {           // U+2012..U+201F (pontuação geral)
+            unsigned char c = r[2];
+            if (c >= 0x90 && c <= 0x95)      { *w++ = '-';  r += 3; continue; }  // ‐ ‑ ‒ – — ―
+            if (c == 0x98 || c == 0x99 || c == 0x9B) { *w++ = '\''; r += 3; continue; }  // ' ' ‛
+            if (c == 0x9C || c == 0x9D || c == 0x9E) { *w++ = '"';  r += 3; continue; }  // " " „
+            if (c == 0xA6)                  { *w++='.'; *w++='.'; *w++='.'; r += 3; continue; }  // …
+        }
+        if (r[0] == 0xE2 && r[1] == 0x86 && r[2] == 0x92) { *w++ = '>'; r += 3; continue; }  // →
+        if (r[0] == 0xC2 && r[1] == 0xA0)                 { *w++ = ' '; r += 2; continue; }  // nbsp
+        *w++ = (char)*r++;
+    }
+    *w = '\0';
+}
+
 // Cruza cada entrada do catálogo com o que está instalado (kit_tool_manager).
 static void cross_reference(void)
 {
@@ -184,10 +221,10 @@ static kit_err_t parse_index(const char *json, size_t len)
         memset(e, 0, sizeof(*e));
 
         str_field(t, "id",          e->id,          sizeof(e->id));
-        str_field(t, "name",        e->name,        sizeof(e->name));
+        str_field_text(t, "name",   e->name,        sizeof(e->name));
         str_field(t, "version",     e->version,     sizeof(e->version));
-        str_field(t, "author",      e->author,      sizeof(e->author));
-        str_field(t, "description", e->description, sizeof(e->description));
+        str_field_text(t, "author", e->author,      sizeof(e->author));
+        str_field_text(t, "description", e->description, sizeof(e->description));
         str_field(t, "tier",        e->tier,        sizeof(e->tier));
         if (e->id[0] == '\0' || e->name[0] == '\0') continue;
 
@@ -258,7 +295,7 @@ static void do_install(const char *id)
     if (!kit_network_is_connected()) { fail(KIT_CAT_OFFLINE, "Sem Wi-Fi"); return; }
 
     set_state(KIT_CAT_WORKING);
-    s_progress = 0;
+    s_progress = e.size ? 0 : -1;   // -1 = indeterminado até o Content-Length chegar
     ESP_LOGI(TAG, "baixando '%s' de %s", id, e.url);
 
     FILE *f = fopen(KIT_TMP_PATH, "wb");

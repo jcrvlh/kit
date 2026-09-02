@@ -78,7 +78,15 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
     if (s_panel_handle) {
         uint32_t len = (area->x2 - area->x1 + 1) * (area->y2 - area->y1 + 1);
         lv_draw_sw_rgb565_swap(px_map, len);
-        esp_lcd_panel_draw_bitmap(s_panel_handle, area->x1, area->y1, area->x2 + 1, area->y2 + 1, px_map);
+        esp_err_t e = esp_lcd_panel_draw_bitmap(s_panel_handle, area->x1, area->y1,
+                                                area->x2 + 1, area->y2 + 1, px_map);
+        // Se a transferência nem chegou a ser enfileirada (fila cheia / disputa
+        // de barramento sob carga de Wi-Fi), o callback de "done" NUNCA vai vir e
+        // o LVGL ficaria preso pra sempre em wait_for_flushing. Libera na mão.
+        if (e != ESP_OK) {
+            ESP_LOGW(TAG, "draw_bitmap falhou (%s) — liberando o flush", esp_err_to_name(e));
+            lv_display_flush_ready(disp);
+        }
     } else {
         lv_display_flush_ready(disp);
     }
@@ -104,7 +112,13 @@ kit_err_t kit_display_init(void)
         return KIT_FAIL;
     }
 
-    // 2. Aloca buffers de desenho em PSRAM
+    // 2. Aloca buffers de desenho em PSRAM. A RAM interna (~232 KB DIRAM) é
+    //    disputada por Wi-Fi (~45 KB), TLS e, principalmente, a relocação do
+    //    .so das Tools (o ELF loader precisa de um bloco contíguo em IRAM). Pôr
+    //    59 KB de framebuffer aqui deixava o catálogo (mbedtls_ssl_setup ->
+    //    -0x7F00 ALLOC_FAILED) e o "abrir Tool" sem bloco grande o bastante.
+    //    O DMA do QSPI lê da PSRAM sem problema; o risco de disputa com o Wi-Fi
+    //    é tratado no lvgl_flush_cb (checa o retorno e não trava o LVGL).
     s_buf1 = heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     s_buf2 = heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!s_buf1 || !s_buf2) {

@@ -35,6 +35,12 @@ static esp_codec_dev_sample_info_t s_fs;
 #define AUDIO_TWO_PI        6.28318530717958647692f
 #define AUDIO_IDLE_MS       3000
 
+// Depois de religar o codec, o PA_EN do ES8311 leva alguns ms pra subir e
+// estabilizar. Sem essa folga o primeiro efeito curto (um CLICK tem ~20 ms)
+// sai enquanto o amplificador ainda acorda e some — só o segundo toque em
+// diante era ouvido. audio_codec_wake() empurra esse silêncio antes do 1º tom.
+#define AUDIO_PA_SETTLE_MS  80
+
 // O som roda numa task própria: escrever no I2S é síncrono (bloqueia até o
 // codec drenar o buffer) e, chamado direto do callback do LVGL, travava a task
 // `main` (a rolagem da Dice Tool, a navegação do Launcher). kit_audio_beep_impl
@@ -283,6 +289,23 @@ static void render_sfx(kit_sfx_t sfx)
         break;
     }
 
+    case KIT_SFX_CATALOG_DONE:
+        // Download concluído: arpejo de Dó subindo depressa, um saltinho no
+        // oitavado e pouso no Sol agudo — comemora sem virar fanfarra. Toca
+        // raramente (só quando um .kit termina de baixar), então pode brilhar.
+        render_tone(523,  42, 8500.0f);   // C5
+        render_silence(10);
+        render_tone(659,  42, 9000.0f);   // E5
+        render_silence(10);
+        render_tone(784,  42, 9500.0f);   // G5
+        render_silence(10);
+        render_tone(1047, 75, 10500.0f);  // C6
+        render_silence(24);
+        render_tone(1319, 48, 9500.0f);   // E6  — saltinho
+        render_tone(1047, 48, 8800.0f);   // C6
+        render_tone(1568, 165, 11000.0f); // G6  — pouso alegre, fica no ar
+        break;
+
     default:
         break;
     }
@@ -300,6 +323,11 @@ static void audio_codec_wake(void)
     }
     esp_codec_dev_set_out_vol(s_speaker, s_volume);
     s_codec_open = true;
+
+    // Dá tempo do PA assentar antes de qualquer tom, alimentando zeros (o DMA
+    // não estala). Só roda nessa transição fechado -> aberto, então não pesa
+    // nos toques seguidos.
+    render_silence(AUDIO_PA_SETTLE_MS);
 }
 
 // Desliga o codec/PA depois de um tempo parado: derruba o PA_EN, o que
