@@ -360,6 +360,7 @@ typedef enum {
     KIT_SFX_LOCK,          /**< tela apagada: cadeado fechando */
     KIT_SFX_UNLOCK,        /**< tela ligada: cadeado abrindo */
     KIT_SFX_BOTTLE_SPIN,   /**< Garrafa: catraca de madeira desacelerando (~2,2 s) */
+    KIT_SFX_CATALOG_DONE,  /**< Catálogo: download de uma Tool concluído — arpejo alegre */
 } kit_sfx_t;
 
 /**
