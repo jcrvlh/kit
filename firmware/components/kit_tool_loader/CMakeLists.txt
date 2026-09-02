@@ -4,5 +4,5 @@ idf_component_register(
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS "src"
     REQUIRES kit_api
-    PRIV_REQUIRES espressif__elf_loader lvgl
+    PRIV_REQUIRES espressif__elf_loader lvgl kit_fonts
 )

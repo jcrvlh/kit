@@ -1,6 +1,6 @@
 # KIT Tools SDK — Referência da API
 
-Esta documentação descreve as interfaces disponibilizadas pelo KIT Runtime para as Tools (`tool.elf`).
+Esta documentação descreve as interfaces disponibilizadas pelo KIT Runtime para as Tools (`tool.so`).
 
 O ponto de entrada de toda Tool recebe um contexto (`kit_tool_ctx_t`) contendo uma tabela de APIs baseada na especificação do manifesto (permissões).
 

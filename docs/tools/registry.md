@@ -62,12 +62,12 @@ Regras aplicadas na revisão do PR:
 
 O `checksum.sha256` do pacote garante **integridade**, não **autenticidade**. Para
 o catálogo aberto, cada `.kit` publicado é **assinado com Ed25519** sobre os bytes
-canônicos do `manifest.json` — que já contém o hash SHA-256 de `tool.elf` e de
+canônicos do `manifest.json` — que já contém o hash SHA-256 de `tool.so` e de
 cada asset, então uma assinatura cobre o pacote inteiro.
 
 ```
 signature.bin  ──assina──▶  manifest.json (bytes canônicos)
-                                   ├─ checksum de tool.elf
+                                   ├─ checksum de tool.so
                                    └─ checksum de cada assets/*
 ```
 
@@ -86,7 +86,7 @@ signature.bin  ──assina──▶  manifest.json (bytes canônicos)
 | **Sideload** | `.kit` local fora do catálogo (web-installer com arquivo próprio, microSD, `kit-cli flash`). | Apenas SHA-256. | Confirmação explícita; exige **Modo Desenvolvedor** ligado em Configurações. |
 
 Verificação em três pontos: a CI assina na publicação; o `kit_tool_manager` valida
-assinatura + hashes no `KIT_TOOL_COMMIT`; o hash de `tool.elf` é reconferido a cada
+assinatura + hashes no `KIT_TOOL_COMMIT`; o hash de `tool.so` é reconferido a cada
 carregamento, antes da relocação em PSRAM. O `index.json` carrega uma lista
 `revoked` que o dispositivo sincroniza quando online.
 

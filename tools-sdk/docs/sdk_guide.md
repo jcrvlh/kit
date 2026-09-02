@@ -72,7 +72,7 @@ source $IDF_PATH/export.sh
 kit-cli build . --target xtensa
 ```
 
-Isso criará o `tool.elf` verdadeiro. Para empacotar com o manifesto, a CLI cria um `.kit`:
+Isso criará o `tool.so` para o KIT. Para empacotar com o manifesto, a CLI cria um `.kit`:
 
 ```bash
 # Valida as permissões e dependências

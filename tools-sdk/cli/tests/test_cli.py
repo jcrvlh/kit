@@ -24,7 +24,7 @@ def _valid_manifest():
         "author": "KIT Community",
         "description": "A dice roller for tabletop games",
         "icon": "icon.bin",
-        "entry_point": "tool.elf",
+        "entry_point": "tool.so",
         "min_runtime": "0.1.0",
         "max_runtime": "1.0.0",
         "arch": "xtensa-esp32s3",
@@ -218,7 +218,7 @@ def test_full_pipeline(tmp_path):
     assert valid is True, f"Errors: {errors}"
 
     # Cria binário dummy
-    with open(tool_dir / "tool.elf", "wb") as f:
+    with open(tool_dir / "tool.so", "wb") as f:
         f.write(b"\x7fELF\x01\x01\x01\x00" + b"\x00" * 32)
 
     # Pack
@@ -236,12 +236,12 @@ def test_full_pipeline(tmp_path):
 
 
 def test_pack_missing_elf(tmp_path):
-    """Pack falha se tool.elf não existe."""
+    """Pack falha se tool.so não existe."""
     ok, _ = scaffold_new_tool("No ELF", "com.test.noelf", tmp_path)
     tool_dir = tmp_path / "no_elf"
     ok, msg = pack_tool_directory(tool_dir)
     assert ok is False
-    assert "tool.elf" in msg
+    assert "tool.so" in msg
 
 
 def test_inspect_invalid_zip(tmp_path):
@@ -258,7 +258,7 @@ def test_inspect_missing_manifest(tmp_path):
     import zipfile
     fake = tmp_path / "no_manifest.kit"
     with zipfile.ZipFile(fake, "w") as zf:
-        zf.writestr("tool.elf", b"\x00" * 8)
+        zf.writestr("tool.so", b"\x00" * 8)
     ok, manifest, msg = inspect_kit_package(fake)
     assert ok is False
     assert "manifest.json" in msg

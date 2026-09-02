@@ -18,11 +18,11 @@ O arquivo `manifest.json` descreve os metadados, requisitos e permissões de uma
   "author": "KIT Community",
   "description": "Rolador de dados poliédricos para jogos de RPG e mesa.",
   "icon": "icon.bin",
-  "entry_point": "tool.elf",
+  "entry_point": "tool.so",
   "arch": "xtensa-esp32s3",
   "size_installed": 128000,
   "checksum": {
-    "tool.elf": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tool.so": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "assets/dice_faces.bin": "sha256:1b4f0e9851971998e732078544c96b36c3d01cedf7caa332359d6f1d83567014"
   },
   "key_id": "kit-release-2026",
@@ -49,7 +49,7 @@ O arquivo `manifest.json` descreve os metadados, requisitos e permissões de uma
 * `version_code`: Número inteiro estritamente incremental usado para verificar atualizações.
 * `min_runtime` / `max_runtime`: Intervalo de compatibilidade com a versão do KIT Runtime.
 * `arch`: Deve ser obrigatoriamente `xtensa-esp32s3`.
-* `checksum`: Objeto com o hash SHA-256 de `tool.elf` e de cada asset. É o que a
+* `checksum`: Objeto com o hash SHA-256 de `tool.so` e de cada asset. É o que a
   assinatura do pacote (`signature.bin`) cobre transitivamente.
 * `key_id`: Identificador da chave usada para assinar o pacote. Presente apenas em
   pacotes do [catálogo](registry.md); ausente em pacotes Sideload.

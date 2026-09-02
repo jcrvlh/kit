@@ -12,6 +12,7 @@
  * | `kit_mono_20`     | Space Mono Bold| 20px   | Rótulos de botão, legendas em caixa alta|
  * | `kit_mono_26`     | Space Mono Bold| 26px   | Barra de status "KIT", títulos de tela |
  * | `kit_sans_22`     | Archivo Bold  | 22px    | Rótulos de linha de lista (caixa normal)|
+ * | `kit_sans_28`     | Archivo Bold  | 28px    | Frases longas legíveis (leitura, onboarding)|
  * | `kit_display_44`  | Archivo Black | 44px    | Wordmark "KIT", número grande do brilho|
  * | `kit_display_72`  | Archivo Black | 72px    | Resultado do Decisor (CARA/COROA/custom)|
  * | `kit_display_120` | Archivo Black | 120px   | Resultado dos Dados (número protagonista)|
@@ -44,14 +45,8 @@
  * @copyright GNU General Public License v3.0 (GPL-3.0)
  */
 
-#ifdef KIT_SDK_STUBS
-/* Compilação desktop (stubs): fontes LVGL padrão serão usadas.
- * Os ponteiros são declarados mas resolvidos nos stubs. */
-#include <stdint.h>
-typedef struct { uint8_t _placeholder; } lv_font_t;
-#else
-#include "lvgl.h"
-#endif
+/* `lv_font_t` vem de kit_lvgl.h (opaco no build nativo, real no Xtensa). */
+#include "kit_lvgl.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -68,6 +63,9 @@ extern const lv_font_t kit_mono_26;
 
 /** Archivo Bold 22px — rótulos de lista (caixa normal, não mono). */
 extern const lv_font_t kit_sans_22;
+
+/** Archivo Bold 28px — frases longas legíveis (leitura, telas de onboarding). */
+extern const lv_font_t kit_sans_28;
 
 /** Archivo Black 44px — wordmark "KIT", números médios (brilho). */
 extern const lv_font_t kit_display_44;
