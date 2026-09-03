@@ -27,6 +27,9 @@
 static const char *TAG = "KIT_RUNTIME";
 static bool s_is_in_tool = false;
 static void (*s_tool_primary_action)(void) = NULL;
+// Chacoalhar dispara a ação principal por padrão; uma Tool pode desligar isso
+// (ex: Veto — quem descreve gesticula e passaria carta sem querer).
+static bool s_tool_shake_enabled = true;
 
 // Botões físicos do sistema.
 //   PWR  — tecla PWRON do PMIC AXP2101 (toque curto: liga/desliga a tela).
@@ -414,7 +417,7 @@ void kit_runtime_run(void)
             last_imu_us = now;
             if (kit_imu_poll_shake()) {
                 note_activity();
-                if (s_tool_primary_action) s_tool_primary_action();
+                if (s_tool_shake_enabled && s_tool_primary_action) s_tool_primary_action();
                 kit_imu_dispatch_shake();
             }
         }
@@ -439,6 +442,7 @@ void kit_runtime_set_in_tool(bool in_tool)
     s_is_in_tool = in_tool;
     if (!in_tool) {
         s_tool_primary_action = NULL;
+        s_tool_shake_enabled = true;
         kit_imu_clear_shake_callback();   // não deixa callback órfão de Tool externa
     }
 }
@@ -446,6 +450,11 @@ void kit_runtime_set_in_tool(bool in_tool)
 void kit_runtime_set_tool_primary_action(void (*action)(void))
 {
     s_tool_primary_action = action;
+}
+
+void kit_runtime_set_tool_shake_enabled(bool enabled)
+{
+    s_tool_shake_enabled = enabled;
 }
 
 // Implementações do módulo System da API

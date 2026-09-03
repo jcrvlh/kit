@@ -43,6 +43,14 @@ void kit_runtime_set_in_tool(bool in_tool);
 void kit_runtime_set_tool_primary_action(void (*action)(void));
 
 /**
+ * Liga/desliga o gesto de chacoalhar como atalho da ação principal na Tool
+ * ativa. Padrão: ligado. Uma Tool em que gesticular é natural (ex: Veto, quem
+ * descreve mexe as mãos) desliga para não disparar a ação sem querer — o PWR
+ * continua valendo. O Tool Manager religa ao encerrar a Tool.
+ */
+void kit_runtime_set_tool_shake_enabled(bool enabled);
+
+/**
  * Encerra a Tool ativa e retorna ao Launcher.
  */
 void kit_system_exit_impl(void);
