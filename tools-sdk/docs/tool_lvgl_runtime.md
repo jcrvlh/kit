@@ -36,7 +36,7 @@ do firmware + registrar aqui.
 **Objetos / árvore:** `lv_obj_create` · `lv_obj_delete` · `lv_obj_clean`
 (apaga só os filhos) · `lv_obj_get_child` · `lv_screen_load`
 **Flags / estilo base:** `lv_obj_add_flag` · `lv_obj_remove_flag`
-(`lv_obj_clear_flag` é alias v8) · `lv_obj_remove_style_all` · `lv_obj_invalidate`
+(`lv_obj_clear_flag` é alias v8) · `lv_obj_has_flag` · `lv_obj_remove_style_all` · `lv_obj_invalidate`
 **Posição / tamanho:** `lv_obj_set_pos` · `lv_obj_set_size` · `lv_obj_set_width` ·
 `lv_obj_set_height` · `lv_obj_align` · `lv_obj_center` · `lv_obj_set_ext_click_area`
 **Flex:** `lv_obj_set_flex_flow` · `lv_obj_set_flex_align` · `lv_obj_set_flex_grow`

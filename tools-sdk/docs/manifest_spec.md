@@ -48,7 +48,7 @@ Toda Tool para o KIT deve possuir um arquivo `manifest.json` na raiz do seu proj
 | `api_level` | **int** | Nível da API do KIT contra o qual a Tool foi compilada. | `1` |
 | `kind` | **string** | `"tool"` (padrão) ou `"game"`. Na tela "TUDO" da Home, ferramentas aparecem em cima e mini-jogos numa seção separada embaixo. | `"game"` |
 | `accent` | **string** | Cor do card da Tool na Home, em hex `#RRGGBB`. Sem isso, o KIT escolhe uma cor da paleta. | `"#4C6EF5"` |
-| `home_icon` | **string** | Ícone geométrico do card na Home. Um de: `card` (padrão), `dice`, `spin`, `coin`, `triangle`, `bingo`, `order`, `timer`, `first`, `teams`, `ask`. | `"dice"` |
+| `home_icon` | **string** | Ícone geométrico do card na Home. Um de: `card` (padrão), `dice`, `spin`, `coin`, `triangle`, `bingo`, `order`, `timer`, `first`, `teams`, `ask`, `pavio`, `adedonha`, `placar`, `veto`, `mimica`, `testa`. | `"dice"` |
 | `checksum` | **string** | `sha256:<hex>` do `entry_point`. O `kit-cli` preenche ao empacotar; o KIT recusa a Tool se não bater. | `"sha256:cebf..."` |
 
 ## Permissões (Permissions)

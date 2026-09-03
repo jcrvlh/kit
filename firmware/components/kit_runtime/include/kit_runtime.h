@@ -7,9 +7,9 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 1
+#define KIT_VERSION_MINOR 2
 #define KIT_VERSION_PATCH 0
-#define KIT_VERSION_STRING "0.1.0"
+#define KIT_VERSION_STRING "0.2.0"   // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

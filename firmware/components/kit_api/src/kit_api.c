@@ -35,6 +35,7 @@ extern kit_err_t kit_system_get_info_impl(kit_system_info_t *info);
 extern void      kit_system_exit_impl(void);
 
 extern kit_err_t kit_imu_register_shake_callback_impl(kit_shake_callback_t cb, void *user_data);
+extern kit_err_t kit_imu_register_tilt_callback_impl(kit_tilt_callback_t cb, void *user_data);
 
 // Definição das tabelas estáticas de APIs
 static const kit_display_api_t s_display_api = {
@@ -87,6 +88,7 @@ static const kit_system_api_t s_system_api = {
 
 static const kit_imu_api_t s_imu_api = {
     .register_shake_callback = kit_imu_register_shake_callback_impl,
+    .register_tilt_callback = kit_imu_register_tilt_callback_impl,
 };
 
 static const kit_api_table_t s_master_api_table = {

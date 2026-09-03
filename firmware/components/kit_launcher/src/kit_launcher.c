@@ -78,7 +78,8 @@ typedef enum {
     TOOL_ICON_DICE, TOOL_ICON_SPIN, TOOL_ICON_COIN, TOOL_ICON_TRIANGLE,
     TOOL_ICON_BINGO, TOOL_ICON_ORDER, TOOL_ICON_TIMER, TOOL_ICON_FIRST,
     TOOL_ICON_TEAMS, TOOL_ICON_ASK, TOOL_ICON_PAVIO, TOOL_ICON_ADEDONHA,
-    TOOL_ICON_PLACAR, TOOL_ICON_VETO, TOOL_ICON_EXTERNAL
+    TOOL_ICON_PLACAR, TOOL_ICON_VETO, TOOL_ICON_MIMICA, TOOL_ICON_TESTA,
+    TOOL_ICON_EXTERNAL
 } tool_icon_t;
 
 typedef struct {
@@ -98,9 +99,10 @@ static const home_tool_t HOME_TOOLS_BUILTIN[] = {
     { "com.kit.primeiro","Primeiro",KIT_COLOR_RED, TOOL_ICON_FIRST, true, false },
     { "com.kit.times",   "Times",   KIT_COLOR_BLUE,   TOOL_ICON_TEAMS, true, false },
     { "com.kit.bingo",   "Bingo",   KIT_COLOR_GREEN,  TOOL_ICON_BINGO, true, true },
-    // Quebra-Gelo, Pavio, Adedonha e Veto saíram do Core — vivem no catálogo como
-    // io.github.jcrvlh.quebragelo, io.github.jcrvlh.pavio, io.github.jcrvlh.adedonha e io.github.jcrvlh.veto.
-    // TOOL_ICON_ASK / TOOL_ICON_PAVIO / TOOL_ICON_ADEDONHA / TOOL_ICON_VETO e seus mapas ficam pra Tool do cartão reusar.
+    // Quebra-Gelo, Pavio, Adedonha, Veto, Mímica e Testa saíram do Core — vivem no
+    // catálogo (io.github.jcrvlh.*). TOOL_ICON_ASK / PAVIO / ADEDONHA / VETO /
+    // MIMICA / TESTA e seus mapas em icon_from_name ficam pra Tool do cartão reusar
+    // via "home_icon" no manifest.
     { "com.kit.placar", "Placar", KIT_COLOR_GREEN, TOOL_ICON_PLACAR, true, false },
 };
 #define HOME_TOOLS_BUILTIN_N ((int)(sizeof(HOME_TOOLS_BUILTIN) / sizeof(HOME_TOOLS_BUILTIN[0])))
@@ -142,6 +144,7 @@ static tool_icon_t icon_from_name(const char *name)
         { "teams", TOOL_ICON_TEAMS },   { "ask", TOOL_ICON_ASK },
         { "pavio", TOOL_ICON_PAVIO },   { "adedonha", TOOL_ICON_ADEDONHA },
         { "placar", TOOL_ICON_PLACAR }, { "veto", TOOL_ICON_VETO },
+        { "mimica", TOOL_ICON_MIMICA }, { "testa", TOOL_ICON_TESTA },
         { "card", TOOL_ICON_EXTERNAL },
     };
     for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); i++)
@@ -768,6 +771,22 @@ static void make_tool_icon(lv_obj_t *badge, tool_icon_t kind, uint32_t color)
         lv_obj_align(icon_shape(ic, 8, 2, color, 1, 0), LV_ALIGN_CENTER,  2, 2);
         lv_obj_align(icon_shape(ic, 3, 3, color, 1, 0), LV_ALIGN_CENTER, -5, 8);
         lv_obj_align(icon_shape(ic, 8, 2, color, 1, 0), LV_ALIGN_CENTER,  2, 8);
+        break;
+    }
+    case TOOL_ICON_MIMICA: {
+        // figura gesticulando: cabeça + tronco + braços erguidos
+        lv_obj_align(icon_shape(ic, 9, 9, color, LV_RADIUS_CIRCLE, 0), LV_ALIGN_TOP_MID, 0, 0);
+        lv_obj_align(icon_shape(ic, 4, 12, color, 2, 0), LV_ALIGN_CENTER, 0, 4);
+        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, -6, 0);
+        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER,  6, 0);
+        break;
+    }
+    case TOOL_ICON_TESTA: {
+        // cabeça + aparelho encostado na testa + setas de inclinar (↑/↓)
+        lv_obj_align(icon_shape(ic, 13, 13, color, LV_RADIUS_CIRCLE, 0), LV_ALIGN_LEFT_MID, 0, 0);
+        lv_obj_align(icon_shape(ic, 10, 18, color, 2, 2), LV_ALIGN_CENTER, 4, 0);
+        lv_obj_align(icon_shape(ic, 8, 3, color, 1, 0), LV_ALIGN_CENTER, 12, -7);
+        lv_obj_align(icon_shape(ic, 8, 3, color, 1, 0), LV_ALIGN_CENTER, 12,  7);
         break;
     }
     case TOOL_ICON_EXTERNAL: {

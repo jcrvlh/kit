@@ -19,7 +19,8 @@
 #include "kit_fonts.h"
 
 #include <errno.h>
-#include <stdio.h>   /* snprintf */
+#include <stdio.h>    /* snprintf */
+#include <string.h>   /* memmove */
 
 static const char *TAG = "KIT_TOOL_SYM";
 
@@ -37,6 +38,7 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
     /* --- Flags / estilo base ------------------------------------------- */
     ESP_ELFSYM_EXPORT(lv_obj_add_flag),
     ESP_ELFSYM_EXPORT(lv_obj_remove_flag),   /* lv_obj_clear_flag() é alias v8 */
+    ESP_ELFSYM_EXPORT(lv_obj_has_flag),      /* Mímica: releitura de HIDDEN no palco */
     ESP_ELFSYM_EXPORT(lv_obj_remove_style_all),
     ESP_ELFSYM_EXPORT(lv_obj_invalidate),
 
@@ -122,6 +124,7 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
        (printf/puts/memcpy/memset/strlen/strcmp/malloc... já vêm do
         elf_loader; `rand` de propósito NÃO — use ctx->api->random.) */
     ESP_ELFSYM_EXPORT(snprintf),
+    ESP_ELFSYM_EXPORT(memmove),   /* GCC emite p/ shift de array com sobreposição */
 
     /* --- Fontes do KIT (dados) ---------------------------------- */
     ESP_ELFSYM_EXPORT(kit_mono_16),

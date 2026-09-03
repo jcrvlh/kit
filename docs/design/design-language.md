@@ -13,13 +13,14 @@ O sistema vive em código:
 
 > Escopo atual: Introdução (onboarding do 1º boot), Home (slideshow de Tools),
 > Ajustes (+ Brilho, Repouso da tela, Desligar sozinho, Repetir introdução),
-> Sobre, a **Test Tool** (`kit_tool_manager`) e as Tools
+> Sobre, a **Test Tool** (`kit_tool_manager`) e as Tools built-in
 > **Dados** (`kit_dice`), **Garrafa** (`kit_bottle`), **Decisor** (`kit_decisor`),
 > **Timer** (`kit_timer`), **Quem Vai Primeiro** (`kit_primeiro`),
-> **Sortear Times** (`kit_times`), **Globo de Bingo** (`kit_bingo`),
-> **Quebra-Gelo** (`kit_quebragelo`), **Pavio** (`kit_pavio`),
-> **Placar** (`kit_placar`). As Tools do catálogo
-> (ex.: **Adedonha**, `io.github.jcrvlh.adedonha`, **Veto**, `io.github.jcrvlh.veto`) seguem a mesma linguagem.
+> **Sortear Times** (`kit_times`), **Globo de Bingo** (`kit_bingo`) e
+> **Placar** (`kit_placar`).
+> As Tools do catálogo (**Adedonha**, **Veto**, **Pavio**, **Quebra-Gelo**,
+> **Mímica** `io.github.jcrvlh.mimica`, **Testa** `io.github.jcrvlh.testa` …)
+> seguem a mesma linguagem.
 
 ---
 
@@ -265,6 +266,7 @@ Tratados em [`kit_runtime`](../architecture/runtime.md) (`poll_system_buttons`,
 | **Pavio** (`kit_pavio`) | Mini-jogo: fale uma palavra com a sílaba e passe o KIT antes de explodir | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Jogo / Como joga) + botão `ACENDER PAVIO`/`PASSEI` fixo; overlay vermelho `BUM` | Arrasta na horizontal (travado em rodada) · Titlebar ← ou BOOT → Home |
 | **Placar** (`kit_placar`) | Placar de mesa: 2–4 colunas, toque = +1 e segurar = −1, meta opcional | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Placar / Como usa) + `ZERAR` (dois toques) fixo; overlay na cor do jogador `VENCEU` | Arrasta na horizontal (travado só no `VENCEU`) · Titlebar ← ou BOOT → Home |
 | **Veto** (`io.github.jcrvlh.veto`) | Mini-jogo: descreva a palavra-alvo sem dizer as 3 proibidas; o KIT cronometra e toca a cigarra, a mesa confere | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Jogo / Como joga) + barra de tempo amarela + botões `DISLIKE (👎)`/`PULAR`/`JOINHA (👍)` na mesma linha; overlay amarelo `TEMPO` com o placar da vez | Arrasta na horizontal (travado em vez) · Titlebar ← ou BOOT → Home |
+| **Mímica** (`io.github.jcrvlh.mimica`, catálogo) | Mini-jogo: atue a palavra por gestos, sem falar; o KIT cronometra, a mesa confere | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Jogo / Como joga) + barra de tempo azul + linha de ações `PULAR` (contornado) + `ACERTOU` (cheio) no rodapé; preparo de 3 s; overlay azul `TEMPO` com o placar da vez | Arrasta na horizontal (travado em vez) · Titlebar ← ou BOOT → Home |
 | **Feedback** | Confirmação transitória (ex: carga iniciada) | Overlay colorido | Some sozinha (~1,7 s) |
 
 As sub-telas são _overlays_ de tela cheia (`make_overlay(bg)`) criados como
@@ -397,8 +399,9 @@ API; animação = um único `lv_timer` (60 ms/tick) que só troca o texto do nú
 Home — o `kit_tool_manager` passa essa cor no `*_start()` e ela vai no botão
 primário e nos acentos da Tool. **Repetição de cor entre Tools é aceita** — a
 paleta Bauhaus só tem quatro primárias: hoje **vermelho** = Dados, Quem
-Vai Primeiro, Quebra-Gelo e Pavio, **azul** = Garrafa e Sortear Times, **amarelo** = Moeda e Veto (texto preto por cima), **verde** = Timer, Globo de Bingo e
-Placar.
+Vai Primeiro, Quebra-Gelo e Pavio, **azul** = Garrafa, Sortear Times e Mímica,
+**amarelo** = Moeda e Veto (texto preto por cima), **verde** = Timer, Globo de
+Bingo e Placar.
 O Placar ainda usa as quatro primárias de uma vez — uma por jogador — como
 identidade de cada coluna.
 
@@ -458,12 +461,13 @@ e a `RANDOM` sorteia um novo valor do TRNG. A saída também sai pela API
   (`TOOL_ICON_ASK`) é um balão de fala com três pontinhos; o "Pavio"
   (`TOOL_ICON_PAVIO`) é uma bomba redonda com um pavio curto e uma faísca; o
   "Veto" (`TOOL_ICON_VETO`) é uma carta com a palavra-alvo em cima e as
-  proibidas (ponto + traço) abaixo. O `TOOL_ICON_ADEDONHA` (folha de cartela com
+  proibidas (ponto + traço) abaixo; a "Mímica" (`TOOL_ICON_MIMICA`) é uma figura
+  gesticulando (cabeça + tronco + braços erguidos). O `TOOL_ICON_ADEDONHA` (folha de cartela com
   três linhas) fica no Core mesmo a Adedonha tendo saído pro catálogo — uma Tool
   do cartão pode reusá-lo por `home_icon`.
 * **Grade de Tools** mostra só as Tools já implementadas (hoje: Dados, Garrafa,
   Moeda, Timer, Quem Vai Primeiro, Sortear Times, Globo de Bingo, Quebra-Gelo,
-  Pavio, Placar, Veto). Cada nova Tool da Fase 2 entra em
+  Pavio, Placar, Veto, Mímica). Cada nova Tool da Fase 2 entra em
   `HOME_TOOLS` quando fica pronta. O campo `available` continua existindo para o
   caso de uma Tool em desenvolvimento (aparece esmaecida + "EM BREVE").
 * **Shake to Roll** (chacoalhar para rolar, na Dice Tool) depende de um driver

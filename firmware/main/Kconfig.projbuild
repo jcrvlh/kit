@@ -2,7 +2,7 @@ menu "Configurações do KIT Core"
 
     config KIT_VERSION_STR
         string "Versão do KIT Runtime"
-        default "0.1.0"
+        default "0.2.0"
 
     config KIT_DEFAULT_BRIGHTNESS
         int "Brilho Padrão do AMOLED (1-100)"
