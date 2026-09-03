@@ -115,6 +115,16 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   Tudo religa no toque de tela ou no botão PWR.
 
 ### Corrigido
+- **Tools do catálogo reiniciavam a placa ao abrir:** tocar em Tools como
+  Quebra-Gelo ou Pavio dava Guru Meditation (`LoadStoreError`) no `dlopen`. O
+  `elf_loader` copia o `.text` da Tool para RAM interna executável (IRAM, que só
+  aceita acesso alinhado de 32 bits no ESP32-S3) com um `memcpy` do tamanho cru
+  da seção; quando esse tamanho não é múltiplo de 4 (Quebra-Gelo `0xa86`, Pavio
+  `0x1d6b`), a cauda vira um store sub-word na IRAM e a placa reinicia. Override
+  do componente em `firmware/components/espressif__elf_loader/` (ver
+  `README.KIT.md`) arredonda só o `memcpy` — o bloco já é alocado com folga e
+  `.text` nunca é a última seção. Tools com `.text` já múltiplo de 4 (Tarot,
+  Adedonha, Veto, Fora) nunca foram afetadas.
 - **Áudio:** o codec/PA do ES8311 agora desliga sozinho após ~3 s sem som
   (e religa no próximo bipe), eliminando o chiado contínuo no alto-falante e
   a corrente de repouso do amplificador de 5 V.
