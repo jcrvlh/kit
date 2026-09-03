@@ -56,6 +56,24 @@ static QueueHandle_t s_beep_queue = NULL;
 // Amplitude "cheia" de um tom (~73% do fundo de escala 16-bit).
 #define AUDIO_AMP_FULL   12000.0f
 
+// "Pavio queimando" (Pavio Tool): um tique metronômico gerado AQUI, na task de
+// áudio, e não por um lv_timer do lado da Tool — o ritmo do lv_timer treme
+// quando a placa está repintando (era o "travando"). A Tool só empurra a
+// "tensão" 0..255 a ~10 Hz; a task tateia s_fuse_tension a cada tique e ajusta
+// o intervalo. render_silence entre os tiques mantém o DMA cheio (sem estalo) e
+// o compasso exato. s_fuse_on liga/desliga o modo (só a Tool escreve tensão; a
+// task só lê). Curva: quase parado no começo (suspense), aperta no meio,
+// disparada no fim.
+static volatile bool    s_fuse_on      = false;
+static volatile uint8_t s_fuse_tension = 0;
+
+#define FUSE_GAP_CALM_MS    430.0f   // intervalo entre tiques com tensão 0
+#define FUSE_GAP_SPAN_MS    366.0f   // quanto o intervalo encurta até a tensão 255
+#define FUSE_FREQ_BASE_HZ   1400.0f
+#define FUSE_FREQ_SPAN_HZ    620.0f
+#define FUSE_AMP_BASE       11800.0f // alto, mas ainda com folga pro fundo de escala (32767)
+#define FUSE_AMP_SPAN        2700.0f // (o silêncio ativo entre os tiques é que tira o estouro)
+
 static void render_tone(uint16_t freq_hz, uint16_t duration_ms, float amp)
 {
     if (!s_speaker || duration_ms == 0) return;
@@ -110,6 +128,35 @@ static void render_silence(uint16_t duration_ms)
         int chunk = remaining < AUDIO_FRAME_COUNT ? (int)remaining : AUDIO_FRAME_COUNT;
         esp_codec_dev_write(s_speaker, (void *)zeros, (size_t)chunk * sizeof(int16_t));
         sent += (uint32_t)chunk;
+    }
+}
+
+// Um tique do pavio + o silêncio até o próximo, dimensionados pela tensão
+// corrente (0..255). Roda na task de áudio, então o compasso é firme. O
+// silêncio é fatiado pra ceder a vez na hora a um efeito que entre na fila (o
+// "toc" do passe, o BUM) e ao fuse(-1) — nesse caso o ritmo cede a vez por um
+// tique só e retoma.
+static void render_fuse_tick(void)
+{
+    float t = s_fuse_tension / 255.0f;
+    // Encurtamento do intervalo: mistura linear + quadrática — segura o começo
+    // (dread) e desaba no fim (pânico).
+    float shape = 0.30f * t + 0.70f * t * t;
+
+    uint16_t freq = (uint16_t)(FUSE_FREQ_BASE_HZ + FUSE_FREQ_SPAN_HZ * t);
+    uint16_t dur  = (uint16_t)(12.0f - 4.0f * t);           // 12 ms -> 8 ms
+    float    amp  = FUSE_AMP_BASE + FUSE_AMP_SPAN * t;
+    uint16_t gap  = (uint16_t)(FUSE_GAP_CALM_MS - FUSE_GAP_SPAN_MS * shape);
+
+    render_tone(freq, dur, amp);
+
+    uint16_t done = 0;
+    while (done < gap) {
+        if (!s_fuse_on || s_suspended) return;
+        if (uxQueueMessagesWaiting(s_beep_queue) > 0) return;
+        uint16_t chunk = (uint16_t)(gap - done) < 20 ? (uint16_t)(gap - done) : 20;
+        render_silence(chunk);
+        done += chunk;
     }
 }
 
@@ -306,6 +353,110 @@ static void render_sfx(kit_sfx_t sfx)
         render_tone(1568, 165, 11000.0f); // G6  — pouso alegre, fica no ar
         break;
 
+    case KIT_SFX_ADEDONHA_CARD: {
+        // Sorteio da cartela: folhear cartas (estalinhos de papel) desacelerando
+        // em ease-out, terminando num "tap" seco — a cartela assentou. É setup,
+        // energia baixa; o brilho fica pro sorteio da letra.
+        int gap = 26;
+        for (int i = 0; i < 12; i++) {
+            render_tone((uint16_t)(1400 + rnd(500)), 6, 3200.0f);
+            render_silence((uint16_t)gap);
+            gap += 4 + i;
+            if (gap > 150) gap = 150;
+        }
+        render_tone(520, 60, 7000.0f);   // tap — assentou
+        break;
+    }
+
+    case KIT_SFX_ADEDONHA_LETTER: {
+        // Letra travando — o som-assinatura. Folheio rápido que desacelera,
+        // um "carimbo" seco (grave curto sobre agudo), e duas notas subindo
+        // (C6 -> G6): "VALENDO!". Elétrico, curto, azul.
+        int gap = 16;
+        for (int i = 0; i < 10; i++) {
+            render_tone((uint16_t)(1600 + rnd(700)), 6, 4200.0f);
+            render_silence((uint16_t)gap);
+            gap += 6 + i;
+        }
+        render_tone(280, 26, 12000.0f);   // carimbo — corpo grave
+        render_tone(1500, 10, 6000.0f);   // ...e o "tec" agudo do carimbo
+        render_silence(24);
+        render_tone(1047, 70, 10000.0f);  // C6
+        render_tone(1568, 150, 11000.0f); // G6 — valendo!
+        break;
+    }
+
+    case KIT_SFX_ADEDONHA_STOP: {
+        // STOP: buzina amigável (não um erro) — três notas descendo depressa e
+        // um assento grave. "Lápis pra cima."
+        render_tone(1245, 70, 10000.0f);  // D#6
+        render_tone(988,  70, 10000.0f);  // B5
+        render_tone(740,  90, 10500.0f);  // F#5
+        render_silence(24);
+        render_tone(392, 150, 9500.0f);   // G4 — assentou
+        break;
+    }
+
+    case KIT_SFX_ADEDONHA_TIMEUP: {
+        // Tempo esgotado: klaxon de game-show, bi-tom alternado (A5/F5) três
+        // vezes e uma resolução grave e longa. Mais urgente que o alarme do
+        // Timer — re-toca no overlay a cada ~3,4 s.
+        for (int i = 0; i < 3; i++) {
+            render_tone(880, 120, 12000.0f);   // A5
+            render_tone(698, 120, 12000.0f);   // F5
+            render_silence(50);
+        }
+        render_tone(392, 320, 12000.0f);       // G4 — "acabou"
+        break;
+    }
+
+    case KIT_SFX_VETO_HIT:
+        // Veto - Acertou: duas notas subindo depressa (E6 -> B6), curtas e brilhantes.
+        // É clicado muitas vezes numa vez, então nada de fanfarra.
+        render_tone(1319, 34, 7000.0f);   // E6
+        render_tone(1976, 60, 8000.0f);   // B6
+        break;
+
+    case KIT_SFX_VETO_FOUL:
+        // A cigarra do Veto: buzina de game-show — dois "honks" ásperos descendo
+        // e um assento grave e longo. Rude de propósito: "falou a proibida".
+        // Ajustar as graves no HW se a corneta chacoalhar (< ~200 Hz).
+        render_tone(262,  95, 12000.0f);  // C4
+        render_tone(208, 110, 12000.0f);  // ~G#3
+        render_silence(22);
+        render_tone(233,  90, 12000.0f);  // ~A#3
+        render_tone(196, 240, 11000.0f);  // ~G3 — assentou
+        break;
+
+    case KIT_SFX_PAVIO_TICK:
+        // A "fagulha" inicial do pavio: um "tec" seco de bancada, casado com o
+        // primeiro tique do motor `fuse()` (mesma freq/amp), e um silêncio ativo
+        // logo depois pra o DMA não estalar.
+        render_tone(1450, 11, 12800.0f);
+        render_silence(10);
+        break;
+
+    case KIT_SFX_PAVIO_TICK_HOT:
+        // O mesmo "tec", mais agudo e mais curto (órfão desde que o tique virou
+        // o motor `fuse()`; mantido pela ABI).
+        render_tone(2050, 9, 13200.0f);
+        render_silence(10);
+        break;
+
+    case KIT_SFX_PAVIO_BOOM: {
+        // Explodiu: um estalo agudo e uma cascata caindo, tudo no registro que a
+        // corneta reproduz limpo (nada de sub-grave) e com silêncios pro DMA.
+        // Fica acima do pico do `fuse()` — a explosão é o som mais alto do jogo.
+        render_tone(2600, 32, 15500.0f);
+        render_silence(12);
+        static const uint16_t f[7] = { 2200, 1750, 1350, 1050, 850, 720, 640 };
+        for (int i = 0; i < 7; i++) {
+            render_tone(f[i], (uint16_t)(26 - i * 2), 14800.0f - i * 1000.0f);
+            render_silence((uint16_t)(12 + i * 4));
+        }
+        break;
+    }
+
     default:
         break;
     }
@@ -344,21 +495,34 @@ static void audio_task(void *arg)
     (void)arg;
     kit_beep_req_t req;
     while (1) {
-        if (xQueueReceive(s_beep_queue, &req, pdMS_TO_TICKS(AUDIO_IDLE_MS)) != pdTRUE) {
-            audio_codec_sleep();   // ocioso: desliga o PA
+        // Com o pavio queimando não bloqueia: entre um efeito e outro a task
+        // fica emitindo os tiques (render_fuse_tick), que é o metrônomo. Se o
+        // áudio está suspenso (tela em repouso), volta a bloquear — não fica
+        // girando à toa.
+        bool burning = s_fuse_on && !s_suspended;
+        TickType_t wait = burning ? 0 : pdMS_TO_TICKS(AUDIO_IDLE_MS);
+        if (xQueueReceive(s_beep_queue, &req, wait) == pdTRUE) {
+            if (req.sfx == -2) continue;   // "kick": só acorda a task pro pavio
+            audio_codec_wake();
+            if (req.sfx == -1) {
+                // Bipes muito curtos (<= 14 ms) são "ticks" de textura — saem
+                // mais baixos pra não estourar quando disparados em rajada
+                // (catraca da Garrafa, animação de sorteio).
+                float amp = (req.duration_ms <= 14) ? AUDIO_AMP_FULL * 0.34f
+                                                    : AUDIO_AMP_FULL;
+                render_tone(req.freq_hz, req.duration_ms, amp);
+            } else {
+                render_sfx((kit_sfx_t)req.sfx);
+            }
             continue;
         }
-        audio_codec_wake();
-        if (req.sfx < 0) {
-            // Bipes muito curtos (<= 14 ms) são "ticks" de textura — saem
-            // mais baixos pra não estourar quando disparados em rajada
-            // (catraca da Garrafa, animação de sorteio).
-            float amp = (req.duration_ms <= 14) ? AUDIO_AMP_FULL * 0.34f
-                                                : AUDIO_AMP_FULL;
-            render_tone(req.freq_hz, req.duration_ms, amp);
-        } else {
-            render_sfx((kit_sfx_t)req.sfx);
+        // Fila vazia.
+        if (burning) {
+            audio_codec_wake();
+            render_fuse_tick();
+            continue;
         }
+        audio_codec_sleep();   // ocioso: desliga o PA
     }
 }
 
@@ -535,6 +699,31 @@ kit_err_t kit_audio_sfx_impl(kit_sfx_t sfx)
     kit_beep_req_t req = { .sfx = (int16_t)sfx, .freq_hz = 0, .duration_ms = 0 };
     if (xQueueSend(s_beep_queue, &req, 0) != pdTRUE) {
         return KIT_FAIL;
+    }
+    return KIT_OK;
+}
+
+kit_err_t kit_audio_fuse_impl(int16_t tension)
+{
+    if (!s_speaker || !s_beep_queue) return KIT_FAIL;
+
+    if (tension < 0) {              // apaga o pavio
+        s_fuse_on = false;
+        return KIT_OK;
+    }
+    if (tension > 255) tension = 255;
+    s_fuse_tension = (uint8_t)tension;
+
+    if (s_suspended || !kit_config_get_sound_enabled()) {
+        s_fuse_on = false;
+        return KIT_OK;
+    }
+    if (!s_fuse_on) {
+        s_fuse_on = true;
+        // A task pode estar bloqueada até AUDIO_IDLE_MS no xQueueReceive —
+        // um "kick" a acorda pra começar a emitir os tiques agora.
+        kit_beep_req_t kick = { .sfx = -2, .freq_hz = 0, .duration_ms = 0 };
+        xQueueSend(s_beep_queue, &kick, 0);
     }
     return KIT_OK;
 }

@@ -132,6 +132,19 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   curto saía enquanto o `PA_EN` ainda subia e sumia (só do 2º toque em diante
   se ouvia). `audio_codec_wake()` passou a inserir ~80 ms de silêncio antes do
   primeiro tom.
+- **Pavio — tique travando/estourando:** o tique acelerava por um `lv_timer` na
+  Tool e, com a placa repintando o pulso, chegava atrasado e irregular; o SFX
+  ainda saía alto com o DMA esvaziando entre um clique e outro. O tique virou um
+  "pavio queimando" gerado na própria task de áudio (novo `api->audio->fuse()`,
+  tensão 0–255) — compasso dado pelo DMA do codec, aceleração contínua e
+  silêncio ativo entre os tiques. Ritmo constante, sem estouro, e mais alto
+  (amp ~11800–14500; a explosão subiu junto pra continuar sendo o som mais alto).
+- **Pavio — pulso vermelho "não renderizava direito":** a banda do pulso tinha
+  `bg_opa` variável (alpha do vermelho contra o preto sujava as bandas do buffer
+  parcial na transição) e o anel era reescrito a 10 Hz — como o *bbox* dele é
+  quase o palco inteiro, invalidava a tela toda a cada tique. Agora a banda é
+  **opaca** e só a cor muda; o anel e o clareamento da sílaba só reescrevem
+  quando mudam de degrau.
 - **Bateria:** o percentual ficava preso em 0% — o gauge interno do AXP2101
   (registrador `0xA4`) não funciona nesta placa da Waveshare. Agora é estimado
   pela tensão da bateria (curva Li-ion), com os canais de ADC do PMIC ligados

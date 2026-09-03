@@ -361,6 +361,15 @@ typedef enum {
     KIT_SFX_UNLOCK,        /**< tela ligada: cadeado abrindo */
     KIT_SFX_BOTTLE_SPIN,   /**< Garrafa: catraca de madeira desacelerando (~2,2 s) */
     KIT_SFX_CATALOG_DONE,  /**< Catálogo: download de uma Tool concluído — arpejo alegre */
+    KIT_SFX_ADEDONHA_CARD, /**< Adedonha: sorteio da cartela — folhear cartas + "tap" */
+    KIT_SFX_ADEDONHA_LETTER,/**< Adedonha: letra travou — folheio + carimbo + "VALENDO!" */
+    KIT_SFX_ADEDONHA_STOP, /**< Adedonha: apertou STOP — buzina amigável descendo */
+    KIT_SFX_ADEDONHA_TIMEUP,/**< Adedonha: tempo esgotado — klaxon bi-tom + resolução grave */
+    KIT_SFX_VETO_HIT,      /**< Veto: acertou — duas notas rápidas subindo, curtas */
+    KIT_SFX_VETO_FOUL,     /**< Veto: falou uma proibida — buzina dupla áspera descendo */
+    KIT_SFX_PAVIO_TICK,    /**< Pavio: tique do pavio — "tec" seco, clicado em série acelerando */
+    KIT_SFX_PAVIO_TICK_HOT,/**< Pavio: tique quase estourando — mesmo "tec", mais agudo */
+    KIT_SFX_PAVIO_BOOM,    /**< Pavio: explodiu — estalo agudo + cascata caindo (~0,35 s) */
 } kit_sfx_t;
 
 /**
@@ -390,6 +399,21 @@ typedef struct {
      * @return KIT_OK ou KIT_ERR_NOT_SUPPORTED se áudio desabilitado.
      */
     kit_err_t (*sfx)(kit_sfx_t sfx);
+
+    /**
+     * "Pavio queimando": um tique metronômico renderizado pela task de áudio do
+     * Runtime — o ritmo é constante mesmo com a Tool ocupada repintando a tela
+     * (um `lv_timer` tocando o tique treme). A Tool empurra só a "tensão".
+     *
+     * @param tension 0..255 acelera o tique de forma contínua (grave e
+     *                espaçado → agudo e frenético). Valor negativo apaga o
+     *                pavio (silêncio).
+     * @return KIT_OK ou KIT_ERR_NOT_SUPPORTED se áudio desabilitado.
+     *
+     * Chame periodicamente (~10 Hz basta) enquanto o pavio queima e uma vez
+     * com valor negativo ao terminar. Respeita a flag "Som".
+     */
+    kit_err_t (*fuse)(int16_t tension);
 } kit_audio_api_t;
 
 /**

@@ -246,6 +246,18 @@ static kit_err_t stub_audio_set_volume(uint8_t percentage)
     return KIT_OK;
 }
 
+static kit_err_t stub_audio_sfx(kit_sfx_t sfx)
+{
+    printf("[STUB AUDIO] sfx(%d)\n", (int)sfx);
+    return KIT_OK;
+}
+
+static kit_err_t stub_audio_fuse(int16_t tension)
+{
+    printf("[STUB AUDIO] fuse(%d)\n", (int)tension);
+    return KIT_OK;
+}
+
 /* -----------------------------------------------------------------------
  * Power API Stubs
  * ----------------------------------------------------------------------- */
@@ -335,6 +347,8 @@ static const kit_time_api_t s_stub_time = {
 static const kit_audio_api_t s_stub_audio = {
     .beep       = stub_audio_beep,
     .set_volume = stub_audio_set_volume,
+    .sfx        = stub_audio_sfx,
+    .fuse       = stub_audio_fuse,
 };
 
 static const kit_power_api_t s_stub_power = {
