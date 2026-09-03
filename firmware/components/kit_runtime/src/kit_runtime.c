@@ -27,6 +27,9 @@
 static const char *TAG = "KIT_RUNTIME";
 static bool s_is_in_tool = false;
 static void (*s_tool_primary_action)(void) = NULL;
+// Chacoalhar dispara a ação principal por padrão; uma Tool pode desligar isso
+// (ex: Veto — quem descreve gesticula e passaria carta sem querer).
+static bool s_tool_shake_enabled = true;
 
 // Botões físicos do sistema.
 //   PWR  — tecla PWRON do PMIC AXP2101 (toque curto: liga/desliga a tela).
@@ -237,7 +240,13 @@ static void poll_system_buttons(void)
         if (s_is_in_tool) {
             kit_system_exit_impl();
         } else {
-            kit_tool_manager_start_last();
+            // Libera o slideshow da Home antes de relançar a última Tool (mais
+            // RAM para o tool_init). Sem última Tool ou falha ao abrir:
+            // kit_launcher_go_home reconstrói a Home.
+            kit_launcher_release_home_deck();
+            if (kit_tool_manager_start_last() != KIT_OK) {
+                kit_launcher_go_home();
+            }
         }
     }
     s_boot_prev = lvl;
@@ -408,8 +417,15 @@ void kit_runtime_run(void)
             last_imu_us = now;
             if (kit_imu_poll_shake()) {
                 note_activity();
-                if (s_tool_primary_action) s_tool_primary_action();
+                if (s_tool_shake_enabled && s_tool_primary_action) s_tool_primary_action();
                 kit_imu_dispatch_shake();
+            }
+            // Gesto de inclinar (Tool tipo "Heads Up!"): kit_imu_poll_tilt()
+            // devolve NONE de graça se nenhuma Tool registrou o callback.
+            kit_tilt_t dir = kit_imu_poll_tilt();
+            if (dir != KIT_TILT_NONE) {
+                note_activity();
+                kit_imu_dispatch_tilt(dir);
             }
         }
 
@@ -433,13 +449,20 @@ void kit_runtime_set_in_tool(bool in_tool)
     s_is_in_tool = in_tool;
     if (!in_tool) {
         s_tool_primary_action = NULL;
+        s_tool_shake_enabled = true;
         kit_imu_clear_shake_callback();   // não deixa callback órfão de Tool externa
+        kit_imu_clear_tilt_callback();
     }
 }
 
 void kit_runtime_set_tool_primary_action(void (*action)(void))
 {
     s_tool_primary_action = action;
+}
+
+void kit_runtime_set_tool_shake_enabled(bool enabled)
+{
+    s_tool_shake_enabled = enabled;
 }
 
 // Implementações do módulo System da API

@@ -10,13 +10,34 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Não lançado]
 
 ### Adicionado
+- **Gesto de inclinar no IMU (Runtime v0.2.0):** `kit_api.imu` ganha
+  `register_tilt_callback` — o QMI8658 detecta o aparelho virado pra baixo/cima
+  a partir da vertical (jogo estilo *Heads Up!*). O Runtime só faz o polling
+  enquanto há callback registrado. Limiares calibráveis em `kit_imu.c`. SDK
+  0.2.0; Tools que usam declaram `min_runtime` `"0.2.0"`.
 - **KIT Core (v0.1.0):** runtime embarcado, HAL (display AMOLED CO5300, touch
   CST820, PMIC AXP2101, RTC PCF85063A, áudio ES8311, IMU QMI8658), Tool Manager
   com ciclo de vida e tabela de APIs, launcher LVGL v9, introdução de primeiro
   uso (repetível pelos Ajustes), recuperação de fábrica e particionamento OTA
   dual-slot.
-- **Tools oficiais (built-in no Core):** Dados, Quem Vai Primeiro, Quebra-Gelo,
-  Garrafa, Decisor (Moeda), Sortear Times, Bingo e Timer.
+- **Tools oficiais (built-in no Core):** Dados, Quem Vai Primeiro,
+  Garrafa, Decisor (Moeda), Sortear Times, Bingo, Timer e Placar.
+- **Mímica (`io.github.jcrvlh.mimica`, catálogo):** mini-jogo "atue a palavra
+  por gestos, sem falar". Card azul, 3 páginas (AJUSTE / JOGO / COMO JOGA),
+  barra de tempo, preparo de 3 s, baralho FÁCIL/TUDO com categorias, overlay
+  TEMPO com o placar da vez. Nasceu built-in (`kit_mimica`) e saiu do Core ao
+  estabilizar. Ver `docs/tools/mimica.md`.
+- **Testa (`io.github.jcrvlh.testa`, catálogo):** mini-jogo estilo *Heads Up!* —
+  segure o KIT na testa, a roda dá dicas e você adivinha. Incline pra baixo =
+  acertou, pra cima = passou (gesto de inclinar novo do IMU,
+  `kit_api.imu->register_tilt_callback`, `min_runtime` 0.2.0). 6 baralhos
+  temáticos + MIX. Ver `docs/tools/testa.md`.
+- **Tools do catálogo:** Quebra-Gelo (`io.github.jcrvlh.quebragelo`), Pavio
+  (`io.github.jcrvlh.pavio`), Adedonha (`io.github.jcrvlh.adedonha`), Veto,
+  Mímica, Testa, Tarot e Fora — pacotes `.kit` carregados do cartão microSD.
+  Quebra-Gelo, Pavio, Adedonha, Veto, Mímica e Testa nasceram built-in e saíram
+  do Core ao estabilizar (o Core guarda seus ícones da Home, SFX e símbolos
+  LVGL que elas usam).
 - **Tools SDK + `kit-cli`:** headers e stubs para compilação local, simulador de
   desktop (SDL/LVGL) e CLI para criar, validar, empacotar e enviar arquivos `.kit`.
 - **Web Installer:** portal WebSerial para instalar Tools sem terminal.
@@ -115,6 +136,16 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   Tudo religa no toque de tela ou no botão PWR.
 
 ### Corrigido
+- **Tools do catálogo reiniciavam a placa ao abrir:** tocar em Tools como
+  Quebra-Gelo ou Pavio dava Guru Meditation (`LoadStoreError`) no `dlopen`. O
+  `elf_loader` copia o `.text` da Tool para RAM interna executável (IRAM, que só
+  aceita acesso alinhado de 32 bits no ESP32-S3) com um `memcpy` do tamanho cru
+  da seção; quando esse tamanho não é múltiplo de 4 (Quebra-Gelo `0xa86`, Pavio
+  `0x1d6b`), a cauda vira um store sub-word na IRAM e a placa reinicia. Override
+  do componente em `firmware/components/espressif__elf_loader/` (ver
+  `README.KIT.md`) arredonda só o `memcpy` — o bloco já é alocado com folga e
+  `.text` nunca é a última seção. Tools com `.text` já múltiplo de 4 (Tarot,
+  Adedonha, Veto, Fora) nunca foram afetadas.
 - **Áudio:** o codec/PA do ES8311 agora desliga sozinho após ~3 s sem som
   (e religa no próximo bipe), eliminando o chiado contínuo no alto-falante e
   a corrente de repouso do amplificador de 5 V.
@@ -122,6 +153,19 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   curto saía enquanto o `PA_EN` ainda subia e sumia (só do 2º toque em diante
   se ouvia). `audio_codec_wake()` passou a inserir ~80 ms de silêncio antes do
   primeiro tom.
+- **Pavio — tique travando/estourando:** o tique acelerava por um `lv_timer` na
+  Tool e, com a placa repintando o pulso, chegava atrasado e irregular; o SFX
+  ainda saía alto com o DMA esvaziando entre um clique e outro. O tique virou um
+  "pavio queimando" gerado na própria task de áudio (novo `api->audio->fuse()`,
+  tensão 0–255) — compasso dado pelo DMA do codec, aceleração contínua e
+  silêncio ativo entre os tiques. Ritmo constante, sem estouro, e mais alto
+  (amp ~11800–14500; a explosão subiu junto pra continuar sendo o som mais alto).
+- **Pavio — pulso vermelho "não renderizava direito":** a banda do pulso tinha
+  `bg_opa` variável (alpha do vermelho contra o preto sujava as bandas do buffer
+  parcial na transição) e o anel era reescrito a 10 Hz — como o *bbox* dele é
+  quase o palco inteiro, invalidava a tela toda a cada tique. Agora a banda é
+  **opaca** e só a cor muda; o anel e o clareamento da sílaba só reescrevem
+  quando mudam de degrau.
 - **Bateria:** o percentual ficava preso em 0% — o gauge interno do AXP2101
   (registrador `0xA4`) não funciona nesta placa da Waveshare. Agora é estimado
   pela tensão da bateria (curva Li-ion), com os canais de ADC do PMIC ligados
@@ -143,4 +187,4 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   scan; agora a pasta é reaberta a cada remoção e o `.kit` de origem também é
   apagado.
 
-_Projeto ainda pré-lançamento; a primeira release marcará a v0.1.0._
+_Projeto ainda pré-lançamento; a primeira release marcará a v0.2.0._

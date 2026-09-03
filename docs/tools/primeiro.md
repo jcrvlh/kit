@@ -8,9 +8,9 @@ tela**. Quem se encaixa começa o jogo.
 É a realização da ideia "Quem começa?" da entrada **Random Tool (Sorteio)** do
 roadmap do projeto. Tool interna (built-in no Core), componente
 `kit_primeiro`, id `com.kit.primeiro`, despachada pelo
-[`kit_tool_manager`](../architecture/tools.md). Card amarelo na grade da Home
+[`kit_tool_manager`](../architecture/tools.md). Card vermelho na grade da Home
 (ícone `TOOL_ICON_FIRST` — uma seta apontando para um disco). Texto sobre a cor
-da Tool = preto (`KIT_COLOR_ON_YELLOW`).
+da Tool = off-white (`KIT_COLOR_ON_COLOR`).
 
 ---
 
@@ -28,7 +28,7 @@ persistência. O mesmo formato enxuto da Bottle Tool: a graça
   `A PESSOA QUE`; abaixo, `COMEÇA O JOGO`, ambos em `kit_mono_16` apagado.
 - Antes do primeiro sorteio o palco mostra só a dica `TOQUE EM SORTEAR` (apagada);
   os rótulos `A PESSOA QUE` / `COMEÇA O JOGO` aparecem no primeiro sorteio.
-- **Botão `SORTEAR`** fixo no rodapé, na cor da Tool (amarelo, texto preto), `kit_mono_26`.
+- **Botão `SORTEAR`** fixo no rodapé, na cor da Tool (vermelho, texto claro), `kit_mono_26`.
 
 > **Frase = mono, nunca display.** A tipografia display (`kit_display_*`) é só
 > para números e o wordmark. Uma característica é uma frase, então vai em
@@ -52,7 +52,7 @@ curso.
 Fluxo: `ocioso → botão/toque/PWR/chacoalhar → embaralhar (~0,7 s) → característica
 → aguarda novo sorteio`. A característica é sorteada **antes** da animação
 ([Random API](../api/random.md) / TRNG) e **nunca repete a anterior**. Durante o
-embaralhar a frase troca a cada tick e fica apagada; ao travar, fica **amarela**
+embaralhar a frase troca a cada tick e fica apagada; ao travar, fica **vermelha**
 (cor da Tool) e sai **1 bipe** (`kit_audio`, `beep(900, 35)`) — igual à Garrafa.
 
 A animação segue **exatamente** o padrão validado da Dice/Coin Tool: **um único
@@ -90,6 +90,6 @@ Sem estados persistentes: ao reabrir, a Tool começa do zero (`TOQUE EM SORTEAR`
 
 | Função | Efeito |
 |---|---|
-| `kit_primeiro_start(accent)` | Monta a tela e carrega. `accent` 0 → amarelo padrão. |
+| `kit_primeiro_start(accent)` | Monta a tela e carrega. `accent` 0 → vermelho padrão. |
 | `kit_primeiro_draw()` | Ação principal — sorteia. Ligada ao PWR/chacoalhar pelo Runtime. |
 | `kit_primeiro_destroy()` | Derruba o `lv_timer` e os objetos LVGL. |

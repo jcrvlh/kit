@@ -31,10 +31,10 @@ extern "C" {
  * ----------------------------------------------------------------------- */
 
 /** Versão do SDK no formato string "MAJOR.MINOR.PATCH". */
-#define KIT_SDK_VERSION       "0.1.0"
+#define KIT_SDK_VERSION       "0.2.0"
 
 /** Versão do SDK como inteiro (major * 10000 + minor * 100 + patch). */
-#define KIT_SDK_VERSION_CODE  100
+#define KIT_SDK_VERSION_CODE  200
 
 /**
  * Nível da API do Runtime com o qual este SDK é compatível.
@@ -162,6 +162,26 @@ typedef struct {
  * @param user_data Ponteiro opaco passado no registro.
  */
 typedef void (*kit_shake_callback_t)(void *user_data);
+
+/**
+ * @brief Direção de uma inclinada deliberada do aparelho (gesto "Heads Up!").
+ *
+ * O KIT fica ~vertical na testa (eixo normal à tela ~0 g). Virar a tela para o
+ * chão dispara @ref KIT_TILT_DOWN; para o teto, @ref KIT_TILT_UP. Dispara uma
+ * vez por inclinada — só rearma quando o aparelho volta a ~vertical.
+ */
+typedef enum {
+    KIT_TILT_NONE = 0,
+    KIT_TILT_DOWN,   /**< tela virada para baixo (no Heads Up!: acertou). */
+    KIT_TILT_UP,     /**< tela virada para cima  (no Heads Up!: passou). */
+} kit_tilt_t;
+
+/**
+ * @brief Callback invocado a cada inclinada deliberada do aparelho.
+ * @param dir       Direção da inclinada.
+ * @param user_data Ponteiro opaco passado no registro.
+ */
+typedef void (*kit_tilt_callback_t)(kit_tilt_t dir, void *user_data);
 
 /* -----------------------------------------------------------------------
  * Tabelas de APIs Individuais
@@ -361,6 +381,15 @@ typedef enum {
     KIT_SFX_UNLOCK,        /**< tela ligada: cadeado abrindo */
     KIT_SFX_BOTTLE_SPIN,   /**< Garrafa: catraca de madeira desacelerando (~2,2 s) */
     KIT_SFX_CATALOG_DONE,  /**< Catálogo: download de uma Tool concluído — arpejo alegre */
+    KIT_SFX_ADEDONHA_CARD, /**< Adedonha: sorteio da cartela — folhear cartas + "tap" */
+    KIT_SFX_ADEDONHA_LETTER,/**< Adedonha: letra travou — folheio + carimbo + "VALENDO!" */
+    KIT_SFX_ADEDONHA_STOP, /**< Adedonha: apertou STOP — buzina amigável descendo */
+    KIT_SFX_ADEDONHA_TIMEUP,/**< Adedonha: tempo esgotado — klaxon bi-tom + resolução grave */
+    KIT_SFX_VETO_HIT,      /**< Veto: acertou — duas notas rápidas subindo, curtas */
+    KIT_SFX_VETO_FOUL,     /**< Veto: falou uma proibida — buzina dupla áspera descendo */
+    KIT_SFX_PAVIO_TICK,    /**< Pavio: tique do pavio — "tec" seco, clicado em série acelerando */
+    KIT_SFX_PAVIO_TICK_HOT,/**< Pavio: tique quase estourando — mesmo "tec", mais agudo */
+    KIT_SFX_PAVIO_BOOM,    /**< Pavio: explodiu — estalo agudo + cascata caindo (~0,35 s) */
 } kit_sfx_t;
 
 /**
@@ -390,6 +419,21 @@ typedef struct {
      * @return KIT_OK ou KIT_ERR_NOT_SUPPORTED se áudio desabilitado.
      */
     kit_err_t (*sfx)(kit_sfx_t sfx);
+
+    /**
+     * "Pavio queimando": um tique metronômico renderizado pela task de áudio do
+     * Runtime — o ritmo é constante mesmo com a Tool ocupada repintando a tela
+     * (um `lv_timer` tocando o tique treme). A Tool empurra só a "tensão".
+     *
+     * @param tension 0..255 acelera o tique de forma contínua (grave e
+     *                espaçado → agudo e frenético). Valor negativo apaga o
+     *                pavio (silêncio).
+     * @return KIT_OK ou KIT_ERR_NOT_SUPPORTED se áudio desabilitado.
+     *
+     * Chame periodicamente (~10 Hz basta) enquanto o pavio queima e uma vez
+     * com valor negativo ao terminar. Respeita a flag "Som".
+     */
+    kit_err_t (*fuse)(int16_t tension);
 } kit_audio_api_t;
 
 /**
@@ -445,6 +489,18 @@ typedef struct {
      * @return KIT_OK em caso de sucesso.
      */
     kit_err_t (*register_shake_callback)(kit_shake_callback_t cb, void *user_data);
+
+    /**
+     * Registra um callback para o gesto de inclinar (ver @ref kit_tilt_t).
+     * Feito para o jogo estilo "Heads Up!": inclina para baixo = acertou,
+     * para cima = passou. Um callback por Tool; nova chamada substitui o
+     * anterior; NULL remove. O Runtime só faz o polling do gesto enquanto
+     * houver um callback registrado. Requer `min_runtime` >= "0.2.0".
+     * @param cb        Função de callback (chamada no contexto da task LVGL).
+     * @param user_data Ponteiro opaco repassado ao callback.
+     * @return KIT_OK em caso de sucesso.
+     */
+    kit_err_t (*register_tilt_callback)(kit_tilt_callback_t cb, void *user_data);
 } kit_imu_api_t;
 
 /* -----------------------------------------------------------------------

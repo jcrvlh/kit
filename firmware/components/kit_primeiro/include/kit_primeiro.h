@@ -23,7 +23,7 @@ extern "C" {
  *
  * @param accent  Cor principal da Tool (a cor do card na grade da Home).
  *                Usada no botão SORTEAR e na frase sorteada. Passe 0 para
- *                o padrão (amarelo).
+ *                o padrão (vermelho).
  */
 kit_err_t kit_primeiro_start(uint32_t accent);
 void      kit_primeiro_destroy(void);

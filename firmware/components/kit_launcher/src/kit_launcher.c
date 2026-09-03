@@ -77,7 +77,9 @@ static bool s_low_batt_warned = false;   // aviso de "bateria baixa" já mostrad
 typedef enum {
     TOOL_ICON_DICE, TOOL_ICON_SPIN, TOOL_ICON_COIN, TOOL_ICON_TRIANGLE,
     TOOL_ICON_BINGO, TOOL_ICON_ORDER, TOOL_ICON_TIMER, TOOL_ICON_FIRST,
-    TOOL_ICON_TEAMS, TOOL_ICON_ASK, TOOL_ICON_EXTERNAL
+    TOOL_ICON_TEAMS, TOOL_ICON_ASK, TOOL_ICON_PAVIO, TOOL_ICON_ADEDONHA,
+    TOOL_ICON_PLACAR, TOOL_ICON_VETO, TOOL_ICON_MIMICA, TOOL_ICON_TESTA,
+    TOOL_ICON_EXTERNAL
 } tool_icon_t;
 
 typedef struct {
@@ -94,10 +96,14 @@ static const home_tool_t HOME_TOOLS_BUILTIN[] = {
     { "com.kit.bottle",  "Garrafa", KIT_COLOR_BLUE,   TOOL_ICON_SPIN, true, false },
     { "com.kit.coin",    "Moeda",   KIT_COLOR_YELLOW, TOOL_ICON_COIN, true, false },
     { "com.kit.timer",   "Timer",   KIT_COLOR_GREEN,  TOOL_ICON_TIMER, true, false },
-    { "com.kit.primeiro","Primeiro",KIT_COLOR_YELLOW, TOOL_ICON_FIRST, true, false },
+    { "com.kit.primeiro","Primeiro",KIT_COLOR_RED, TOOL_ICON_FIRST, true, false },
     { "com.kit.times",   "Times",   KIT_COLOR_BLUE,   TOOL_ICON_TEAMS, true, false },
     { "com.kit.bingo",   "Bingo",   KIT_COLOR_GREEN,  TOOL_ICON_BINGO, true, true },
-    { "com.kit.quebragelo", "Quebra-Gelo", KIT_COLOR_RED, TOOL_ICON_ASK, true, false },
+    // Quebra-Gelo, Pavio, Adedonha, Veto, Mímica e Testa saíram do Core — vivem no
+    // catálogo (io.github.jcrvlh.*). TOOL_ICON_ASK / PAVIO / ADEDONHA / VETO /
+    // MIMICA / TESTA e seus mapas em icon_from_name ficam pra Tool do cartão reusar
+    // via "home_icon" no manifest.
+    { "com.kit.placar", "Placar", KIT_COLOR_GREEN, TOOL_ICON_PLACAR, true, false },
 };
 #define HOME_TOOLS_BUILTIN_N ((int)(sizeof(HOME_TOOLS_BUILTIN) / sizeof(HOME_TOOLS_BUILTIN[0])))
 
@@ -136,6 +142,9 @@ static tool_icon_t icon_from_name(const char *name)
         { "bingo", TOOL_ICON_BINGO },   { "order", TOOL_ICON_ORDER },
         { "timer", TOOL_ICON_TIMER },   { "first", TOOL_ICON_FIRST },
         { "teams", TOOL_ICON_TEAMS },   { "ask", TOOL_ICON_ASK },
+        { "pavio", TOOL_ICON_PAVIO },   { "adedonha", TOOL_ICON_ADEDONHA },
+        { "placar", TOOL_ICON_PLACAR }, { "veto", TOOL_ICON_VETO },
+        { "mimica", TOOL_ICON_MIMICA }, { "testa", TOOL_ICON_TESTA },
         { "card", TOOL_ICON_EXTERNAL },
     };
     for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); i++)
@@ -728,6 +737,58 @@ static void make_tool_icon(lv_obj_t *badge, tool_icon_t kind, uint32_t color)
         lv_obj_align(icon_shape(ic, 3, 3, color, 2, 0), LV_ALIGN_TOP_MID,  6, 6);
         break;
     }
+    case TOOL_ICON_PAVIO: {
+        // bomba: corpo redondo + pavio curto no topo com uma faísca
+        lv_obj_t *body = icon_shape(ic, 18, 18, color, LV_RADIUS_CIRCLE, 0);
+        lv_obj_align(body, LV_ALIGN_CENTER, 0, 3);
+        lv_obj_align(icon_shape(ic, 3, 6, color, 1, 0), LV_ALIGN_CENTER, 3, -7);
+        lv_obj_align(icon_shape(ic, 5, 5, color, 2, 0), LV_ALIGN_CENTER, 6, -10);
+        break;
+    }
+    case TOOL_ICON_ADEDONHA: {
+        // folha de cartela: moldura + três linhas (as colunas a preencher)
+        lv_obj_t *sheet = icon_shape(ic, 20, 24, color, 4, 3);
+        lv_obj_center(sheet);
+        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, 0, -6);
+        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, 0,  0);
+        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, 0,  6);
+        break;
+    }
+    case TOOL_ICON_PLACAR: {
+        // três colunas de placar em alturas diferentes (pódio / barras)
+        lv_obj_align(icon_shape(ic, 6, 12, color, 1, 0), LV_ALIGN_BOTTOM_LEFT,  1, 0);
+        lv_obj_align(icon_shape(ic, 6, 22, color, 1, 0), LV_ALIGN_BOTTOM_MID,   0, 0);
+        lv_obj_align(icon_shape(ic, 6, 16, color, 1, 0), LV_ALIGN_BOTTOM_RIGHT, -1, 0);
+        break;
+    }
+    case TOOL_ICON_VETO: {
+        // carta: a palavra-alvo (barra grossa no topo) e as proibidas abaixo,
+        // cada uma com um ponto (o marcador quadrado da lista)
+        lv_obj_t *card = icon_shape(ic, 22, 24, color, 4, 3);
+        lv_obj_center(card);
+        lv_obj_align(icon_shape(ic, 13, 5, color, 1, 0), LV_ALIGN_CENTER, 0, -6);
+        lv_obj_align(icon_shape(ic, 3, 3, color, 1, 0), LV_ALIGN_CENTER, -5, 2);
+        lv_obj_align(icon_shape(ic, 8, 2, color, 1, 0), LV_ALIGN_CENTER,  2, 2);
+        lv_obj_align(icon_shape(ic, 3, 3, color, 1, 0), LV_ALIGN_CENTER, -5, 8);
+        lv_obj_align(icon_shape(ic, 8, 2, color, 1, 0), LV_ALIGN_CENTER,  2, 8);
+        break;
+    }
+    case TOOL_ICON_MIMICA: {
+        // figura gesticulando: cabeça + tronco + braços erguidos
+        lv_obj_align(icon_shape(ic, 9, 9, color, LV_RADIUS_CIRCLE, 0), LV_ALIGN_TOP_MID, 0, 0);
+        lv_obj_align(icon_shape(ic, 4, 12, color, 2, 0), LV_ALIGN_CENTER, 0, 4);
+        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, -6, 0);
+        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER,  6, 0);
+        break;
+    }
+    case TOOL_ICON_TESTA: {
+        // cabeça + aparelho encostado na testa + setas de inclinar (↑/↓)
+        lv_obj_align(icon_shape(ic, 13, 13, color, LV_RADIUS_CIRCLE, 0), LV_ALIGN_LEFT_MID, 0, 0);
+        lv_obj_align(icon_shape(ic, 10, 18, color, 2, 2), LV_ALIGN_CENTER, 4, 0);
+        lv_obj_align(icon_shape(ic, 8, 3, color, 1, 0), LV_ALIGN_CENTER, 12, -7);
+        lv_obj_align(icon_shape(ic, 8, 3, color, 1, 0), LV_ALIGN_CENTER, 12,  7);
+        break;
+    }
     case TOOL_ICON_EXTERNAL: {
         // cartão (Tool vinda do microSD): moldura com 3 pinos — sem glifo
         // dedicado por Tool ainda (o manifest não traz ícone próprio).
@@ -978,6 +1039,22 @@ static void home_clear_deck(void)
     if (s_home_deck)     { lv_obj_delete(s_home_deck);     s_home_deck = NULL; }
     if (s_home_dots_box) { lv_obj_delete(s_home_dots_box); s_home_dots_box = NULL; }
     s_home_slides = 0;
+}
+
+static void home_build_deck(void);
+
+// Reconstrução do deck adiada (via lv_async_call). Ao sair de uma Tool,
+// kit_system_exit_impl chama kit_launcher_go_home() e SÓ DEPOIS
+// kit_tool_manager_stop_current() (que libera a árvore LVGL da Tool). Se o deck
+// fosse remontado dentro do go_home, a Tool ainda viva + a Home nova não cabem
+// no pool de 64 KB do LVGL: lv_malloc devolve NULL, o LV_ASSERT dispara e cai
+// num while(1) (a placa "trava" no voltar). Adiar um tick deixa a Tool ser
+// liberada primeiro.
+static void home_build_deck_async_cb(void *unused)
+{
+    (void)unused;
+    if (!s_launcher_screen || s_home_deck) return;   // já saiu de novo, ou já montado
+    home_build_deck();
 }
 
 // Monta o slideshow (tileview horizontal) + os pontos de página, a partir da
@@ -2798,6 +2875,32 @@ static void catalog_confirm_do_cb(lv_event_t *e)
 // Ações
 // ---------------------------------------------------------------------------
 
+// Id da Tool a abrir no próximo ciclo do LVGL (ver launch_pending_tool_cb).
+static char s_pending_tool_id[40];
+
+// Abre a Tool pedida DEPOIS de liberar o slideshow da Home. O deck (tileview +
+// slides com fontes grandes e ícones) ocupa uma fatia gorda do pool de 64 KB
+// do LVGL; enquanto ele está montado, o tool_init de uma Tool pesada pode não
+// achar memória e falhar ("não abre até reiniciar a placa"). Roda via
+// lv_async_call porque home_tile_cb é o evento de um filho do próprio deck —
+// apagá-lo ali dentro seria use-after-free. A Home reconstrói o deck ao voltar.
+static void launch_pending_tool_cb(void *unused)
+{
+    (void)unused;
+    if (!s_home_deck) return;   // deck já liberado: um launch já está em curso
+
+    home_clear_deck();
+    s_home_deck_dirty = true;
+
+    if (kit_tool_manager_start(s_pending_tool_id) == KIT_OK) return;
+
+    // Não abriu: reconstrói o deck aqui mesmo (ainda estamos na Home).
+    kit_audio_beep_impl(400, 60);
+    home_build_deck();
+    s_home_deck_dirty = false;
+    show_toast("NAO ABRIU");
+}
+
 static void home_tile_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
@@ -2814,10 +2917,8 @@ static void home_tile_cb(lv_event_t *e)
     ESP_LOGI(TAG, "Abrindo Tool '%s'...", tool->id);
     if (s_toast) { lv_obj_delete(s_toast); s_toast = NULL; }
     home_mru_touch(i);   // sobe pro topo da recência (deck reconstrói ao voltar)
-    if (kit_tool_manager_start(tool->id) != KIT_OK) {
-        kit_audio_beep_impl(400, 60);
-        show_toast("NAO ABRIU");
-    }
+    snprintf(s_pending_tool_id, sizeof s_pending_tool_id, "%s", tool->id);
+    lv_async_call(launch_pending_tool_cb, NULL);
 }
 
 static void run_test_tool_cb(lv_event_t *e)
@@ -2835,6 +2936,12 @@ static void run_test_tool_cb(lv_event_t *e)
 // ---------------------------------------------------------------------------
 // Navegação e polling da bateria
 // ---------------------------------------------------------------------------
+
+void kit_launcher_release_home_deck(void)
+{
+    if (s_home_deck) home_clear_deck();
+    s_home_deck_dirty = true;   // kit_launcher_go_home reconstrói ao voltar
+}
 
 void kit_launcher_go_home(void)
 {
@@ -2883,7 +2990,10 @@ void kit_launcher_go_home(void)
     if (s_home_deck_dirty) {
         s_home_deck_dirty = false;
         home_clear_deck();
-        home_build_deck();
+        // Remonta FORA daqui — depois que a Tool que está saindo for liberada
+        // (ver home_build_deck_async_cb). A Home aparece ~1 frame sem o
+        // slideshow; o deck entra no tick seguinte.
+        lv_async_call(home_build_deck_async_cb, NULL);
     } else if (s_home_deck && s_home_slides > 0) {
         lv_tileview_set_tile_by_index(s_home_deck, 0, 0, LV_ANIM_OFF);
         home_sync_dots();

@@ -15,6 +15,13 @@ void      kit_launcher_show(void);
  */
 void      kit_launcher_go_home(void);
 
+/**
+ * Libera o slideshow da Home (deck + pontos de página) para dar folga de RAM
+ * ao tool_init de uma Tool. O deck é reconstruído ao voltar (kit_launcher_go_home).
+ * Chamada pelo kit_runtime no relançamento pelo botão BOOT.
+ */
+void      kit_launcher_release_home_deck(void);
+
 #ifdef __cplusplus
 }
 #endif
