@@ -980,6 +980,22 @@ static void home_clear_deck(void)
     s_home_slides = 0;
 }
 
+static void home_build_deck(void);
+
+// Reconstrução do deck adiada (via lv_async_call). Ao sair de uma Tool,
+// kit_system_exit_impl chama kit_launcher_go_home() e SÓ DEPOIS
+// kit_tool_manager_stop_current() (que libera a árvore LVGL da Tool). Se o deck
+// fosse remontado dentro do go_home, a Tool ainda viva + a Home nova não cabem
+// no pool de 64 KB do LVGL: lv_malloc devolve NULL, o LV_ASSERT dispara e cai
+// num while(1) (a placa "trava" no voltar). Adiar um tick deixa a Tool ser
+// liberada primeiro.
+static void home_build_deck_async_cb(void *unused)
+{
+    (void)unused;
+    if (!s_launcher_screen || s_home_deck) return;   // já saiu de novo, ou já montado
+    home_build_deck();
+}
+
 // Monta o slideshow (tileview horizontal) + os pontos de página, a partir da
 // ordem de recência atual em s_mru.
 static void home_build_deck(void)
@@ -2913,7 +2929,10 @@ void kit_launcher_go_home(void)
     if (s_home_deck_dirty) {
         s_home_deck_dirty = false;
         home_clear_deck();
-        home_build_deck();
+        // Remonta FORA daqui — depois que a Tool que está saindo for liberada
+        // (ver home_build_deck_async_cb). A Home aparece ~1 frame sem o
+        // slideshow; o deck entra no tick seguinte.
+        lv_async_call(home_build_deck_async_cb, NULL);
     } else if (s_home_deck && s_home_slides > 0) {
         lv_tileview_set_tile_by_index(s_home_deck, 0, 0, LV_ANIM_OFF);
         home_sync_dots();
