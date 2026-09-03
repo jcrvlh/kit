@@ -420,6 +420,13 @@ void kit_runtime_run(void)
                 if (s_tool_shake_enabled && s_tool_primary_action) s_tool_primary_action();
                 kit_imu_dispatch_shake();
             }
+            // Gesto de inclinar (Tool tipo "Heads Up!"): kit_imu_poll_tilt()
+            // devolve NONE de graça se nenhuma Tool registrou o callback.
+            kit_tilt_t dir = kit_imu_poll_tilt();
+            if (dir != KIT_TILT_NONE) {
+                note_activity();
+                kit_imu_dispatch_tilt(dir);
+            }
         }
 
         uint32_t sleep_ms = delay_ms > 0 ? delay_ms : 5;
@@ -444,6 +451,7 @@ void kit_runtime_set_in_tool(bool in_tool)
         s_tool_primary_action = NULL;
         s_tool_shake_enabled = true;
         kit_imu_clear_shake_callback();   // não deixa callback órfão de Tool externa
+        kit_imu_clear_tilt_callback();
     }
 }
 

@@ -308,6 +308,17 @@ static kit_err_t stub_imu_register_shake_callback(kit_shake_callback_t cb, void 
     return KIT_OK;
 }
 
+static kit_tilt_callback_t s_tilt_cb = NULL;
+static void *s_tilt_ud = NULL;
+
+static kit_err_t stub_imu_register_tilt_callback(kit_tilt_callback_t cb, void *user_data)
+{
+    s_tilt_cb = cb;
+    s_tilt_ud = user_data;
+    printf("[STUB IMU] tilt callback %s.\n", cb ? "registrado" : "removido");
+    return KIT_OK;
+}
+
 /* -----------------------------------------------------------------------
  * Montagem das Tabelas de API (Stubs)
  * ----------------------------------------------------------------------- */
@@ -362,6 +373,7 @@ static const kit_system_api_t s_stub_system = {
 
 static const kit_imu_api_t s_stub_imu = {
     .register_shake_callback = stub_imu_register_shake_callback,
+    .register_tilt_callback = stub_imu_register_tilt_callback,
 };
 
 static const kit_api_table_t s_stub_api_table = {

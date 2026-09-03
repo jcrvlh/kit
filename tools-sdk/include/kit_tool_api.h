@@ -31,10 +31,10 @@ extern "C" {
  * ----------------------------------------------------------------------- */
 
 /** Versão do SDK no formato string "MAJOR.MINOR.PATCH". */
-#define KIT_SDK_VERSION       "0.1.0"
+#define KIT_SDK_VERSION       "0.2.0"
 
 /** Versão do SDK como inteiro (major * 10000 + minor * 100 + patch). */
-#define KIT_SDK_VERSION_CODE  100
+#define KIT_SDK_VERSION_CODE  200
 
 /**
  * Nível da API do Runtime com o qual este SDK é compatível.
@@ -162,6 +162,26 @@ typedef struct {
  * @param user_data Ponteiro opaco passado no registro.
  */
 typedef void (*kit_shake_callback_t)(void *user_data);
+
+/**
+ * @brief Direção de uma inclinada deliberada do aparelho (gesto "Heads Up!").
+ *
+ * O KIT fica ~vertical na testa (eixo normal à tela ~0 g). Virar a tela para o
+ * chão dispara @ref KIT_TILT_DOWN; para o teto, @ref KIT_TILT_UP. Dispara uma
+ * vez por inclinada — só rearma quando o aparelho volta a ~vertical.
+ */
+typedef enum {
+    KIT_TILT_NONE = 0,
+    KIT_TILT_DOWN,   /**< tela virada para baixo (no Heads Up!: acertou). */
+    KIT_TILT_UP,     /**< tela virada para cima  (no Heads Up!: passou). */
+} kit_tilt_t;
+
+/**
+ * @brief Callback invocado a cada inclinada deliberada do aparelho.
+ * @param dir       Direção da inclinada.
+ * @param user_data Ponteiro opaco passado no registro.
+ */
+typedef void (*kit_tilt_callback_t)(kit_tilt_t dir, void *user_data);
 
 /* -----------------------------------------------------------------------
  * Tabelas de APIs Individuais
@@ -469,6 +489,18 @@ typedef struct {
      * @return KIT_OK em caso de sucesso.
      */
     kit_err_t (*register_shake_callback)(kit_shake_callback_t cb, void *user_data);
+
+    /**
+     * Registra um callback para o gesto de inclinar (ver @ref kit_tilt_t).
+     * Feito para o jogo estilo "Heads Up!": inclina para baixo = acertou,
+     * para cima = passou. Um callback por Tool; nova chamada substitui o
+     * anterior; NULL remove. O Runtime só faz o polling do gesto enquanto
+     * houver um callback registrado. Requer `min_runtime` >= "0.2.0".
+     * @param cb        Função de callback (chamada no contexto da task LVGL).
+     * @param user_data Ponteiro opaco repassado ao callback.
+     * @return KIT_OK em caso de sucesso.
+     */
+    kit_err_t (*register_tilt_callback)(kit_tilt_callback_t cb, void *user_data);
 } kit_imu_api_t;
 
 /* -----------------------------------------------------------------------

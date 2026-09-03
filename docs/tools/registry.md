@@ -17,7 +17,7 @@ Request) e reprodutível (os `.kit` são construídos pela CI, não enviados pro
 | Onde vive | Componentes do firmware (`firmware/components/kit_*`), repositório `kit` | Repositório `kit-tools`, distribuídas como `.kit` |
 | Instalação | Já vêm no Core; despachadas pelo `kit_tool_manager` por `id` | Instaladas em `/sdcard/tools/<id>/` (catálogo, Wi-Fi ou web-installer) |
 | Curadoria | Conjunto oficial mínimo, mantido pela equipe | Aberto a contribuições da comunidade |
-| Exemplos | `kit_dice`, `kit_bingo`, `kit_coin`, `kit_timer`, `kit_times`, `kit_primeiro`, `kit_placar`, `kit_bottle` | `io.github.jcrvlh.quebragelo`, `io.github.jcrvlh.pavio`, `io.github.jcrvlh.adedonha`, `io.github.jcrvlh.veto`, `io.github.jcrvlh.tarot`, `io.github.jcrvlh.fora` |
+| Exemplos | `kit_dice`, `kit_bingo`, `kit_coin`, `kit_timer`, `kit_times`, `kit_primeiro`, `kit_placar`, `kit_bottle` | `io.github.jcrvlh.quebragelo`, `io.github.jcrvlh.pavio`, `io.github.jcrvlh.adedonha`, `io.github.jcrvlh.veto`, `io.github.jcrvlh.mimica`, `io.github.jcrvlh.testa`, `io.github.jcrvlh.tarot`, `io.github.jcrvlh.fora` |
 
 O Core traz um conjunto curado e enxuto. Tudo além disso é distribuído pelo
 catálogo — inclusive Tools oficiais que não justifiquem ocupar espaço na Flash de

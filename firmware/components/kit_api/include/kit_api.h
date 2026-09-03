@@ -149,8 +149,22 @@ typedef struct {
 
 typedef void (*kit_shake_callback_t)(void *user_data);
 
+// Gesto de inclinar (Tool "Testa" / Heads Up!): o aparelho fica ~vertical na
+// testa (eixo normal à tela ~0 g); virar a tela para o chão dispara DOWN, para o
+// teto dispara UP. Uma vez por inclinada — só rearma ao voltar ao neutro.
+typedef enum {
+    KIT_TILT_NONE = 0,
+    KIT_TILT_DOWN,   // tela virada para baixo (no Heads Up!: acertou)
+    KIT_TILT_UP,     // tela virada para cima  (no Heads Up!: passou)
+} kit_tilt_t;
+
+typedef void (*kit_tilt_callback_t)(kit_tilt_t dir, void *user_data);
+
 typedef struct {
     kit_err_t (*register_shake_callback)(kit_shake_callback_t cb, void *user_data);
+    // Registra o callback de inclinar. O Runtime só faz o polling do gesto
+    // enquanto a Tool ativa o pediu (kit_runtime_set_tool_tilt_enabled).
+    kit_err_t (*register_tilt_callback)(kit_tilt_callback_t cb, void *user_data);
 } kit_imu_api_t;
 
 // Export Table Consolidada
