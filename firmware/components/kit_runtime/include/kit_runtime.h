@@ -7,9 +7,9 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 1
+#define KIT_VERSION_MINOR 2
 #define KIT_VERSION_PATCH 0
-#define KIT_VERSION_STRING "0.1.0"
+#define KIT_VERSION_STRING "0.2.0"   // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.
@@ -41,6 +41,14 @@ void kit_runtime_set_in_tool(bool in_tool);
  * Ex.: a Dice Tool registra kit_dice_roll (PWR rola os dados).
  */
 void kit_runtime_set_tool_primary_action(void (*action)(void));
+
+/**
+ * Liga/desliga o gesto de chacoalhar como atalho da ação principal na Tool
+ * ativa. Padrão: ligado. Uma Tool em que gesticular é natural (ex: Veto, quem
+ * descreve mexe as mãos) desliga para não disparar a ação sem querer — o PWR
+ * continua valendo. O Tool Manager religa ao encerrar a Tool.
+ */
+void kit_runtime_set_tool_shake_enabled(bool enabled);
 
 /**
  * Encerra a Tool ativa e retorna ao Launcher.

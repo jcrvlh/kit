@@ -69,6 +69,13 @@ kit_err_t kit_network_start(void);
 kit_err_t kit_network_stop(void);
 
 /**
+ * Derruba a pilha inteira (`esp_wifi_deinit`), devolvendo ~40 KB de RAM
+ * interna. `kit_network_start()` reconstrói. Usado pela recuperação de
+ * memória ao abrir uma Tool pesada.
+ */
+kit_err_t kit_network_teardown(void);
+
+/**
  * Suspende / retoma o rádio sem esquecer que o Wi-Fi está "ligado".
  *
  * Usado pelo runtime quando a tela entra em repouso: com o painel apagado o

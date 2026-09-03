@@ -26,7 +26,7 @@ kit_err_t kit_tool_manager_init(void);
 uint32_t  kit_tool_manager_get_count(void);
 kit_err_t kit_tool_manager_get_entry(uint32_t index, kit_tool_entry_t *entry);
 kit_err_t kit_tool_manager_start(const char *tool_id);
-void      kit_tool_manager_start_last(void);
+kit_err_t kit_tool_manager_start_last(void);   // KIT_ERR_NOT_FOUND se não houver última Tool
 void      kit_tool_manager_stop_current(void);
 const char *kit_tool_manager_current(void);   // id da Tool rodando, "" se nenhuma
 

@@ -64,9 +64,9 @@ static void comms_task(void *arg)
             strncpy(s_current_tool_id, tool_id, sizeof(s_current_tool_id) - 1);
             
             // Garante o diretório raiz e o diretório da tool
-            ensure_dir("/tools");
+            ensure_dir("/sdcard/tools");
             char path[256];
-            snprintf(path, sizeof(path), "/tools/%s", s_current_tool_id);
+            snprintf(path, sizeof(path), "/sdcard/tools/%s", s_current_tool_id);
             ensure_dir(path);
             
             ESP_LOGI(TAG, "Iniciando recebimento da Tool: %s", s_current_tool_id);
@@ -87,7 +87,7 @@ static void comms_task(void *arg)
             }
 
             char path[256];
-            snprintf(path, sizeof(path), "/tools/%s/%s", s_current_tool_id, filename);
+            snprintf(path, sizeof(path), "/sdcard/tools/%s/%s", s_current_tool_id, filename);
 
             ESP_LOGI(TAG, "Recebendo arquivo %s (%d bytes)", path, size);
             

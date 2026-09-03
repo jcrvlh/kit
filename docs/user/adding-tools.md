@@ -1,7 +1,8 @@
 # Adicionando Tools
 
 O KIT já vem com as Tools oficiais (Dados, Garrafa, Moeda, Timer, Primeiro,
-Times, Bingo, Quebra-Gelo). Para colocar outras, há dois caminhos.
+Times, Bingo, Quebra-Gelo, Pavio, Placar, Veto). Outras — como a **Adedonha** —
+vêm do catálogo. Para colocar Tools do catálogo, há dois caminhos.
 
 ---
 

@@ -402,7 +402,8 @@ static void worker_task(void *arg)
 // Ciclo de vida
 // ---------------------------------------------------------------------------
 
-static bool s_stack_up;   // esp_netif/event/esp_wifi já inicializados?
+static bool s_stack_up;      // esp_netif/event/esp_wifi já inicializados?
+static bool s_handlers_up;   // handlers de evento do kit_network registrados
 
 // Traz a pilha de rede para o ar (esp_netif + event loop + esp_wifi). Custa
 // ~45 KB de RAM interna, então só roda quando o usuário liga o Wi-Fi de fato
@@ -434,10 +435,13 @@ static kit_err_t ensure_stack(void)
     // Gerimos a lista de redes por conta própria (NVS "kit_net").
     esp_wifi_set_storage(WIFI_STORAGE_RAM);
 
-    esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                        on_wifi_event, NULL, NULL);
-    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-                                        on_wifi_event, NULL, NULL);
+    if (!s_handlers_up) {
+        esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
+                                            on_wifi_event, NULL, NULL);
+        esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
+                                            on_wifi_event, NULL, NULL);
+        s_handlers_up = true;
+    }
 
     if (!s_worker &&
         xTaskCreate(worker_task, "kit_net", 4096, NULL, 4, &s_worker) != pdPASS) {
@@ -506,6 +510,35 @@ kit_err_t kit_network_stop(void)
     if (s_stack_up) {
         esp_wifi_disconnect();
         esp_wifi_stop();
+    }
+    set_state(KIT_NET_OFF);
+    return KIT_OK;
+}
+
+kit_err_t kit_network_teardown(void)
+{
+    if (!s_lock) return KIT_FAIL;
+
+    s_want_connected = false;
+    s_suspended      = false;
+    s_connecting     = false;
+    s_got_ip         = false;
+    s_ip[0]          = '\0';
+    s_ssid[0]        = '\0';
+
+    if (s_stack_up) {
+        ESP_LOGW(TAG, "derrubando a pilha Wi-Fi (esp_wifi_deinit) para liberar RAM interna");
+        esp_wifi_disconnect();
+        esp_wifi_stop();
+        esp_wifi_deinit();
+        if (s_handlers_up) {
+            esp_event_handler_unregister(WIFI_EVENT, ESP_EVENT_ANY_ID, on_wifi_event);
+            esp_event_handler_unregister(IP_EVENT, IP_EVENT_STA_GOT_IP, on_wifi_event);
+            s_handlers_up = false;
+        }
+        s_stack_up = false;
+        // netif + event loop + task "kit_net" ficam de pé; ensure_stack()
+        // reconstrói só o esp_wifi na próxima kit_network_start().
     }
     set_state(KIT_NET_OFF);
     return KIT_OK;

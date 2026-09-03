@@ -27,6 +27,7 @@ extern void      kit_time_delay_ms_impl(uint32_t ms);
 extern kit_err_t kit_audio_beep_impl(uint16_t freq_hz, uint16_t duration_ms);
 extern kit_err_t kit_audio_set_volume_impl(uint8_t percentage);
 extern kit_err_t kit_audio_sfx_impl(kit_sfx_t sfx);
+extern kit_err_t kit_audio_fuse_impl(int16_t tension);
 
 extern kit_err_t kit_power_keep_awake_impl(bool enable);
 
@@ -34,6 +35,7 @@ extern kit_err_t kit_system_get_info_impl(kit_system_info_t *info);
 extern void      kit_system_exit_impl(void);
 
 extern kit_err_t kit_imu_register_shake_callback_impl(kit_shake_callback_t cb, void *user_data);
+extern kit_err_t kit_imu_register_tilt_callback_impl(kit_tilt_callback_t cb, void *user_data);
 
 // Definição das tabelas estáticas de APIs
 static const kit_display_api_t s_display_api = {
@@ -72,6 +74,7 @@ static const kit_audio_api_t s_audio_api = {
     .beep = kit_audio_beep_impl,
     .set_volume = kit_audio_set_volume_impl,
     .sfx = kit_audio_sfx_impl,
+    .fuse = kit_audio_fuse_impl,
 };
 
 static const kit_power_api_t s_power_api = {
@@ -85,6 +88,7 @@ static const kit_system_api_t s_system_api = {
 
 static const kit_imu_api_t s_imu_api = {
     .register_shake_callback = kit_imu_register_shake_callback_impl,
+    .register_tilt_callback = kit_imu_register_tilt_callback_impl,
 };
 
 static const kit_api_table_t s_master_api_table = {
