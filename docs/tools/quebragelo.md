@@ -15,7 +15,9 @@ pra começar uma noite de jogos, uma reunião ou um jantar.
 > O Core mantém: o ícone geométrico da Home (`TOOL_ICON_ASK` — um balão de fala
 > com reticências) e o mapa `"ask"`.
 
-Card **azul** na grade da Home, marcada como **mini-jogo** (`is_game`). Texto sobre o azul = paper (`KIT_COLOR_ON_COLOR`).
+Card **azul** na grade da Home, classificada como **ferramenta** (`"kind":"tool"`) —
+aparece junto das Tools, não na seção de mini-jogos. Texto sobre o azul = paper
+(`KIT_COLOR_ON_COLOR`).
 
 ---
 
