@@ -77,7 +77,8 @@ static bool s_low_batt_warned = false;   // aviso de "bateria baixa" já mostrad
 typedef enum {
     TOOL_ICON_DICE, TOOL_ICON_SPIN, TOOL_ICON_COIN, TOOL_ICON_TRIANGLE,
     TOOL_ICON_BINGO, TOOL_ICON_ORDER, TOOL_ICON_TIMER, TOOL_ICON_FIRST,
-    TOOL_ICON_TEAMS, TOOL_ICON_ASK, TOOL_ICON_EXTERNAL
+    TOOL_ICON_TEAMS, TOOL_ICON_ASK, TOOL_ICON_PAVIO, TOOL_ICON_ADEDONHA,
+    TOOL_ICON_PLACAR, TOOL_ICON_VETO, TOOL_ICON_EXTERNAL
 } tool_icon_t;
 
 typedef struct {
@@ -94,10 +95,13 @@ static const home_tool_t HOME_TOOLS_BUILTIN[] = {
     { "com.kit.bottle",  "Garrafa", KIT_COLOR_BLUE,   TOOL_ICON_SPIN, true, false },
     { "com.kit.coin",    "Moeda",   KIT_COLOR_YELLOW, TOOL_ICON_COIN, true, false },
     { "com.kit.timer",   "Timer",   KIT_COLOR_GREEN,  TOOL_ICON_TIMER, true, false },
-    { "com.kit.primeiro","Primeiro",KIT_COLOR_YELLOW, TOOL_ICON_FIRST, true, false },
+    { "com.kit.primeiro","Primeiro",KIT_COLOR_RED, TOOL_ICON_FIRST, true, false },
     { "com.kit.times",   "Times",   KIT_COLOR_BLUE,   TOOL_ICON_TEAMS, true, false },
     { "com.kit.bingo",   "Bingo",   KIT_COLOR_GREEN,  TOOL_ICON_BINGO, true, true },
-    { "com.kit.quebragelo", "Quebra-Gelo", KIT_COLOR_RED, TOOL_ICON_ASK, true, false },
+    // Quebra-Gelo, Pavio, Adedonha e Veto saíram do Core — vivem no catálogo como
+    // io.github.jcrvlh.quebragelo, io.github.jcrvlh.pavio, io.github.jcrvlh.adedonha e io.github.jcrvlh.veto.
+    // TOOL_ICON_ASK / TOOL_ICON_PAVIO / TOOL_ICON_ADEDONHA / TOOL_ICON_VETO e seus mapas ficam pra Tool do cartão reusar.
+    { "com.kit.placar", "Placar", KIT_COLOR_GREEN, TOOL_ICON_PLACAR, true, false },
 };
 #define HOME_TOOLS_BUILTIN_N ((int)(sizeof(HOME_TOOLS_BUILTIN) / sizeof(HOME_TOOLS_BUILTIN[0])))
 
@@ -136,6 +140,8 @@ static tool_icon_t icon_from_name(const char *name)
         { "bingo", TOOL_ICON_BINGO },   { "order", TOOL_ICON_ORDER },
         { "timer", TOOL_ICON_TIMER },   { "first", TOOL_ICON_FIRST },
         { "teams", TOOL_ICON_TEAMS },   { "ask", TOOL_ICON_ASK },
+        { "pavio", TOOL_ICON_PAVIO },   { "adedonha", TOOL_ICON_ADEDONHA },
+        { "placar", TOOL_ICON_PLACAR }, { "veto", TOOL_ICON_VETO },
         { "card", TOOL_ICON_EXTERNAL },
     };
     for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); i++)
@@ -726,6 +732,42 @@ static void make_tool_icon(lv_obj_t *badge, tool_icon_t kind, uint32_t color)
         lv_obj_align(icon_shape(ic, 3, 3, color, 2, 0), LV_ALIGN_TOP_MID, -6, 6);
         lv_obj_align(icon_shape(ic, 3, 3, color, 2, 0), LV_ALIGN_TOP_MID,  0, 6);
         lv_obj_align(icon_shape(ic, 3, 3, color, 2, 0), LV_ALIGN_TOP_MID,  6, 6);
+        break;
+    }
+    case TOOL_ICON_PAVIO: {
+        // bomba: corpo redondo + pavio curto no topo com uma faísca
+        lv_obj_t *body = icon_shape(ic, 18, 18, color, LV_RADIUS_CIRCLE, 0);
+        lv_obj_align(body, LV_ALIGN_CENTER, 0, 3);
+        lv_obj_align(icon_shape(ic, 3, 6, color, 1, 0), LV_ALIGN_CENTER, 3, -7);
+        lv_obj_align(icon_shape(ic, 5, 5, color, 2, 0), LV_ALIGN_CENTER, 6, -10);
+        break;
+    }
+    case TOOL_ICON_ADEDONHA: {
+        // folha de cartela: moldura + três linhas (as colunas a preencher)
+        lv_obj_t *sheet = icon_shape(ic, 20, 24, color, 4, 3);
+        lv_obj_center(sheet);
+        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, 0, -6);
+        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, 0,  0);
+        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, 0,  6);
+        break;
+    }
+    case TOOL_ICON_PLACAR: {
+        // três colunas de placar em alturas diferentes (pódio / barras)
+        lv_obj_align(icon_shape(ic, 6, 12, color, 1, 0), LV_ALIGN_BOTTOM_LEFT,  1, 0);
+        lv_obj_align(icon_shape(ic, 6, 22, color, 1, 0), LV_ALIGN_BOTTOM_MID,   0, 0);
+        lv_obj_align(icon_shape(ic, 6, 16, color, 1, 0), LV_ALIGN_BOTTOM_RIGHT, -1, 0);
+        break;
+    }
+    case TOOL_ICON_VETO: {
+        // carta: a palavra-alvo (barra grossa no topo) e as proibidas abaixo,
+        // cada uma com um ponto (o marcador quadrado da lista)
+        lv_obj_t *card = icon_shape(ic, 22, 24, color, 4, 3);
+        lv_obj_center(card);
+        lv_obj_align(icon_shape(ic, 13, 5, color, 1, 0), LV_ALIGN_CENTER, 0, -6);
+        lv_obj_align(icon_shape(ic, 3, 3, color, 1, 0), LV_ALIGN_CENTER, -5, 2);
+        lv_obj_align(icon_shape(ic, 8, 2, color, 1, 0), LV_ALIGN_CENTER,  2, 2);
+        lv_obj_align(icon_shape(ic, 3, 3, color, 1, 0), LV_ALIGN_CENTER, -5, 8);
+        lv_obj_align(icon_shape(ic, 8, 2, color, 1, 0), LV_ALIGN_CENTER,  2, 8);
         break;
     }
     case TOOL_ICON_EXTERNAL: {

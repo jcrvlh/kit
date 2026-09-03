@@ -53,6 +53,9 @@ Bem-vindo à documentação técnica do **KIT**. Esta seção descreve a arquite
 * [Quebra-Gelo](tools/quebragelo.md)
 * [Sortear Times](tools/times.md)
 * [Globo de Bingo](tools/bingo.md)
+* [Pavio](tools/pavio.md)
+* [Placar](tools/placar.md)
+* [Veto](tools/veto.md)
 
 ### 6. [Guia de Desenvolvimento](development/setup.md)
 * [Configuração do Ambiente ESP-IDF](development/setup.md)

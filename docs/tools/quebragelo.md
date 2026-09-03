@@ -4,13 +4,18 @@ A Tool **Quebra-Gelo** sorteia uma pergunta leve e criativa de um baralho fixo e
 mostra o texto **grande no centro da tela**. Todo mundo na roda responde — bom
 pra começar uma noite de jogos, uma reunião ou um jantar.
 
-É a mesma linha da [Quem Vai Primeiro](primeiro.md), realizando o "sorteio de
-listas rápidas" da entrada **Random Tool (Sorteio)** do
-roadmap do projeto. Tool interna (built-in no Core), componente
-`kit_quebragelo`, id `com.kit.quebragelo`, despachada pelo
-[`kit_tool_manager`](../architecture/tools.md). Card **azul** na grade da Home
-(ícone `TOOL_ICON_ASK` — um balão de fala com reticências). Texto sobre o azul =
-paper (`KIT_COLOR_ON_COLOR`).
+> **Tool do catálogo**, não built-in do Core. Vive em
+> [`kit-tools`](https://github.com/jcrvlh/kit-tools/tree/main/tools/io.github.jcrvlh.quebragelo)
+> como `io.github.jcrvlh.quebragelo` (pacote `.kit`, carregado do cartão microSD
+> pelo [`kit_tool_loader`](../architecture/tools.md)). Nasceu como componente
+> built-in `kit_quebragelo` para iteração rápida e saiu do Core quando estabilizou
+> — a lógica já só usava `kit_api`, então a conversão foi `tool_init`/
+> `tool_destroy` + a ação principal ligada ao toque e a `register_shake_callback`.
+>
+> O Core mantém: o ícone geométrico da Home (`TOOL_ICON_ASK` — um balão de fala
+> com reticências) e o mapa `"ask"`.
+
+Card **azul** na grade da Home, marcada como **mini-jogo** (`is_game`). Texto sobre o azul = paper (`KIT_COLOR_ON_COLOR`).
 
 ---
 
@@ -94,6 +99,5 @@ Sem estados persistentes: ao reabrir, a Tool começa do zero (`TOQUE EM SORTEAR`
 
 | Função | Efeito |
 |---|---|
-| `kit_quebragelo_start(accent)` | Monta a tela e carrega. `accent` 0 → azul padrão. |
-| `kit_quebragelo_draw()` | Ação principal — sorteia. Ligada ao PWR/chacoalhar pelo Runtime. |
-| `kit_quebragelo_destroy()` | Derruba o `lv_timer` e os objetos LVGL. |
+| `tool_init(ctx)` | Monta a tela, registra callback de shake e carrega. |
+| `tool_destroy()` | Derruba o `lv_timer`, solta o callback de shake e deleta a tela. |

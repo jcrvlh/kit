@@ -9,7 +9,7 @@
 #include "kit_primeiro.h"
 #include "kit_times.h"
 #include "kit_bingo.h"
-#include "kit_quebragelo.h"
+#include "kit_placar.h"
 #include "kit_fonts.h"
 #include "kit_theme.h"
 #include "kit_tool_loader.h"
@@ -641,7 +641,7 @@ kit_err_t kit_tool_manager_start(const char *tool_id)
         err = kit_timer_start(KIT_COLOR_GREEN); // cor do card "Timer" na Home
         primary_action = kit_timer_toggle;     // PWR físico começa/pausa
     } else if (strcmp(tool_id, "com.kit.primeiro") == 0) {
-        err = kit_primeiro_start(KIT_COLOR_YELLOW); // cor do card "Primeiro" na Home
+        err = kit_primeiro_start(KIT_COLOR_RED); // cor do card "Primeiro" na Home
         primary_action = kit_primeiro_draw;        // PWR físico sorteia
     } else if (strcmp(tool_id, "com.kit.times") == 0) {
         err = kit_times_start(KIT_COLOR_BLUE); // cor do card "Times" na Home
@@ -649,9 +649,8 @@ kit_err_t kit_tool_manager_start(const char *tool_id)
     } else if (strcmp(tool_id, "com.kit.bingo") == 0) {
         err = kit_bingo_start(KIT_COLOR_GREEN); // cor do card "Bingo" na Home
         primary_action = kit_bingo_draw;       // PWR físico sorteia o próximo número
-    } else if (strcmp(tool_id, "com.kit.quebragelo") == 0) {
-        err = kit_quebragelo_start(KIT_COLOR_RED); // cor do card "Quebra-Gelo" na Home
-        primary_action = kit_quebragelo_draw;       // PWR físico sorteia a próxima pergunta
+    } else if (strcmp(tool_id, "com.kit.placar") == 0) {
+        err = kit_placar_start(KIT_COLOR_GREEN);  // cor do card "Placar" na Home
     } else {
         // Não é uma Tool built-in: procura no catálogo do cartão SD (Marco 2)
         // pelo caminho exato do entry_point; sem manifest, cai no layout
@@ -719,8 +718,8 @@ void kit_tool_manager_stop_current(void)
         kit_times_destroy();
     } else if (strcmp(s_current_tool, "com.kit.bingo") == 0) {
         kit_bingo_destroy();
-    } else if (strcmp(s_current_tool, "com.kit.quebragelo") == 0) {
-        kit_quebragelo_destroy();
+    } else if (strcmp(s_current_tool, "com.kit.placar") == 0) {
+        kit_placar_destroy();
     } else if (kit_tool_loader_is_active()) {
         kit_tool_loader_stop();
     } else if (s_test_tool_screen) {

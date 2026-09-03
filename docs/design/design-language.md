@@ -16,8 +16,10 @@ O sistema vive em código:
 > Sobre, a **Test Tool** (`kit_tool_manager`) e as Tools
 > **Dados** (`kit_dice`), **Garrafa** (`kit_bottle`), **Decisor** (`kit_decisor`),
 > **Timer** (`kit_timer`), **Quem Vai Primeiro** (`kit_primeiro`),
-> **Sortear Times** (`kit_times`), **Globo de Bingo** (`kit_bingo`) e
-> **Quebra-Gelo** (`kit_quebragelo`).
+> **Sortear Times** (`kit_times`), **Globo de Bingo** (`kit_bingo`),
+> **Quebra-Gelo** (`kit_quebragelo`), **Pavio** (`kit_pavio`),
+> **Placar** (`kit_placar`). As Tools do catálogo
+> (ex.: **Adedonha**, `io.github.jcrvlh.adedonha`, **Veto**, `io.github.jcrvlh.veto`) seguem a mesma linguagem.
 
 ---
 
@@ -260,6 +262,9 @@ Tratados em [`kit_runtime`](../architecture/runtime.md) (`poll_system_buttons`,
 | **Sortear Times** (`kit_times`) | Divide a mesa em times equilibrados | Titlebar + `lv_tileview` de 2 páginas (Ajuste / Sorteio) + `SORTEAR` fixo; overlay de revelação um a um | Arrasta na horizontal · Titlebar ← ou BOOT → Home |
 | **Globo de Bingo** (`kit_bingo`) | Globo de bingo digital 1–75 / 1–90 com painel de chamadas | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Globo / Chamadas) + `SORTEAR` fixo | Arrasta na horizontal · Titlebar ← ou BOOT → Home |
 | **Quebra-Gelo** (`kit_quebragelo`) | Sorteia uma pergunta quebra-gelo pra roda responder | Titlebar + palco tocável + `SORTEAR` fixo | Titlebar ← ou BOOT → Home |
+| **Pavio** (`kit_pavio`) | Mini-jogo: fale uma palavra com a sílaba e passe o KIT antes de explodir | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Jogo / Como joga) + botão `ACENDER PAVIO`/`PASSEI` fixo; overlay vermelho `BUM` | Arrasta na horizontal (travado em rodada) · Titlebar ← ou BOOT → Home |
+| **Placar** (`kit_placar`) | Placar de mesa: 2–4 colunas, toque = +1 e segurar = −1, meta opcional | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Placar / Como usa) + `ZERAR` (dois toques) fixo; overlay na cor do jogador `VENCEU` | Arrasta na horizontal (travado só no `VENCEU`) · Titlebar ← ou BOOT → Home |
+| **Veto** (`io.github.jcrvlh.veto`) | Mini-jogo: descreva a palavra-alvo sem dizer as 3 proibidas; o KIT cronometra e toca a cigarra, a mesa confere | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Jogo / Como joga) + barra de tempo amarela + botões `DISLIKE (👎)`/`PULAR`/`JOINHA (👍)` na mesma linha; overlay amarelo `TEMPO` com o placar da vez | Arrasta na horizontal (travado em vez) · Titlebar ← ou BOOT → Home |
 | **Feedback** | Confirmação transitória (ex: carga iniciada) | Overlay colorido | Some sozinha (~1,7 s) |
 
 As sub-telas são _overlays_ de tela cheia (`make_overlay(bg)`) criados como
@@ -317,7 +322,7 @@ A saída é feita pela API (`system->exit`).
   notação à esquerda e o total à direita (o mais recente na cor da Tool).
 
 **Quem Vai Primeiro** (`kit_primeiro`) — titlebar (chip ← + `PRIMEIRO`) sobre um
-**palco** tocável e o botão `SORTEAR` fixo no rodapé (amarelo, texto preto,
+**palco** tocável e o botão `SORTEAR` fixo no rodapé (vermelho, texto claro,
 `kit_mono_26`).
 Página única — sem `lv_tileview`, sem ajuste, sem histórico, sem persistência (o
 formato enxuto da Garrafa). No palco, a característica sorteada em `kit_mono_26`
@@ -326,7 +331,7 @@ formato enxuto da Garrafa). No palco, a característica sorteada em `kit_mono_26
 primeiro sorteio). Antes do primeiro sorteio o palco mostra só `TOQUE EM SORTEAR`
 apagado. Sortear (botão, toque no palco, PWR ou chacoalhar) embaralha entre as
 57 características fixas por ~0,7 s num **único `lv_timer`** e trava na sorteada
-(escolhida antes, via Random API; nunca repete) — cor amarela + 1 bipe. _Frase vai
+(escolhida antes, via Random API; nunca repete) — cor vermelha + 1 bipe. _Frase vai
 em mono, nunca em `kit_display_*` (essa é só pra números e o wordmark), mesmo
 sendo o elemento protagonista da tela._ A saída é feita pela API (`system->exit`).
 
@@ -391,9 +396,11 @@ API; animação = um único `lv_timer` (60 ms/tick) que só troca o texto do nú
 **Cor da Tool.** Cada Tool adota como cor principal a cor do seu slide/card na
 Home — o `kit_tool_manager` passa essa cor no `*_start()` e ela vai no botão
 primário e nos acentos da Tool. **Repetição de cor entre Tools é aceita** — a
-paleta Bauhaus só tem quatro primárias: hoje **vermelho** = Dados, **azul** =
-Garrafa, Sortear Times e Quebra-Gelo, **amarelo** = Moeda e Quem Vai Primeiro
-(texto preto por cima), **verde** = Timer e Globo de Bingo.
+paleta Bauhaus só tem quatro primárias: hoje **vermelho** = Dados, Quem
+Vai Primeiro, Quebra-Gelo e Pavio, **azul** = Garrafa e Sortear Times, **amarelo** = Moeda e Veto (texto preto por cima), **verde** = Timer, Globo de Bingo e
+Placar.
+O Placar ainda usa as quatro primárias de uma vez — uma por jogador — como
+identidade de cada coluna.
 
 **Indicador de bateria** — desenhado (corpo + terminal + barra de nível), com
 `NN%` ao lado (`kit_mono_16`). Verde carregando, vermelho ≤ 15 %, "paper" no
@@ -448,9 +455,15 @@ e a `RANDOM` sorteia um novo valor do TRNG. A saída também sai pela API
   "Primeiro" (`KIT_ICON_CHEVRON` apontando para um disco). O card "Times"
   (`TOOL_ICON_TEAMS`) é um quadrado dividido em dois (metade cheia, metade
   contorno). O card "Bingo" (`TOOL_ICON_BINGO`) são quatro pontos; o "Quebra-Gelo"
-  (`TOOL_ICON_ASK`) é um balão de fala com três pontinhos.
+  (`TOOL_ICON_ASK`) é um balão de fala com três pontinhos; o "Pavio"
+  (`TOOL_ICON_PAVIO`) é uma bomba redonda com um pavio curto e uma faísca; o
+  "Veto" (`TOOL_ICON_VETO`) é uma carta com a palavra-alvo em cima e as
+  proibidas (ponto + traço) abaixo. O `TOOL_ICON_ADEDONHA` (folha de cartela com
+  três linhas) fica no Core mesmo a Adedonha tendo saído pro catálogo — uma Tool
+  do cartão pode reusá-lo por `home_icon`.
 * **Grade de Tools** mostra só as Tools já implementadas (hoje: Dados, Garrafa,
-  Moeda, Timer, Quem Vai Primeiro, Sortear Times, Globo de Bingo, Quebra-Gelo). Cada nova Tool da Fase 2 entra em
+  Moeda, Timer, Quem Vai Primeiro, Sortear Times, Globo de Bingo, Quebra-Gelo,
+  Pavio, Placar, Veto). Cada nova Tool da Fase 2 entra em
   `HOME_TOOLS` quando fica pronta. O campo `available` continua existindo para o
   caso de uma Tool em desenvolvimento (aparece esmaecida + "EM BREVE").
 * **Shake to Roll** (chacoalhar para rolar, na Dice Tool) depende de um driver

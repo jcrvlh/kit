@@ -15,8 +15,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   com ciclo de vida e tabela de APIs, launcher LVGL v9, introdução de primeiro
   uso (repetível pelos Ajustes), recuperação de fábrica e particionamento OTA
   dual-slot.
-- **Tools oficiais (built-in no Core):** Dados, Quem Vai Primeiro, Quebra-Gelo,
-  Garrafa, Decisor (Moeda), Sortear Times, Bingo e Timer.
+- **Tools oficiais (built-in no Core):** Dados, Quem Vai Primeiro,
+  Garrafa, Decisor (Moeda), Sortear Times, Bingo, Timer, Placar e Veto.
+- **Tools do catálogo:** Quebra-Gelo (`io.github.jcrvlh.quebragelo`), Pavio
+  (`io.github.jcrvlh.pavio`), Adedonha (`io.github.jcrvlh.adedonha`), Tarot e Fora
+  — pacotes `.kit` carregados do cartão microSD. Quebra-Gelo, Pavio e Adedonha
+  nasceram built-in e saíram do Core ao estabilizar (o Core guarda seus ícones
+  da Home, SFX e símbolos LVGL que elas usam).
 - **Tools SDK + `kit-cli`:** headers e stubs para compilação local, simulador de
   desktop (SDL/LVGL) e CLI para criar, validar, empacotar e enviar arquivos `.kit`.
 - **Web Installer:** portal WebSerial para instalar Tools sem terminal.

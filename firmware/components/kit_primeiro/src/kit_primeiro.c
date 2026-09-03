@@ -107,7 +107,7 @@ static const char *const TRAITS[] = {
 #define TRAITS_N ((int)(sizeof(TRAITS) / sizeof(TRAITS[0])))
 
 // --- estado --------------------------------------------------------------
-static uint32_t s_accent  = KIT_COLOR_YELLOW;
+static uint32_t s_accent  = KIT_COLOR_RED;
 static bool     s_drawing = false;
 static bool     s_drawn   = false;    // já houve ao menos um sorteio
 static int      s_last    = -1;       // índice sorteado anterior
@@ -329,7 +329,7 @@ kit_err_t kit_primeiro_start(uint32_t accent)
     if (s_screen) kit_primeiro_destroy();
 
     ESP_LOGI(TAG, "Montando Quem Vai Primeiro...");
-    s_accent  = accent ? accent : KIT_COLOR_YELLOW;
+    s_accent  = accent ? accent : KIT_COLOR_RED;
     s_drawing = false;
     s_drawn   = false;
     s_last    = -1;
