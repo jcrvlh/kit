@@ -33,16 +33,16 @@ dela **compila e linka**, mas falha no `dlopen` (símbolo indefinido no log do
 `KIT_TOOL_LOADER`). Para adicionar: uma entrada em `kit_tool_symbols.c` + rebuild
 do firmware + registrar aqui.
 
-**Objetos / árvore:** `lv_obj_create` · `lv_obj_delete` · `lv_obj_get_child` ·
-`lv_screen_load`
+**Objetos / árvore:** `lv_obj_create` · `lv_obj_delete` · `lv_obj_clean`
+(apaga só os filhos) · `lv_obj_get_child` · `lv_screen_load`
 **Flags / estilo base:** `lv_obj_add_flag` · `lv_obj_remove_flag`
-(`lv_obj_clear_flag` é alias v8) · `lv_obj_remove_style_all`
+(`lv_obj_clear_flag` é alias v8) · `lv_obj_remove_style_all` · `lv_obj_invalidate`
 **Posição / tamanho:** `lv_obj_set_pos` · `lv_obj_set_size` · `lv_obj_set_width` ·
 `lv_obj_set_height` · `lv_obj_align` · `lv_obj_center` · `lv_obj_set_ext_click_area`
 **Flex:** `lv_obj_set_flex_flow` · `lv_obj_set_flex_align` · `lv_obj_set_flex_grow`
 **Scroll:** `lv_obj_set_scroll_dir` · `lv_obj_set_scrollbar_mode`
 **Estilos locais:** `lv_obj_set_style_bg_color` · `…_bg_opa` · `…_border_width` ·
-`…_shadow_width` · `…_radius` · `…_opa` · `…_min_width` ·
+`…_border_color` · `…_border_opa` · `…_shadow_width` · `…_radius` · `…_opa` · `…_translate_x` · `…_translate_y` · `…_min_width` ·
 `…_pad_top/bottom/left/right/row/column`
 (`…_pad_all/hor/ver/gap` são `static inline` no 9.5 → expandem para essas) ·
 `…_text_color` · `…_text_font` · `…_text_align` · `…_text_letter_space` ·
@@ -51,6 +51,8 @@ do firmware + registrar aqui.
 `lv_pct` (no LVGL 9 é função, não macro)
 **Label:** `lv_label_create` · `lv_label_set_text` · `lv_label_set_text_fmt` ·
 `lv_label_set_long_mode`
+**Imagens / Bitmaps:** `lv_image_create` · `lv_image_set_src` ·
+`lv_obj_set_style_image_recolor` · `lv_obj_set_style_image_recolor_opa`
 **Tileview** (páginas que deslizam na horizontal — o padrão das Tools nativas
 Dados/Bingo): `lv_tileview_create` · `lv_tileview_add_tile` ·
 `lv_tileview_set_tile_by_index` · `lv_tileview_get_tile_active`. O evento de

@@ -30,6 +30,7 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
     /* --- Ciclo de vida de objeto / árvore ------------------------------- */
     ESP_ELFSYM_EXPORT(lv_obj_create),
     ESP_ELFSYM_EXPORT(lv_obj_delete),
+    ESP_ELFSYM_EXPORT(lv_obj_clean),          /* apaga só os filhos (Adedonha: relista a cartela) */
     ESP_ELFSYM_EXPORT(lv_obj_get_child),
     ESP_ELFSYM_EXPORT(lv_screen_load),
 
@@ -37,6 +38,7 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
     ESP_ELFSYM_EXPORT(lv_obj_add_flag),
     ESP_ELFSYM_EXPORT(lv_obj_remove_flag),   /* lv_obj_clear_flag() é alias v8 */
     ESP_ELFSYM_EXPORT(lv_obj_remove_style_all),
+    ESP_ELFSYM_EXPORT(lv_obj_invalidate),
 
     /* --- Posição / tamanho / alinhamento ------------------------------- */
     ESP_ELFSYM_EXPORT(lv_obj_set_pos),
@@ -60,6 +62,8 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
     ESP_ELFSYM_EXPORT(lv_obj_set_style_bg_color),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_bg_opa),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_border_width),
+    ESP_ELFSYM_EXPORT(lv_obj_set_style_border_color),  /* botão contornado, anel pulsante */
+    ESP_ELFSYM_EXPORT(lv_obj_set_style_border_opa),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_shadow_width),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_radius),
     /* lv_obj_set_style_pad_all/hor/ver/gap são `static inline` no LVGL 9.5:
@@ -76,6 +80,8 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
     ESP_ELFSYM_EXPORT(lv_obj_set_style_text_letter_space),
 
     ESP_ELFSYM_EXPORT(lv_obj_set_style_opa),
+    ESP_ELFSYM_EXPORT(lv_obj_set_style_translate_x),
+    ESP_ELFSYM_EXPORT(lv_obj_set_style_translate_y),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_text_line_space),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_min_width),
     ESP_ELFSYM_EXPORT(lv_obj_update_layout),
@@ -86,6 +92,12 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
     ESP_ELFSYM_EXPORT(lv_label_set_text),
     ESP_ELFSYM_EXPORT(lv_label_set_text_fmt),
     ESP_ELFSYM_EXPORT(lv_label_set_long_mode),
+
+    /* --- Imagens / Bitmaps ------------------------------------------- */
+    ESP_ELFSYM_EXPORT(lv_image_create),
+    ESP_ELFSYM_EXPORT(lv_image_set_src),
+    ESP_ELFSYM_EXPORT(lv_obj_set_style_image_recolor),
+    ESP_ELFSYM_EXPORT(lv_obj_set_style_image_recolor_opa),
 
     /* --- Tileview (páginas que deslizam na horizontal, padrão da Dice) - */
     ESP_ELFSYM_EXPORT(lv_tileview_create),
