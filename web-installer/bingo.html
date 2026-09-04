@@ -51,6 +51,9 @@ body {
   color: var(--paper);
   line-height: 1.5;
   min-height: 100dvh;
+  /* marcar número é toque rápido repetido — sem isto o navegador entende
+     como duplo-toque e dá zoom. Mantém rolagem e pinça. */
+  touch-action: manipulation;
   padding: max(18px, env(safe-area-inset-top)) 16px
            calc(24px + env(safe-area-inset-bottom));
   display: flex;
@@ -325,7 +328,13 @@ footer {
   html, body { background: #fff; }
   body { padding: 0; display: block; }
   .wrap, .dlg { display: none !important; }
-  .sheet { display: block; }
+  /* print-color-adjust herda: sem isto o navegador descarta os preenchimentos
+     e sobra só o triângulo (feito de bordas) e o centro livre some. */
+  .sheet {
+    display: block;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 
   .ppage { break-after: page; }
   .ppage:last-child { break-after: auto; }
