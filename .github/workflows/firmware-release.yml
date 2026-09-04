@@ -1,0 +1,60 @@
+name: Firmware Release
+
+# Publica uma GitHub Release com o binário do KIT Core para atualização OTA.
+# Dispara ao empurrar uma tag `fw-v*` (ex.: `fw-v0.2.0`). O `firmware.json` que
+# o dispositivo consulta é gerado pelo workflow `pages.yml` e aponta para o
+# `kit_core.bin` anexado aqui.
+
+on:
+  push:
+    tags:
+      - 'fw-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Conferir a tag contra firmware/version.txt
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#fw-v}"
+          file="$(tr -d '[:space:]' < firmware/version.txt)"
+          echo "tag=$tag  version.txt=$file"
+          if [ "$tag" != "$file" ]; then
+            echo "::error::A tag ($tag) não bate com firmware/version.txt ($file)."
+            exit 1
+          fi
+
+      - name: Compilar KIT Core (ESP-IDF v5.3, esp32s3)
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.3
+          target: esp32s3
+          path: firmware
+
+      - name: Empacotar o binário OTA
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp firmware/build/kit_core.bin dist/kit_core.bin
+          ( cd dist && sha256sum kit_core.bin | tee kit_core.bin.sha256 )
+          ls -l dist/
+
+      - name: Criar a Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/kit_core.bin
+            dist/kit_core.bin.sha256
+          body: |
+            Firmware KIT Core `${{ github.ref_name }}`.
+
+            Instale pelo dispositivo em **Ajustes → Atualizar firmware** (o
+            `firmware.json` publicado no GitHub Pages aponta para esta Release),
+            ou grave `kit_core.bin` no slot `factory` (`0x20000`) via
+            `idf.py flash` / Web Installer.
