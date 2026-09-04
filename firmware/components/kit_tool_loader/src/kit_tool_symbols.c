@@ -133,6 +133,13 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
         elf_loader; `rand` de propósito NÃO — use ctx->api->random.) */
     ESP_ELFSYM_EXPORT(snprintf),
     ESP_ELFSYM_EXPORT(memmove),   /* GCC emite p/ shift de array com sobreposição */
+    /* O GCC sintetiza strcpy/strncpy/strlcpy a partir de snprintf(d,n,"%s",lit),
+       inicialização de array e afins — o elf_loader traz só strlen/strcmp/strchr.
+       Sem estes, uma Tool que os aciona falha no dlopen ("Can't find symbol"). */
+    ESP_ELFSYM_EXPORT(strcpy),
+    ESP_ELFSYM_EXPORT(strncpy),
+    ESP_ELFSYM_EXPORT(strlcpy),
+    ESP_ELFSYM_EXPORT(strcat),
 
     /* --- Fontes do KIT (dados) ---------------------------------- */
     ESP_ELFSYM_EXPORT(kit_mono_16),
