@@ -169,7 +169,7 @@ Todos montados por _helpers_ em `kit_launcher.c`. Raio de canto sempre generoso
 
 ### Chip de canto — `make_chip()`
 Quadrado `64 × 64`, `KIT_COLOR_SURFACE`, raio 18. Contém um glifo centralizado
-(voltar) ou um anel (Ajustes na Home). `ext_click_area` +12.
+(voltar). `ext_click_area` +12.
 
 ### Titlebar — `make_titlebar()`
 Faixa fixa de `KIT_TITLEBAR` (88 px) no topo das sub-telas: chip de voltar à
@@ -251,7 +251,8 @@ Tratados em [`kit_runtime`](../architecture/runtime.md) (`poll_system_buttons`,
 |---|---|---|---|
 | **Splash** | "INICIANDO" ao ligar | Fixo | Some sozinha (~1,4 s) → Introdução (1º boot) ou Home |
 | **Introdução** | 4 telas no 1º boot: marca → o que é → o que tem dentro → pronto | Overlay preto: coluna central + botão-pílula fixo no rodapé | Abre com o SFX `WELCOME` · `COMEÇAR`/`VEM VER`/`CONTINUAR` avança · `COMEÇAR` verde no fim toca `ONBOARD_DONE`, grava a flag `onboarded` e vai pra Home · BOOT sai e grava a flag |
-| **Home** | Launcher / slideshow de Tools | Barra de status + `lv_tileview` horizontal (4 recentes + "VER TODOS") + pontos | Arrasta na horizontal · slide/card → Tool · chip-anel (topo dir.) → Ajustes |
+| **Duas dicas** (coach-mark) | Ensina os 2 gestos sem botão da Home | Overlay preto sobre a Home: título + 2 linhas (rastro de setas + frase) + `ENTENDI` no rodapé | Só aparece 1× logo após o `COMEÇAR` da Introdução · `ENTENDI` ou BOOT fecha |
+| **Home** | Launcher / slideshow de Tools | Barra de status + `lv_tileview` horizontal ("VER TODOS" + 3 recentes) + pontos | Abre na Tool mais recente · arrasta na horizontal (→ direita cai na visão geral) · slide/card → Tool · deslizar pra cima → Ajustes (ou o card na grade "VER TODOS") |
 | **Ajustes** | Lista de configurações | Titlebar + corpo rolável | Linhas → Brilho / Repouso da tela / Desligar sozinho / Test Tool / Testar som / Repetir introdução / Sobre |
 | **Brilho** | Controle de brilho do AMOLED | Fixo | Titlebar ← ou `VOLTAR` |
 | **Repouso da tela** | Tempo sem toque até apagar a tela | Titlebar + lista de opção | Toque numa opção grava e volta |
@@ -275,17 +276,22 @@ filhos do `s_launcher_screen` sob demanda e destruídos no retorno.
 **Splash** — fundo preto, a logo (trio + wordmark `KIT`) e `INICIANDO` em mono
 caixa alta. Sem botão.
 
-**Home** — barra de status fixa (`KIT` + indicador de bateria + chip-anel) sobre
+**Home** — barra de status fixa (`KIT` + indicador de bateria) sobre
 um **slideshow** de Tools: um `lv_tileview` horizontal (`build_home` →
-`home_build_deck`) com um slide por Tool + um último slide **"VER TODOS"**.
-Arrasta-se na horizontal; pontos de página no rodapé (traço claro = ativo).
+`home_build_deck`) com o slide **"VER TODOS"** primeiro (índice 0) seguido de um
+slide por Tool recente. A Home **abre na Tool mais recente** (índice 1): deslizar
+da esquerda para a direita cai direto na visão geral sem passar pelas outras
+recentes; deslizar para a esquerda percorre as demais. Pontos de página no
+rodapé (traço claro = ativo). **Deslizar pra cima** em qualquer ponto da Home
+abre os **Ajustes** (`home_gesture_cb` no `s_launcher_screen`, `LV_EVENT_GESTURE`
++ `LV_DIR_TOP`); o card "Ajustes" na grade "VER TODOS" continua valendo.
 
-* **Slides de Tool** (até 4) — os **4 mais usados recentemente**, o mais recente
-  primeiro. A ordem é persistida em NVS (`kit_config`, chaves `home_mru0`…`mru3`)
+* **Slides de Tool** (até 3) — as **3 mais usadas recentemente**, a mais recente
+  primeiro. A ordem é persistida em NVS (`kit_config`, chaves `home_mru0`…`mru2`)
   e sobe pro topo toda vez que a Tool é aberta (`home_mru_touch`); o deck
   reconstrói ao voltar pra Home. Cada slide é uma carta cheia na cor da Tool
   (`KIT_CONTENT` de largura), raio 30: badge `52 × 52` com o ícone geométrico no
-  topo esquerdo, número da posição no slideshow (`01`…`04`) em `kit_display_72` a
+  topo esquerdo, número da posição na recência (`01`…`03`) em `kit_display_72` a
   30 % no topo direito, rótulo em `kit_sans_22` e a dica `TOQUE PARA ABRIR`
   (`kit_mono_16`) no rodapé. Tocar abre a Tool; indisponível = carta a `LV_OPA_40`
   + dica "EM BREVE".
@@ -296,6 +302,15 @@ Arrasta-se na horizontal; pontos de página no rodapé (traço claro = ativo).
   "EM BREVE".
 
 O Test Tool continua em Ajustes.
+
+**Duas dicas** (`home_hints_show`) — coach-mark que entra **uma vez**, logo depois
+do `COMEÇAR` verde da Introdução (chamado no fim de `onboarding_finish_cb`, já com
+a Home montada atrás). Overlay preto: título `DUAS DICAS` (`kit_mono_20` apagado)
+e duas linhas `hint_row` — uma calha de 64 px com um **rastro de 3 setas** (glifo
+caret repetido em `kit_mono_26` amarelo, opacidade 30→60→100 na direção do gesto:
+`»` pra direita, `⌃` empilhado pra cima) e a frase em `kit_sans_22`. Botão
+`ENTENDI` (amarelo) no rodapé; BOOT também fecha. Não há flag própria — só se
+alcança por `onboarding_finish_cb`, então repetir a Introdução mostra de novo.
 
 **Toast** (`show_toast(msg)`) — `lv_label` com fundo `KIT_COLOR_TEXT`, texto
 preto em `kit_mono_20`, raio 16, no rodapé; some sozinho (~1,4 s).
