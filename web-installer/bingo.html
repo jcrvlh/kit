@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Cartela de Bingo</title>
+<link rel="icon" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600&family=Archivo+Black&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* --------------------------------------------------------------------------
+   Cartela de Bingo — gerador do KIT.
+   Linguagem "Brutalist Bauhaus" (docs/design/design-language.md): preto AMOLED
+   absoluto como material, tipografia mono em caixa alta carrega a hierarquia,
+   uma superfície colorida por vez. Verde = a Tool Globo de Bingo.
+   Tudo roda no navegador; nada é enviado a lugar nenhum.
+   -------------------------------------------------------------------------- */
+
+:root {
+  --bg:          #000000;
+  --surface:     #171719;
+  --surface-alt: #222226;
+  --line:        #2C2C2E;
+  --paper:       #EFEADD;
+  --muted:       #6E6C66;
+
+  --red:    #C6472F;
+  --blue:   #2C3CC4;
+  --yellow: #E9B23C;
+  --green:  #45A05B;
+
+  --on-yellow: #000000;
+  --on-green:  #EFEADD;
+
+  --mono: "Space Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --disp: "Archivo Black", "Arial Black", system-ui, sans-serif;
+  --body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; }
+
+html, body { background: var(--bg); }
+
+body {
+  font-family: var(--body);
+  color: var(--paper);
+  line-height: 1.5;
+  min-height: 100dvh;
+  padding: max(18px, env(safe-area-inset-top)) 16px
+           calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.wrap { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 20px; }
+
+/* ---- Masthead ---------------------------------------------------------- */
+
+.mast {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.primitives { display: flex; align-items: center; gap: 7px; }
+.primitives i { display: block; width: 13px; height: 13px; }
+.primitives .sq { background: var(--red); }
+.primitives .ci { background: var(--blue); border-radius: 50%; }
+.primitives .tr {
+  width: 0; height: 0; background: none;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 13px solid var(--yellow);
+}
+
+.wordmark {
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 0.42em;
+  font-size: 20px;
+  text-indent: 0.42em;
+  text-align: center;
+}
+
+.code {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---- Segmented control ----------------------------------------------- */
+
+.seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.seg button {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  padding: 13px 0;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.seg button[aria-pressed="true"] {
+  background: var(--green);
+  color: var(--on-green);
+}
+
+/* ---- Card ------------------------------------------------------------- */
+
+.card { display: flex; flex-direction: column; gap: 4px; }
+
+.grid { display: grid; gap: 4px; }
+.card.m75 .grid { grid-template-columns: repeat(5, 1fr); }
+.card.m90 .grid { grid-template-columns: repeat(9, 1fr); gap: 3px; }
+
+.cell {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--disp);
+  background: var(--surface);
+  color: var(--paper);
+  border: 0;
+  border-radius: 10px;
+  padding: 0;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .1s;
+}
+.card.m75 .cell { font-size: clamp(24px, 9vw, 36px); border-radius: 12px; }
+.card.m90 .cell { font-size: clamp(15px, 5.4vw, 22px); border-radius: 7px; }
+
+.cell.head {
+  aspect-ratio: auto;
+  padding: 6px 0 10px;
+  background: none;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  color: var(--green);
+  cursor: default;
+}
+
+.cell.blank { background: none; cursor: default; }
+
+.cell.free {
+  color: var(--green);
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  cursor: default;
+}
+.cell.free::before {
+  content: "";
+  position: absolute;
+  inset: 20%;
+  border: 3px solid var(--green);
+  border-radius: 50%;
+}
+
+.cell.marked { background: var(--green); color: var(--on-green); }
+/* A marca é o "carimbo" — o círculo Bauhaus estampado por cima do número. */
+.cell.marked::after {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border: 3px solid rgba(0, 0, 0, 0.38);
+  border-radius: 50%;
+}
+
+.cell:focus-visible {
+  outline: 3px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cell:not(.head):not(.blank):not(.free):active { transform: scale(0.94); }
+}
+
+.howto {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* ---- Actions --------------------------------------------------------- */
+
+.actions { display: flex; flex-direction: column; gap: 10px; }
+
+.btn {
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  font-size: 14px;
+  padding: 16px 0;
+  border-radius: 16px;
+  border: 0;
+  cursor: pointer;
+  width: 100%;
+}
+.btn-primary { background: var(--yellow); color: var(--on-yellow); }
+.btn-ghost {
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 13px 0;
+  font-size: 12px;
+}
+.btn:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
+
+footer {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ---- Impressão ------------------------------------------------------- */
+
+@media print {
+  :root { --bg: #fff; --surface: #fff; --paper: #000; --muted: #444; }
+  body { padding: 0; }
+  .seg, .actions, .howto, footer { display: none; }
+  .mast { border-color: #000; }
+  .cell { border: 1.5px solid #000; }
+  .cell.blank { border-color: #bbb; }
+  .cell.marked { background: none; }
+  .cell.marked::after { border-color: #000; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div class="primitives" aria-hidden="true"><i class="sq"></i><i class="ci"></i><i class="tr"></i></div>
+    <div class="wordmark">BINGO</div>
+    <div class="code" id="code">#----</div>
+  </header>
+
+  <div class="seg" role="group" aria-label="Faixa da cartela">
+    <button type="button" data-mode="75" aria-pressed="true">75 BOLAS</button>
+    <button type="button" data-mode="90" aria-pressed="false">90 BOLAS</button>
+  </div>
+
+  <main>
+    <div class="card m75" id="card"></div>
+  </main>
+
+  <p class="howto" id="howto"></p>
+
+  <div class="actions">
+    <button type="button" class="btn btn-primary" id="new">NOVA CARTELA</button>
+    <button type="button" class="btn btn-ghost" id="clear">LIMPAR MARCAS</button>
+  </div>
+
+  <footer>KIT &middot; gerador de cartelas &middot; nada sai do seu celular</footer>
+</div>
+
+<script>
+"use strict";
+
+/* --- PRNG determinístico: a cartela é reconstruível a partir do código ---- */
+function xmur3(str) {
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return function () {
+    h = Math.imul(h ^ (h >>> 16), 2246822507);
+    h = Math.imul(h ^ (h >>> 13), 3266489909);
+    return (h ^= h >>> 16) >>> 0;
+  };
+}
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function rngFromCode(code) { return mulberry32(xmur3(code)()); }
+
+/* Alfabeto sem caracteres ambíguos (0/O, 1/I). */
+const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function newCode() {
+  const a = new Uint32Array(4);
+  crypto.getRandomValues(a);
+  let s = "";
+  for (let i = 0; i < 4; i++) s += ALPHA[a[i] % ALPHA.length];
+  return s;
+}
+
+function shuffle(arr, rand) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function pick(lo, hi, n, rand) {
+  const pool = [];
+  for (let v = lo; v <= hi; v++) pool.push(v);
+  return shuffle(pool, rand).slice(0, n).sort((x, y) => x - y);
+}
+
+/* --- 75 bolas: 5 colunas B/I/N/G/O, 5 por coluna, centro LIVRE ----------- */
+function make75(rand) {
+  const ranges = [[1, 15], [16, 30], [31, 45], [46, 60], [61, 75]];
+  const cols = ranges.map(([lo, hi]) => pick(lo, hi, 5, rand));
+  const cells = [];
+  for (let r = 0; r < 5; r++)
+    for (let c = 0; c < 5; c++)
+      cells.push(r === 2 && c === 2 ? null : cols[c][r]);
+  return cells; // 25 posições, null = LIVRE
+}
+
+/* --- 90 bolas: cartela 3x9, 15 números, 5 por linha, 1–3 por coluna ------ */
+function make90(rand) {
+  const ranges = [[1, 9], [10, 19], [20, 29], [30, 39], [40, 49],
+                  [50, 59], [60, 69], [70, 79], [80, 90]];
+  for (let attempt = 0; attempt < 4000; attempt++) {
+    // quantos números por coluna (1..3, somando 15)
+    const counts = Array(9).fill(1);
+    let extra = 6;
+    while (extra > 0) {
+      const c = Math.floor(rand() * 9);
+      if (counts[c] < 3) { counts[c]++; extra--; }
+    }
+    // atribui as linhas de cada coluna; aceita só se cada linha ficar com 5
+    const grid = [Array(9).fill(false), Array(9).fill(false), Array(9).fill(false)];
+    for (let c = 0; c < 9; c++) {
+      const rows = shuffle([0, 1, 2], rand);
+      for (let k = 0; k < counts[c]; k++) grid[rows[k]][c] = true;
+    }
+    if (!grid.every((row) => row.filter(Boolean).length === 5)) continue;
+
+    const cells = [];
+    const nums = ranges.map(([lo, hi], c) => pick(lo, hi, counts[c], rand));
+    const idx = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    for (let r = 0; r < 3; r++)
+      for (let c = 0; c < 9; c++)
+        cells.push(grid[r][c] ? nums[c][idx[c]++] : null);
+    return cells; // 27 posições, null = branco
+  }
+  return make90(rand); // praticamente inalcançável
+}
+
+/* --- Estado ------------------------------------------------------------- */
+const KEY = "kit.bingo.v1";
+let state = load() || { mode: "75", code: newCode(), marks: [] };
+
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && (s.mode === "75" || s.mode === "90") && typeof s.code === "string")
+      return { mode: s.mode, code: s.code, marks: Array.isArray(s.marks) ? s.marks : [] };
+  } catch (e) { /* storage indisponível — segue com cartela nova */ }
+  return null;
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ok */ }
+}
+
+function freeIndex() { return state.mode === "75" ? 12 : -1; }
+
+/* --- Render ----------------------------------------------------------- */
+const card = document.getElementById("card");
+const howto = document.getElementById("howto");
+
+function render() {
+  const rand = rngFromCode(state.mode === "75" ? state.code : state.code + "-90");
+  const cells = state.mode === "75" ? make75(rand) : make90(rand);
+  const marks = new Set(state.marks);
+  if (freeIndex() >= 0) marks.add(freeIndex());
+
+  card.className = "card m" + state.mode;
+  card.replaceChildren();
+
+  const grid = document.createElement("div");
+  grid.className = "grid";
+
+  if (state.mode === "75") {
+    for (const L of ["B", "I", "N", "G", "O"]) {
+      const h = document.createElement("div");
+      h.className = "cell head";
+      h.textContent = L;
+      grid.appendChild(h);
+    }
+  }
+
+  cells.forEach((val, i) => {
+    if (val === null && i === freeIndex()) {
+      const el = document.createElement("div");
+      el.className = "cell free marked";
+      el.textContent = "LIVRE";
+      grid.appendChild(el);
+      return;
+    }
+    if (val === null) {
+      const el = document.createElement("div");
+      el.className = "cell blank";
+      grid.appendChild(el);
+      return;
+    }
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "cell" + (marks.has(i) ? " marked" : "");
+    el.textContent = val;
+    el.setAttribute("aria-pressed", marks.has(i) ? "true" : "false");
+    el.setAttribute("aria-label", val + (marks.has(i) ? " — marcado" : ""));
+    el.addEventListener("click", () => toggle(i));
+    grid.appendChild(el);
+  });
+
+  card.appendChild(grid);
+
+  document.getElementById("code").textContent = "#" + state.code;
+  document.querySelectorAll(".seg button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode)));
+  howto.textContent = state.mode === "75"
+    ? "Toque nos números conforme forem cantados. O centro já vem livre."
+    : "Toque nos números conforme forem cantados. Cada celular é uma cartela.";
+}
+
+function toggle(i) {
+  const s = new Set(state.marks);
+  s.has(i) ? s.delete(i) : s.add(i);
+  state.marks = [...s];
+  save();
+  render();
+}
+
+/* --- Ações ----------------------------------------------------------- */
+document.querySelectorAll(".seg button").forEach((b) => {
+  b.addEventListener("click", () => {
+    if (state.mode === b.dataset.mode) return;
+    state.mode = b.dataset.mode;
+    state.marks = [];
+    save();
+    render();
+  });
+});
+
+document.getElementById("new").addEventListener("click", () => {
+  state.code = newCode();
+  state.marks = [];
+  save();
+  render();
+});
+
+document.getElementById("clear").addEventListener("click", () => {
+  state.marks = [];
+  save();
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
