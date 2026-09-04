@@ -224,10 +224,6 @@ esp-web-install-button {
 .troubleshoot ul { margin: 1rem 0 0.25rem 1.2rem; display: grid; gap: 0.5rem; }
 .troubleshoot li { font-size: 0.9rem; color: #b7b2a6; }
 
-/* ---------- Already ---------- */
-.already { padding-top: 2rem; padding-bottom: 2rem; }
-.already p { max-width: 40rem; color: var(--muted); font-size: 0.92rem; }
-
 /* ---------- Open source ---------- */
 .open-source p { max-width: 40rem; color: #b7b2a6; margin-bottom: 0.9rem; }
 .open-source p:last-child { margin-bottom: 0; }
