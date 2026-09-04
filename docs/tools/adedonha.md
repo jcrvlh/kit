@@ -20,9 +20,10 @@ papel.
 > `lv_obj_clean` / `lv_obj_set_style_border_color` / `_border_opa` / `lv_qrcode_*`
 > na tabela do `kit_tool_loader`.
 >
-> A partir da **v1.1.0** exige **runtime ≥ 0.3.0** — a versão que exporta
-> `lv_qrcode_*` (usado no QR da página CARTELA, ver
-> [tool_lvgl_runtime.md](../../tools-sdk/docs/tool_lvgl_runtime.md)).
+> A partir da **v1.1.1** exige **runtime ≥ 0.3.1** — a versão que exporta
+> `lv_qrcode_*` (QR da página CARTELA) **e** `strcpy` (que o GCC sintetiza no
+> `.so`; sem ele o `dlopen` falhava com `Can't find symbol strcpy`). Ver
+> [tool_lvgl_runtime.md](../../tools-sdk/docs/tool_lvgl_runtime.md).
 
 Card **azul**, mini-jogo. Baralho de 43 categorias, licença CC0.
 
