@@ -42,6 +42,7 @@
 }
 
 * { box-sizing: border-box; margin: 0; }
+[hidden] { display: none !important; }
 
 html, body { background: var(--bg); }
 
@@ -63,7 +64,7 @@ body {
 
 .mast {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 12px;
   padding-bottom: 14px;
@@ -88,15 +89,6 @@ body {
   font-size: 20px;
   text-indent: 0.42em;
   text-align: center;
-}
-
-.code {
-  font-family: var(--mono);
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 0.12em;
-  color: var(--green);
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -130,13 +122,15 @@ body {
 
 .card { display: flex; flex-direction: column; gap: 4px; }
 
-.grid { display: grid; gap: 4px; }
-.card.m75 .grid { grid-template-columns: repeat(5, 1fr); }
-.card.m90 .grid { grid-template-columns: repeat(9, 1fr); gap: 3px; }
+.grid { display: grid; gap: 4px; width: 100%; }
+.card.m75 .grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.card.m90 .grid { grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px; }
 
 .cell {
   position: relative;
   aspect-ratio: 1;
+  min-width: 0;
+  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -168,20 +162,13 @@ body {
 
 .cell.blank { background: none; cursor: default; }
 
-.cell.free {
-  color: var(--green);
-  font-family: var(--mono);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  cursor: default;
-}
+/* Centro livre — o quadrado vermelho do KIT no lugar do texto. */
+.cell.free { cursor: default; }
 .cell.free::before {
   content: "";
   position: absolute;
-  inset: 20%;
-  border: 3px solid var(--green);
-  border-radius: 50%;
+  inset: 30%;
+  background: var(--red);
 }
 
 .cell.marked { background: var(--green); color: var(--on-green); }
@@ -238,8 +225,10 @@ body {
 footer {
   margin-top: 4px;
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
   text-transform: uppercase;
   color: var(--muted);
   text-align: center;
@@ -264,10 +253,10 @@ footer {
   <header class="mast">
     <div class="primitives" aria-hidden="true"><i class="sq"></i><i class="ci"></i><i class="tr"></i></div>
     <div class="wordmark">BINGO</div>
-    <div class="code" id="code">#----</div>
+    <span></span>
   </header>
 
-  <div class="seg" role="group" aria-label="Faixa da cartela">
+  <div class="seg" id="seg" role="group" aria-label="Faixa da cartela">
     <button type="button" data-mode="75" aria-pressed="true">75 BOLAS</button>
     <button type="button" data-mode="90" aria-pressed="false">90 BOLAS</button>
   </div>
@@ -283,7 +272,7 @@ footer {
     <button type="button" class="btn btn-ghost" id="clear">LIMPAR MARCAS</button>
   </div>
 
-  <footer>KIT &middot; gerador de cartelas &middot; nada sai do seu celular</footer>
+  <footer>KIT</footer>
 </div>
 
 <script>
@@ -379,7 +368,18 @@ function make90(rand) {
 
 /* --- Estado ------------------------------------------------------------- */
 const KEY = "kit.bingo.v1";
+
+/* A faixa pode vir travada pela URL: ?bolas=75 ou ?bolas=90. É assim que o
+   QR do KIT manda a cartela certa — nesse caso o seletor some. */
+const forced = new URLSearchParams(location.search).get("bolas");
+const lockedMode = (forced === "75" || forced === "90") ? forced : null;
+
 let state = load() || { mode: "75", code: newCode(), marks: [] };
+if (lockedMode && state.mode !== lockedMode) {
+  state.mode = lockedMode;
+  state.marks = [];
+}
+if (lockedMode) document.getElementById("seg").hidden = true;
 
 function load() {
   try {
@@ -423,8 +423,8 @@ function render() {
   cells.forEach((val, i) => {
     if (val === null && i === freeIndex()) {
       const el = document.createElement("div");
-      el.className = "cell free marked";
-      el.textContent = "LIVRE";
+      el.className = "cell free";
+      el.setAttribute("aria-label", "espaço livre");
       grid.appendChild(el);
       return;
     }
@@ -446,7 +446,6 @@ function render() {
 
   card.appendChild(grid);
 
-  document.getElementById("code").textContent = "#" + state.code;
   document.querySelectorAll(".seg button").forEach((b) =>
     b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode)));
   howto.textContent = state.mode === "75"
