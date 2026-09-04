@@ -127,6 +127,18 @@ CONFIG_LV_BUILD_DEMOS=n
 CONFIG_LV_DRAW_SW_RGB565_SWAP=y
 CONFIG_LV_COLOR_16_SWAP=y
 
+# Memória do LVGL: o pool builtin de 64 KB estourava em telas pesadas — fontes
+# de 44/72 px + máscaras de canto arredondado + scrollbar (ex.: Sobre) e no
+# slider de brilho (máscara de círculo redesenhada a cada arrasto). lv_malloc
+# devolvia NULL → LV_ASSERT_MALLOC → LV_ASSERT_HANDLER (while(1)) → trava dura no
+# task watchdog. Passando pro malloc da libc, o LVGL aloca do heap do ESP-IDF
+# (interno + PSRAM), que tem MB de folga. E o handler aborta (reboot
+# recuperável) em vez de travar caso ainda falte memória.
+CONFIG_LV_USE_BUILTIN_MALLOC=n
+CONFIG_LV_USE_CLIB_MALLOC=y
+CONFIG_LV_ASSERT_HANDLER_INCLUDE="esp_system.h"
+CONFIG_LV_ASSERT_HANDLER="esp_system_abort(\"LVGL assert\");"
+
 # QR Code — a Tool Globo de Bingo mostra um QR pro gerador de cartelas
 # (web-installer/bingo.html no GitHub Pages). Usa lv_canvas, já habilitado.
 CONFIG_LV_USE_QRCODE=y
