@@ -57,6 +57,7 @@ static lv_obj_t *s_fwupdate_screen = NULL;      // Ajustes > Atualizar firmware 
 static lv_obj_t *s_fwupdate_busy = NULL;        // overlay de progresso (baixando/gravando)
 static lv_timer_t *s_fwupdate_poll = NULL;
 static lv_obj_t *s_onboarding_screen = NULL;   // introdução do primeiro boot (repetível)
+static lv_obj_t *s_home_hints_screen = NULL;   // coach-mark dos gestos da Home (só no fim da introdução)
 static lv_obj_t *s_home_deck = NULL;       // lv_tileview horizontal — slideshow de Tools
 static lv_obj_t *s_home_dots_box = NULL;   // fileira de pontos de página (rodapé da Home)
 static lv_obj_t *s_feedback_screen = NULL;
@@ -125,10 +126,13 @@ static home_tool_t s_home_tools[KIT_HOME_TOOLS_MAX];
 static int         s_home_tools_n = 0;
 
 // -- Slideshow da Home ----------------------------------------------------
-// A Home é um lv_tileview horizontal: os HOME_MRU_SLOTS primeiros slides são as
-// Tools usadas mais recentemente (a mais recente primeiro) e o último slide é
-// "VER TODOS" — a grade completa. A ordem de recência é persistida em NVS
-// (kit_config, chaves "home_mru0".."home_mru2", valor = índice em s_home_tools + 1).
+// A Home é um lv_tileview horizontal. O primeiro slide (índice 0) é "VER TODOS"
+// — a grade completa — e os HOME_MRU_SLOTS slides seguintes são as Tools usadas
+// mais recentemente (a mais recente primeiro). A Home ABRE na Tool mais recente
+// (índice 1): deslizar da esquerda para a direita cai direto na visão geral sem
+// passar pelas outras recentes; deslizar para a esquerda percorre as demais.
+// A ordem de recência é persistida em NVS (kit_config, chaves "home_mru0".."home_mru2",
+// valor = índice em s_home_tools + 1).
 #define HOME_MRU_SLOTS 3
 #define HOME_STATUS_H  72
 #define HOME_DOTS_H    40
@@ -286,6 +290,7 @@ static void run_test_tool_cb(lv_event_t *e);
 static void home_tile_cb(lv_event_t *e);
 static void onboarding_show(int step);
 static void onboarding_start_if_needed(void);
+static void home_hints_show(void);
 static void repeat_onboarding_cb(lv_event_t *e);
 
 // ---------------------------------------------------------------------------
@@ -996,7 +1001,7 @@ static void make_grid_header(lv_obj_t *grid, const char *txt, bool first)
     lv_obj_set_style_pad_bottom(h, 2, 0);
 }
 
-// -- Último slide: "VER TODOS" — a grade completa, rola na vertical.
+// -- Primeiro slide: "VER TODOS" — a grade completa, rola na vertical.
 //    Ferramentas em cima, mini-jogos embaixo (separação visual). --
 static void make_all_slide(lv_obj_t *tile)
 {
@@ -1084,11 +1089,13 @@ static void home_build_deck_async_cb(void *unused)
 }
 
 // Monta o slideshow (tileview horizontal) + os pontos de página, a partir da
-// ordem de recência atual em s_mru.
+// ordem de recência atual em s_mru. Slide 0 = "VER TODOS"; slides 1..n_tools =
+// Tools recentes. Ao terminar de montar, salta pro slide 1 (a Tool mais
+// recente) — deslizar pra direita volta um passo e cai na visão geral.
 static void home_build_deck(void)
 {
     int n_tools = s_mru_n < HOME_MRU_SLOTS ? s_mru_n : HOME_MRU_SLOTS;
-    s_home_slides = n_tools + 1;   // + "VER TODOS"
+    s_home_slides = n_tools + 1;   // "VER TODOS" + as recentes
 
     s_home_deck = lv_tileview_create(s_launcher_screen);
     lv_obj_set_size(s_home_deck, KIT_DISPLAY_WIDTH, HOME_DECK_H);
@@ -1098,12 +1105,12 @@ static void home_build_deck(void)
     lv_obj_set_scrollbar_mode(s_home_deck, LV_SCROLLBAR_MODE_OFF);
     lv_obj_add_event_cb(s_home_deck, home_deck_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
+    s_home_tiles[0] = lv_tileview_add_tile(s_home_deck, 0, 0, LV_DIR_HOR);
+    make_all_slide(s_home_tiles[0]);
     for (int i = 0; i < n_tools; i++) {
-        s_home_tiles[i] = lv_tileview_add_tile(s_home_deck, i, 0, LV_DIR_HOR);
-        make_tool_slide(s_home_tiles[i], s_mru[i], i);
+        s_home_tiles[i + 1] = lv_tileview_add_tile(s_home_deck, i + 1, 0, LV_DIR_HOR);
+        make_tool_slide(s_home_tiles[i + 1], s_mru[i], i);
     }
-    s_home_tiles[n_tools] = lv_tileview_add_tile(s_home_deck, n_tools, 0, LV_DIR_HOR);
-    make_all_slide(s_home_tiles[n_tools]);
 
     s_home_dots_box = lv_obj_create(s_launcher_screen);
     lv_obj_remove_style_all(s_home_dots_box);
@@ -1123,6 +1130,11 @@ static void home_build_deck(void)
         lv_obj_set_style_bg_color(d, lv_color_hex(KIT_COLOR_LINE), 0);
         s_home_dots[i] = d;
     }
+
+    // Abre na Tool mais recente (slide 1) quando há histórico; sem histórico
+    // fica na visão geral (slide 0).
+    if (s_home_slides > 1)
+        lv_tileview_set_tile_by_index(s_home_deck, 1, 0, LV_ANIM_OFF);
     home_sync_dots();
 }
 
@@ -1149,7 +1161,21 @@ static bool home_is_covered(void)
            s_wifi_screen || s_wifi_portal_screen || s_catalog_screen ||
            s_catalog_detail_screen || s_catalog_busy_screen ||
            s_catalog_confirm_screen || s_fwupdate_screen || s_fwupdate_busy ||
-           s_onboarding_screen || s_feedback_screen;
+           s_onboarding_screen || s_home_hints_screen || s_feedback_screen;
+}
+
+// Gesto na Home: deslizar pra CIMA abre os Ajustes (atalho — a outra porta é o
+// card "Ajustes" na grade "VER TODOS"). O evento borbulha de qualquer filho até
+// o s_launcher_screen (GESTURE_BUBBLE), então filtramos: só age com a Home à
+// mostra (sem overlay) e quando o gesto é mesmo vertical pra cima.
+static void home_gesture_cb(lv_event_t *e)
+{
+    (void)e;
+    if (!s_home_deck || home_is_covered()) return;
+    lv_indev_t *indev = lv_indev_active();
+    if (!indev) return;
+    if (lv_indev_get_gesture_dir(indev) == LV_DIR_TOP)
+        open_settings_cb(NULL);
 }
 
 // Recallback do Tool Manager: o catálogo do cartão mudou (instalou/removeu Tool,
@@ -1207,6 +1233,7 @@ static void onboarding_finish_cb(lv_event_t *e)
     kit_config_set_u8("onboarded", 1);
     if (s_onboarding_screen) { lv_obj_delete(s_onboarding_screen); s_onboarding_screen = NULL; }
     kit_launcher_go_home();
+    home_hints_show();   // coach-mark dos gestos, por cima da Home — só aqui
 }
 
 // Frase grande, branca e centralizada. Archivo Bold é a única fonte proporcional
@@ -1340,6 +1367,68 @@ static void repeat_onboarding_cb(lv_event_t *e)
 
     lv_timer_t *t = lv_timer_create(onboarding_replay_shutdown_cb, 900, NULL);
     lv_timer_set_repeat_count(t, 1);
+}
+
+// ---------------------------------------------------------------------------
+// Coach-mark dos gestos da Home
+// ---------------------------------------------------------------------------
+// Aparece UMA vez, logo depois do "COMEÇAR" verde da introdução, por cima da
+// Home. Ensina os dois gestos que não têm botão: deslizar pro lado abre a visão
+// geral ("VER TODOS"), deslizar pra cima abre os Ajustes. Só entra por
+// onboarding_finish_cb — nunca reaparece fora do primeiro boot.
+
+// Uma dica: rastro de setas (caret repetido, esmaecendo na cauda) + a frase.
+// `vertical` empilha o rastro apontando pra cima; senão fica em linha pra direita.
+static void hint_row(lv_obj_t *parent, const char *glyph, bool vertical, const char *text)
+{
+    lv_obj_t *row = lv_obj_create(parent);
+    lv_obj_remove_style_all(row);
+    lv_obj_set_size(row, KIT_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, 18, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *trail = make_group(row, vertical ? LV_FLEX_FLOW_COLUMN : LV_FLEX_FLOW_ROW);
+    lv_obj_set_width(trail, 64);   // calha fixa: alinha as duas frases
+    lv_obj_set_style_pad_column(trail, 4, 0);
+    lv_obj_set_style_pad_row(trail, 0, 0);
+
+    static const lv_opa_t kFade[3] = { LV_OPA_30, LV_OPA_60, LV_OPA_COVER };
+    for (int i = 0; i < 3; i++) {
+        lv_obj_t *g = add_label(trail, glyph, KIT_COLOR_YELLOW, &kit_mono_26, 0);
+        lv_obj_set_style_text_opa(g, vertical ? kFade[2 - i] : kFade[i], 0);
+    }
+
+    lv_obj_t *t = add_label(row, text, KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(t, LV_LABEL_LONG_WRAP);
+    lv_obj_set_flex_grow(t, 1);
+}
+
+static void home_hints_close_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_home_hints_screen) { lv_obj_delete(s_home_hints_screen); s_home_hints_screen = NULL; }
+}
+
+static void home_hints_show(void)
+{
+    if (s_home_hints_screen) return;
+    s_home_hints_screen = make_overlay(KIT_COLOR_BG);
+
+    lv_obj_t *col = make_group(s_home_hints_screen, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_width(col, KIT_CONTENT);
+    lv_obj_set_flex_align(col, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_style_pad_row(col, 26, 0);
+    lv_obj_align(col, LV_ALIGN_TOP_MID, 0, 64);
+
+    add_label(col, "DUAS DICAS", KIT_COLOR_TEXT_MUTED, &kit_mono_20, 3);
+    hint_row(col, KIT_ICON_CHEVRON,  false, "Deslize para o lado para ver todas as ferramentas");
+    hint_row(col, KIT_ICON_TRIANGLE, true,  "Deslize para cima para abrir os ajustes");
+
+    lv_obj_t *btn = make_button(s_home_hints_screen, "ENTENDI", home_hints_close_cb, true);
+    lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -20);
 }
 
 // ---------------------------------------------------------------------------
@@ -3281,13 +3370,15 @@ void kit_launcher_go_home(void)
                                s_volume_val_lbl = NULL; s_sound_val_lbl = NULL; }
     if (s_display_screen)    { lv_obj_delete(s_display_screen);    s_display_screen = NULL; }
     if (s_settings_screen)   { lv_obj_delete(s_settings_screen);   s_settings_screen = NULL; }
+    if (s_home_hints_screen) { lv_obj_delete(s_home_hints_screen); s_home_hints_screen = NULL; }
     if (s_onboarding_screen) { lv_obj_delete(s_onboarding_screen); s_onboarding_screen = NULL;
                                kit_config_set_u8("onboarded", 1); }  // saiu pelo BOTÃO físico: não repete no próximo boot
     if (s_splash_screen)     { lv_obj_delete(s_splash_screen);     s_splash_screen = NULL; }
     if (s_toast)             { lv_obj_delete(s_toast);             s_toast = NULL; }
 
     // Usou uma Tool? A ordem de recência mudou — reconstrói o slideshow.
-    // Senão, só volta o slideshow para o primeiro slide.
+    // Senão, só volta o slideshow para a Tool mais recente (slide 1; slide 0 é
+    // a visão geral, a um deslize de distância).
     if (s_home_deck_dirty) {
         s_home_deck_dirty = false;
         home_clear_deck();
@@ -3296,7 +3387,7 @@ void kit_launcher_go_home(void)
         // slideshow; o deck entra no tick seguinte.
         lv_async_call(home_build_deck_async_cb, NULL);
     } else if (s_home_deck && s_home_slides > 0) {
-        lv_tileview_set_tile_by_index(s_home_deck, 0, 0, LV_ANIM_OFF);
+        lv_tileview_set_tile_by_index(s_home_deck, s_home_slides > 1 ? 1 : 0, 0, LV_ANIM_OFF);
         home_sync_dots();
     }
 
@@ -3347,6 +3438,7 @@ kit_err_t kit_launcher_init(void)
     s_launcher_screen = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_launcher_screen, lv_color_hex(KIT_COLOR_BG), 0);
     lv_obj_clear_flag(s_launcher_screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(s_launcher_screen, home_gesture_cb, LV_EVENT_GESTURE, NULL);
 
     build_home(s_launcher_screen);
     kit_tool_manager_set_catalog_changed_cb(launcher_catalog_changed);

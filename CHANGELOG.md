@@ -139,6 +139,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   sem empilhar objetos por cima de um overlay aberto.
 - **Catálogo:** som próprio ao concluir um download (`KIT_SFX_CATALOG_DONE`,
   arpejo alegre), distinto do `CONFIRM` usado na remoção.
+- **Home — visão geral à esquerda e atalho de gesto pros Ajustes:** o slideshow
+  passou a começar pela grade **"VER TODOS"** (slide 0), com as Tools recentes
+  logo depois; a Home abre na Tool mais recente (slide 1), então um deslize pra
+  direita cai direto na visão geral. **Deslizar pra cima** em qualquer ponto da
+  Home abre os **Ajustes** (a outra porta continua sendo o card "Ajustes" no fim
+  da grade). No fim da introdução de primeiro uso aparece uma vez um
+  coach-mark **"DUAS DICAS"** ensinando os dois gestos.
 - **Energia — repouso da tela vira meia-hibernação:** ao apagar a tela (manual
   ou por inatividade), o Runtime desliga o acelerômetro do QMI8658, suspende o
   áudio (efeitos novos são descartados até acordar) e habilita o *light sleep*
