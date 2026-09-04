@@ -127,6 +127,10 @@ CONFIG_LV_BUILD_DEMOS=n
 CONFIG_LV_DRAW_SW_RGB565_SWAP=y
 CONFIG_LV_COLOR_16_SWAP=y
 
+# QR Code — a Tool Globo de Bingo mostra um QR pro gerador de cartelas
+# (web-installer/bingo.html no GitHub Pages). Usa lv_canvas, já habilitado.
+CONFIG_LV_USE_QRCODE=y
+
 
 # LVGL Fonts — a UI usa só as fontes próprias do KIT (kit_fonts.h). Do conjunto
 # Montserrat embutido no LVGL ficamos apenas com o tamanho 14, que é o

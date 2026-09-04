@@ -10,7 +10,7 @@
 #include <string.h>
 
 // Globo de Bingo — linguagem "Brutalist Bauhaus" (ver docs/design/design-language.md).
-// Titlebar fixa + tileview de 3 páginas (arrasta na horizontal):
+// Titlebar fixa + tileview de 4 páginas (arrasta na horizontal):
 //   0 AJUSTE   — FAIXA (1–75 com letra B/I/N/G/O, ou 1–90) + REINICIAR SORTEIO
 //                (dois toques para confirmar).
 //   1 GLOBO    — o palco: número grande (kit_display_120) + letra da coluna +
@@ -18,6 +18,9 @@
 //                chacoalhar). É a página inicial.
 //   2 CHAMADAS — o painel inteiro da faixa: números já sorteados acesos na cor
 //                da Tool, o último com um anel. Rola na vertical.
+//   3 CARTELAS — QR pro gerador de cartelas (web-installer/bingo.html no GitHub
+//                Pages, com ?bolas= conforme a FAIXA). Cada celular pega a sua
+//                cartela. Incentiva papel e caneta, não mais tempo de tela.
 //
 // Sorteio sem reposição via Random API (TRNG). Diferente da Sortear Times, a
 // **rodada persiste**: faixa e sorteados vão para o Storage (bingo_range /
@@ -47,9 +50,12 @@ static const char *TAG = "KIT_BINGO";
 #define X_CHIP       56
 #define X_GO_H       76
 #define X_GO_MARGIN  18
-#define PAGES        3
+#define PAGES        4
 
 #define BINGO_MAX    90
+
+// Gerador de cartelas — página CARTELAS (QR). ?bolas= é preenchido com a FAIXA.
+#define CARDS_URL    "https://jcrvlh.github.io/kit/bingo.html?bolas="
 
 // Suspense curto do sorteio (só troca o texto do número).
 #define SHUF_TICKS     10
@@ -120,6 +126,10 @@ static lv_obj_t *s_bingo_hdr  = NULL;   // linha de rótulos B/I/N/G/O (só GRAD
 static lv_obj_t *s_table      = NULL;   // GRADE — 1 widget lv_table (células desenhadas)
 static lv_obj_t *s_list       = NULL;   // LISTA — coluna rolável de linhas por grupo
 static lv_obj_t *s_list_val[9];         // rótulo com os números sorteados de cada grupo
+
+// Página 3 — Cartelas
+static lv_obj_t *s_qr      = NULL;      // lv_qrcode com o link do gerador
+static lv_obj_t *s_qr_tag  = NULL;      // "BINGO 1-75" / "1-90" abaixo do QR
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -240,6 +250,16 @@ static void sync_dots(void)
             lv_color_hex(on ? s_accent : KIT_COLOR_LINE), 0);
         lv_obj_set_size(s_dots[i], on ? 20 : 8, 8);
     }
+}
+
+// Página CARTELAS — refaz o QR e o rótulo com a FAIXA atual.
+static void cards_sync(void)
+{
+    if (!s_qr) return;
+    char url[sizeof(CARDS_URL) + 4];
+    int n = snprintf(url, sizeof(url), CARDS_URL "%d", s_range);
+    lv_qrcode_update(s_qr, url, n);
+    if (s_qr_tag) lv_label_set_text_fmt(s_qr_tag, "BINGO 1-%d", s_range);
 }
 
 static void sync_seg(void)
@@ -640,6 +660,7 @@ static void range_cb(lv_event_t *e)
     sync_seg();
     sync_globo();
     board_build();
+    cards_sync();
 }
 
 // ---------------------------------------------------------------------------
@@ -870,6 +891,50 @@ static void build_page_board(lv_obj_t *tile)
     lv_obj_add_event_cb(s_table, table_draw_cb, LV_EVENT_DRAW_TASK_ADDED, NULL);
 }
 
+// Página 3 — CARTELAS
+// QR pro gerador de cartelas (web-installer/bingo.html). O QR precisa de fundo
+// claro pra ler numa câmera, então aqui é a exceção ao preto AMOLED: quadrado
+// branco com o código preto. O link carrega ?bolas= com a FAIXA atual.
+static void build_page_cards(lv_obj_t *tile)
+{
+    lv_obj_set_style_pad_all(tile, 0, 0);
+
+    lv_obj_t *p = lv_obj_create(tile);
+    lv_obj_remove_style_all(p);
+    lv_obj_set_size(p, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_pad_left(p, X_PAD, 0);
+    lv_obj_set_style_pad_right(p, X_PAD, 0);
+    lv_obj_set_style_pad_top(p, 16, 0);
+    lv_obj_set_style_pad_bottom(p, 24, 0);
+    lv_obj_set_style_pad_row(p, 16, 0);
+    lv_obj_set_flex_flow(p, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(p, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_scroll_dir(p, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(p, LV_SCROLLBAR_MODE_AUTO);
+
+    lv_obj_t *cap = add_label(p, "ESCANEIE COM O CELULAR", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
+    lv_obj_set_style_text_align(cap, LV_TEXT_ALIGN_CENTER, 0);
+
+    s_qr = lv_qrcode_create(p);
+    lv_qrcode_set_size(s_qr, 188);
+    lv_qrcode_set_dark_color(s_qr, lv_color_hex(KIT_COLOR_BG));
+    lv_qrcode_set_light_color(s_qr, lv_color_white());
+    lv_qrcode_set_quiet_zone(s_qr, true);
+    lv_obj_set_style_border_width(s_qr, 10, 0);
+    lv_obj_set_style_border_color(s_qr, lv_color_white(), 0);
+    lv_obj_set_style_radius(s_qr, 4, 0);
+
+    s_qr_tag = add_label(p, "BINGO 1-75", s_accent, &kit_mono_20, 2);
+
+    lv_obj_t *note = add_label(p,
+        "NO SITE D\xC3\x81 PRA BAIXAR, IMPRIMIR OU MARCAR POR L\xC3\x81. "
+        "MAS O KIT TORCE POR PAPEL E CANETA, N\xC3\x83O POR MAIS TEMPO DE TELA.",
+        KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(note, X_CONTENT);
+    lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_CENTER, 0);
+}
+
 static void build_tileview(void)
 {
     s_tv = lv_tileview_create(s_screen);
@@ -883,9 +948,11 @@ static void build_tileview(void)
     s_tiles[0] = lv_tileview_add_tile(s_tv, 0, 0, LV_DIR_HOR);
     s_tiles[1] = lv_tileview_add_tile(s_tv, 1, 0, LV_DIR_HOR);
     s_tiles[2] = lv_tileview_add_tile(s_tv, 2, 0, LV_DIR_HOR);
+    s_tiles[3] = lv_tileview_add_tile(s_tv, 3, 0, LV_DIR_HOR);
     build_page_adjust(s_tiles[0]);
     build_page_stage(s_tiles[1]);
     build_page_board(s_tiles[2]);
+    build_page_cards(s_tiles[3]);
 }
 
 // ---------------------------------------------------------------------------
@@ -921,6 +988,7 @@ kit_err_t kit_bingo_start(uint32_t accent)
     sync_seg();
     sync_globo();
     sync_dots();
+    cards_sync();
 
     lv_screen_load(s_screen);
     return KIT_OK;
@@ -947,4 +1015,5 @@ void kit_bingo_destroy(void)
     s_view_pills[0] = s_view_pills[1] = NULL;
     s_view_pill_lbls[0] = s_view_pill_lbls[1] = NULL;
     for (int i = 0; i < 9; i++) s_list_val[i] = NULL;
+    s_qr = s_qr_tag = NULL;
 }
