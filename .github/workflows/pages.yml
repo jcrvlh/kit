@@ -85,7 +85,6 @@ jobs:
           set -euo pipefail
           VER="$(tr -d '[:space:]' < firmware/version.txt)"
           TAG="fw-v${VER}"
-          BIN="firmware/build/kit_core.bin"
 
           # Só publica o manifesto OTA quando a Release com o .bin já existe —
           # senão o dispositivo baixaria uma URL 404.
@@ -94,8 +93,14 @@ jobs:
             exit 0
           fi
 
-          SHA="$(sha256sum "$BIN" | cut -d' ' -f1)"
-          SIZE="$(stat -c%s "$BIN")"
+          # Hasheia o BINÁRIO DA RELEASE (o que o dispositivo baixa), não o
+          # que este workflow compilou — os dois builds diferem pelo timestamp
+          # embutido no esp_app_desc, e o sha256 tem que casar com o download.
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern kit_core.bin --output kit_core.release.bin --clobber
+
+          SHA="$(sha256sum kit_core.release.bin | cut -d' ' -f1)"
+          SIZE="$(stat -c%s kit_core.release.bin)"
           VC="$(echo "$VER" | awk -F. '{ printf "%d", ($1*10000)+($2*100)+$3 }')"
           NOTES="$(git tag -l --format='%(contents:subject)' "$TAG" | head -c 160)"
           [ -n "$NOTES" ] || NOTES="Atualização do KIT Core ${VER}."
@@ -109,6 +114,7 @@ jobs:
             --argjson size "$SIZE" \
             '{version:$version, version_code:$version_code, notes:$notes, url:$url, sha256:$sha256, size:$size}' \
             | tee _site/firmware.json
+          rm -f kit_core.release.bin
 
       - uses: actions/configure-pages@v5
         with:
