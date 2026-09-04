@@ -8,7 +8,7 @@ extern "C" {
 
 #define KIT_VERSION_MAJOR 0
 #define KIT_VERSION_MINOR 3
-#define KIT_VERSION_PATCH 2
+#define KIT_VERSION_PATCH 3
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
 // 0.3.1: runtime LVGL das Tools ganha strcpy/strncpy/strlcpy/strcat
@@ -19,7 +19,9 @@ extern "C" {
 //        superfície nova pras Tools (símbolo novo em kit_tool_symbols.c) tem
 //        que bumpar esta também.)
 // 0.3.2: alinha com firmware/version.txt (nenhuma superfície nova)
-#define KIT_VERSION_STRING "0.3.2"
+// 0.3.3: alinha com firmware/version.txt (texto do QR da Tool Bingo, nenhuma
+//        superfície nova)
+#define KIT_VERSION_STRING "0.3.3"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

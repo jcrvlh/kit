@@ -7,6 +7,13 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [0.3.3] — 2026-09-04
+
+### Alterado
+- **Texto da página CARTELAS (QR) da Tool Bingo** (`kit_bingo.c`): reescrito
+  pra deixar claro que o QR baixa e imprime a cartela, com a opção de marcar
+  pelo próprio celular, mas incentivando papel e caneta.
+
 ## [0.3.2] — 2026-09-04
 
 ### Corrigido
