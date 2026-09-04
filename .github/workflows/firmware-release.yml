@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  actions: write   # disparar o workflow Site (pages.yml) para publicar o firmware.json
 
 jobs:
   release:
@@ -58,3 +59,13 @@ jobs:
             `firmware.json` publicado no GitHub Pages aponta para esta Release),
             ou grave `kit_core.bin` no slot `factory` (`0x20000`) via
             `idf.py flash` / Web Installer.
+
+      # A Release acima é criada com o GITHUB_TOKEN, e o GitHub não dispara
+      # workflows a partir de eventos do GITHUB_TOKEN — então o gatilho
+      # `release: published` do pages.yml não roda sozinho. Dispara na mão.
+      # (Se o token do repo não tiver permissão de workflow_dispatch, rode o
+      #  workflow "Site" manualmente após a tag.)
+      - name: Publicar o firmware.json (dispara o workflow Site)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main || true

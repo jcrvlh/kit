@@ -69,9 +69,13 @@ Componente `firmware/components/kit_ota` — mesmo desenho *offline-first* do
 | `url` | `kit_core.bin` anexado à GitHub Release `fw-v<versão>`. |
 | `sha256` / `size` | Conferidos no download (streaming). |
 
-Gerado na CI (`pages.yml`) a partir de `firmware/version.txt` + do `.bin`
-compilado, só quando a Release já existe. O `.bin` sai por `firmware-release.yml`
-(tag `fw-v*`).
+`firmware-release.yml` (tag `fw-v*`) builda e cria a Release com o `kit_core.bin`.
+`pages.yml` gera o `firmware.json` a partir de `firmware/version.txt` e do
+**`.bin` baixado da Release** (não o que ele mesmo compila — os dois builds
+diferem pelo timestamp no `esp_app_desc`, e o `sha256` precisa casar com o que
+o dispositivo baixa). Só publica quando a Release já existe; como o GitHub não
+dispara workflows a partir de eventos do `GITHUB_TOKEN`, o `firmware-release.yml`
+chama `pages.yml` via `workflow_dispatch` no fim.
 
 ### Máquina de estados
 
