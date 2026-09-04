@@ -7,9 +7,11 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 2
+#define KIT_VERSION_MINOR 3
 #define KIT_VERSION_PATCH 0
-#define KIT_VERSION_STRING "0.2.0"   // 0.2.0: kit_imu_api_t ganha register_tilt_callback
+// 0.2.0: kit_imu_api_t ganha register_tilt_callback
+// 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
+#define KIT_VERSION_STRING "0.3.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

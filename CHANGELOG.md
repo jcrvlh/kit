@@ -10,6 +10,21 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Não lançado]
 
 ### Adicionado
+- **Folha de Adedonha para papel e caneta (`web-installer/adedonha.html`):**
+  gerador web no mesmo espírito da Cartela de Bingo — recebe as categorias
+  sorteadas pela URL (`?c=nome,animal,fruta,…`) e imprime uma folha A4 por
+  pessoa (coluna da LETRA + uma coluna por categoria + PONTOS, N rodadas em
+  branco). Alternador **CATEGORIAS / PREENCHER**: em vez de imprimir, dá pra
+  anotar as respostas no próprio celular (uma rodada por cartão: letra +
+  resposta por categoria + pontos, com total), salvo em `localStorage` sob a
+  chave das categorias. Abre sem parâmetros com um seletor das 43 categorias.
+  Publicado junto com o site em `jcrvlh.github.io/kit/adedonha.html`.
+- **QR no runtime LVGL das Tools (Runtime v0.3.0):** `kit_tool_symbols.c` passa a
+  exportar `lv_qrcode_create` · `…_set_size` · `…_set_dark_color` ·
+  `…_set_light_color` · `…_set_quiet_zone` · `…_update`, e o `kit-cli build
+  --target xtensa` compila com `-DLV_USE_QRCODE=1`. A Tool Adedonha usa isso pra
+  mostrar um QR pro gerador de folhas na página CARTELA (padrão do Bingo). Tools
+  que usam declaram `min_runtime` `"0.3.0"`.
 - **Atualização de firmware via OTA (`kit_ota`):** o KIT consulta um manifesto
   `firmware.json` por HTTPS (GitHub Pages), compara com a versão rodando e, em
   **Ajustes → Atualizar firmware**, baixa o `kit_core.bin` de uma GitHub Release
