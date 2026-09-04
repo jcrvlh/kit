@@ -124,7 +124,18 @@ body {
 
 .grid { display: grid; gap: 4px; width: 100%; }
 .card.m75 .grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.card.m90 .grid { grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px; }
+
+/* 90 bolas = a cartela: moldura de verdade. O fundo da grade vaza pelos
+   vãos de 1 px e vira o fio da grade; célula vazia é preta, célula com
+   número é levantada. Sem isso vira número flutuando no vácuo. */
+.card.m90 .grid {
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 1px;
+  padding: 1px;
+  background: var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
 
 .cell {
   position: relative;
@@ -146,7 +157,9 @@ body {
   transition: background .1s;
 }
 .card.m75 .cell { font-size: clamp(24px, 9vw, 36px); border-radius: 12px; }
-.card.m90 .cell { font-size: clamp(15px, 5.4vw, 22px); border-radius: 7px; }
+.card.m90 .cell { font-size: clamp(16px, 5.6vw, 24px); border-radius: 0; }
+.card.m90 .cell:not(.marked) { background: var(--surface); }
+.card.m90 .cell.blank { background: var(--bg); }
 
 .cell.head {
   aspect-ratio: auto;
@@ -222,6 +235,68 @@ body {
 }
 .btn:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
 
+/* ---- Botão imprimir + diálogo -------------------------------------- */
+
+.iconbtn {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: var(--surface);
+  color: var(--paper);
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.iconbtn:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+
+.dlg {
+  border: 0;
+  border-radius: 18px;
+  padding: 0;
+  background: var(--surface-alt);
+  color: var(--paper);
+  max-width: 340px;
+  width: calc(100% - 32px);
+}
+.dlg::backdrop { background: rgba(0, 0, 0, 0.6); }
+.dlg-in { display: flex; flex-direction: column; gap: 14px; padding: 22px; }
+.dlg h2 {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.dlg p { font-size: 13px; color: var(--muted); }
+.dlg label {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dlg input {
+  font-family: var(--disp);
+  font-size: 24px;
+  padding: 10px 14px;
+  background: var(--bg);
+  color: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  width: 100%;
+}
+.dlg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dlg-row .btn { font-size: 12px; padding: 13px 0; }
+
+/* Folhas de impressão — montadas só ao imprimir. */
+.sheet { display: none; }
+
 footer {
   margin-top: 4px;
   font-family: var(--mono);
@@ -234,17 +309,99 @@ footer {
   text-align: center;
 }
 
-/* ---- Impressão ------------------------------------------------------- */
+/* ---- Impressão ----------------------------------------------------- --
+   Só a folha de cartelas vai pro papel: A4 retrato, 4 cartelas por folha
+   (2 x 2), todas diferentes, tudo em preto — logo do KIT incluída. A tela
+   inteira (.wrap) e o diálogo somem. */
 
 @media print {
-  :root { --bg: #fff; --surface: #fff; --paper: #000; --muted: #444; }
-  body { padding: 0; }
-  .seg, .actions, .howto, footer { display: none; }
-  .mast { border-color: #000; }
-  .cell { border: 1.5px solid #000; }
-  .cell.blank { border-color: #bbb; }
-  .cell.marked { background: none; }
-  .cell.marked::after { border-color: #000; }
+  @page { size: A4 portrait; margin: 10mm; }
+  html, body { background: #fff; }
+  body { padding: 0; display: block; }
+  .wrap, .dlg { display: none !important; }
+  .sheet { display: block; }
+
+  .ppage { break-after: page; }
+  .ppage:last-child { break-after: auto; }
+  .ppage-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8mm;
+    align-content: start;
+  }
+
+  .pcard {
+    break-inside: avoid;
+    border: 1pt solid #000;
+    border-radius: 2mm;
+    padding: 4mm;
+    display: flex;
+    flex-direction: column;
+    gap: 3mm;
+    color: #000;
+  }
+  .pcard.m75 { min-height: 118mm; }
+  .pcard.m90 { min-height: 56mm; }
+
+  .pcard-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 7.5pt;
+    letter-spacing: 0.12em;
+  }
+  .klogo {
+    display: flex;
+    align-items: center;
+    gap: 1.6mm;
+    font-family: var(--mono);
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    font-size: 10pt;
+  }
+  .klogo i { display: block; width: 3mm; height: 3mm; background: #000; }
+  .klogo .ci { border-radius: 50%; }
+  .klogo .tr {
+    width: 0; height: 0; background: none;
+    border-left: 1.7mm solid transparent;
+    border-right: 1.7mm solid transparent;
+    border-bottom: 3mm solid #000;
+  }
+
+  .pcard .grid { gap: 0; width: 100%; background: none; padding: 0; border: 0; }
+  .pcard.m75 .grid { grid-template-columns: repeat(5, 1fr); }
+  .pcard.m90 .grid { grid-template-columns: repeat(9, 1fr); }
+
+  .pcard .cell {
+    border: 0.5pt solid #000;
+    border-radius: 0;
+    background: none !important;
+    color: #000 !important;
+    font-family: var(--disp);
+    box-shadow: none;
+  }
+  .pcard.m75 .cell { font-size: 13pt; }
+  .pcard.m90 .cell { font-size: 10pt; }
+  .pcard .cell.head {
+    border: 0;
+    aspect-ratio: auto;
+    padding: 0 0 1mm;
+    font-family: var(--mono);
+    font-size: 9pt;
+    color: #000 !important;
+  }
+  .pcard .cell.blank { background: none !important; }
+  .pcard .cell.free::before { background: #000; }
+  .pcard .cell.marked::after { content: none; }
+
+  .pcard-code {
+    font-family: var(--mono);
+    font-size: 7.5pt;
+    letter-spacing: 0.16em;
+    color: #000;
+  }
 }
 </style>
 </head>
@@ -253,7 +410,12 @@ footer {
   <header class="mast">
     <div class="primitives" aria-hidden="true"><i class="sq"></i><i class="ci"></i><i class="tr"></i></div>
     <div class="wordmark">BINGO</div>
-    <span></span>
+    <button type="button" class="iconbtn" id="print" aria-label="Imprimir cartelas" title="Imprimir cartelas">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M8 14h8v7H8z"/>
+      </svg>
+    </button>
   </header>
 
   <div class="seg" id="seg" role="group" aria-label="Faixa da cartela">
@@ -274,6 +436,22 @@ footer {
 
   <footer>KIT</footer>
 </div>
+
+<dialog class="dlg" id="printbox">
+  <form method="dialog" class="dlg-in">
+    <h2>Imprimir cartelas</h2>
+    <p>Cada folha A4 leva 4 cartelas, todas diferentes. Sai em preto e branco.</p>
+    <label>Quantas cartelas
+      <input type="number" id="qty" min="1" max="60" value="8" inputmode="numeric">
+    </label>
+    <div class="dlg-row">
+      <button type="submit" value="cancel" class="btn btn-ghost">Cancelar</button>
+      <button type="submit" value="ok" class="btn btn-primary">Gerar e imprimir</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="sheet" id="sheet" aria-hidden="true"></div>
 
 <script>
 "use strict";
@@ -393,25 +571,23 @@ function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ok */ }
 }
 
-function freeIndex() { return state.mode === "75" ? 12 : -1; }
+function freeIndexFor(mode) { return mode === "75" ? 12 : -1; }
 
-/* --- Render ----------------------------------------------------------- */
-const card = document.getElementById("card");
-const howto = document.getElementById("howto");
+/* Números da cartela para (faixa, código) — determinístico. */
+function cellsFor(mode, code) {
+  const rand = rngFromCode(mode === "75" ? code : code + "-90");
+  return mode === "75" ? make75(rand) : make90(rand);
+}
 
-function render() {
-  const rand = rngFromCode(state.mode === "75" ? state.code : state.code + "-90");
-  const cells = state.mode === "75" ? make75(rand) : make90(rand);
+/* Monta a grade (.grid) de uma cartela. Com `onToggle`, as células viram
+   botões que marcam; sem, é estática (usado na impressão). */
+function buildGrid(mode, cells, onToggle) {
+  const free = freeIndexFor(mode);
   const marks = new Set(state.marks);
-  if (freeIndex() >= 0) marks.add(freeIndex());
-
-  card.className = "card m" + state.mode;
-  card.replaceChildren();
-
   const grid = document.createElement("div");
   grid.className = "grid";
 
-  if (state.mode === "75") {
+  if (mode === "75") {
     for (const L of ["B", "I", "N", "G", "O"]) {
       const h = document.createElement("div");
       h.className = "cell head";
@@ -421,7 +597,7 @@ function render() {
   }
 
   cells.forEach((val, i) => {
-    if (val === null && i === freeIndex()) {
+    if (val === null && i === free) {
       const el = document.createElement("div");
       el.className = "cell free";
       el.setAttribute("aria-label", "espaço livre");
@@ -434,17 +610,29 @@ function render() {
       grid.appendChild(el);
       return;
     }
-    const el = document.createElement("button");
-    el.type = "button";
-    el.className = "cell" + (marks.has(i) ? " marked" : "");
+    const marked = onToggle && marks.has(i);
+    const el = document.createElement(onToggle ? "button" : "div");
+    el.className = "cell" + (marked ? " marked" : "");
     el.textContent = val;
-    el.setAttribute("aria-pressed", marks.has(i) ? "true" : "false");
-    el.setAttribute("aria-label", val + (marks.has(i) ? " — marcado" : ""));
-    el.addEventListener("click", () => toggle(i));
+    if (onToggle) {
+      el.type = "button";
+      el.setAttribute("aria-pressed", marked ? "true" : "false");
+      el.setAttribute("aria-label", val + (marked ? " — marcado" : ""));
+      el.addEventListener("click", () => onToggle(i));
+    }
     grid.appendChild(el);
   });
 
-  card.appendChild(grid);
+  return grid;
+}
+
+/* --- Render ----------------------------------------------------------- */
+const card = document.getElementById("card");
+const howto = document.getElementById("howto");
+
+function render() {
+  card.className = "card m" + state.mode;
+  card.replaceChildren(buildGrid(state.mode, cellsFor(state.mode, state.code), toggle));
 
   document.querySelectorAll(".seg button").forEach((b) =>
     b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode)));
@@ -484,6 +672,69 @@ document.getElementById("clear").addEventListener("click", () => {
   save();
   render();
 });
+
+/* --- Impressão: N cartelas diferentes, 4 por folha A4 ----------------- */
+const sheet = document.getElementById("sheet");
+const printbox = document.getElementById("printbox");
+const qtyInput = document.getElementById("qty");
+
+document.getElementById("print").addEventListener("click", () => {
+  if (typeof printbox.showModal === "function") printbox.showModal();
+  else runPrint(8);
+});
+
+printbox.addEventListener("close", () => {
+  if (printbox.returnValue !== "ok") return;
+  const n = parseInt(qtyInput.value, 10);
+  runPrint(Number.isFinite(n) ? Math.max(1, Math.min(60, n)) : 8);
+});
+
+function buildPrintCard(mode, code) {
+  const pc = document.createElement("div");
+  pc.className = "pcard m" + mode;
+
+  const head = document.createElement("div");
+  head.className = "pcard-head";
+  const logo = document.createElement("span");
+  logo.className = "klogo";
+  logo.innerHTML = '<i class="sq"></i><i class="ci"></i><i class="tr"></i>KIT';
+  const tag = document.createElement("span");
+  tag.textContent = mode === "75" ? "BINGO 1–75" : "BINGO 1–90";
+  head.append(logo, tag);
+
+  const foot = document.createElement("div");
+  foot.className = "pcard-code";
+  foot.textContent = "#" + code;
+
+  pc.append(head, buildGrid(mode, cellsFor(mode, code), null), foot);
+  return pc;
+}
+
+function runPrint(qty) {
+  const mode = state.mode;
+  const used = new Set();
+  sheet.replaceChildren();
+
+  let page = null;
+  for (let i = 0; i < qty; i++) {
+    if (i % 4 === 0) {
+      const p = document.createElement("div");
+      p.className = "ppage";
+      page = document.createElement("div");
+      page.className = "ppage-grid";
+      p.appendChild(page);
+      sheet.appendChild(p);
+    }
+    let code;
+    do { code = newCode(); } while (used.has(code));
+    used.add(code);
+    page.appendChild(buildPrintCard(mode, code));
+  }
+
+  window.print();
+}
+
+window.addEventListener("afterprint", () => sheet.replaceChildren());
 
 render();
 </script>
