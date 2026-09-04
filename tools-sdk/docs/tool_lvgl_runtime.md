@@ -68,8 +68,10 @@ troca de página é `LV_EVENT_VALUE_CHANGED` no objeto do tileview.
 `lv_timer_set_repeat_count`
 **Cor:** `lv_color_hex`
 **Fontes (dados):** `kit_mono_16/20/26` · `kit_sans_22/28` · `kit_display_44/72/120`
-**libc:** `snprintf` (o `elf_loader` já traz `printf` · `puts` · `memcpy` ·
-`memset` · `strlen` · `strcmp` · `strchr` · `malloc` · …).
+**libc:** `snprintf` · `strcpy` · `strncpy` · `strlcpy` · `strcat` (runtime ≥
+0.3.1 — o GCC sintetiza `strcpy` a partir de `snprintf(d,n,"%s",lit)` e afins). O
+`elf_loader` já traz `printf` · `puts` · `memcpy` · `memset` · `strlen` ·
+`strcmp` · `strchr` · `malloc` · …).
 
 `rand`/`srand` **não** são exportados — use `ctx->api->random`. A UI de toque
 e o resto do hardware vêm pela `kit_api_table_t`

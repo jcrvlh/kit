@@ -7,6 +7,25 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [0.3.1] — 2026-09-04
+
+### Corrigido
+- **Tools do catálogo não abriam ("Não abriu", `Can't find symbol strcpy`):** o
+  `kit_tool_symbols.c` agora exporta `strcpy` · `strncpy` · `strlcpy` · `strcat`.
+  O GCC sintetiza `strcpy` a partir de `snprintf(dst, n, "%s", literal)` e afins,
+  e o `elf_loader` só trazia `strlen`/`strcmp`/`strchr` — qualquer Tool que
+  encostasse nisso falhava no `dlopen`. (Pegou a Adedonha v1.1.0.) Verificado no
+  HW.
+- **Aparelho travava duro na tela Sobre e às vezes no slider de brilho (task
+  watchdog, sem recuperar):** o pool de memória do LVGL (`CONFIG_LV_MEM_SIZE_
+  KILOBYTES`, builtin malloc) era de **64 KB** e estourava em telas pesadas —
+  fontes de 44/72 px, máscaras de canto arredondado, scrollbar. `lv_malloc`
+  devolvia NULL → `LV_ASSERT_MALLOC` → `LV_ASSERT_HANDLER` (`while(1)`) → trava
+  permanente. Pool → **256 KB** (vai pra PSRAM, sobra de 6 MB), e o
+  `LV_ASSERT_HANDLER` passou de `while(1)` para `esp_system_abort` — um OOM
+  futuro reinicia (recuperável) em vez de congelar. Bug pré-existente, exposto
+  só no hardware.
+
 ## [0.3.0] — 2026-09-04
 
 ### Adicionado
