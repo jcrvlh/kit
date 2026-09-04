@@ -325,7 +325,13 @@ footer {
   html, body { background: #fff; }
   body { padding: 0; display: block; }
   .wrap, .dlg { display: none !important; }
-  .sheet { display: block; }
+  /* print-color-adjust herda: sem isto o navegador descarta os preenchimentos
+     e sobra só o triângulo (feito de bordas) e o centro livre some. */
+  .sheet {
+    display: block;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
 
   .ppage { break-after: page; }
   .ppage:last-child { break-after: auto; }
