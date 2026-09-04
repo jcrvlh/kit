@@ -895,6 +895,14 @@ static void build_page_board(lv_obj_t *tile)
 // QR pro gerador de cartelas (web-installer/bingo.html). O QR precisa de fundo
 // claro pra ler numa câmera, então aqui é a exceção ao preto AMOLED: quadrado
 // branco com o código preto. O link carrega ?bolas= com a FAIXA atual.
+// O texto segue o padrão do "COMO JOGA" da Mímica: um rótulo em kit_sans_28
+// (caixa normal, quebra linha, corpo rolável) — mono em caixa alta e apagado
+// numa tela de 1,8" não se lê.
+static const char CARDS_NOTE[] =
+    "Aponte a câmera do celular no código para pegar a sua cartela.\n\n"
+    "O site também imprime ou marca por você. Mas papel e caneta rende "
+    "mais que tempo de tela.";
+
 static void build_page_cards(lv_obj_t *tile)
 {
     lv_obj_set_style_pad_all(tile, 0, 0);
@@ -905,34 +913,27 @@ static void build_page_cards(lv_obj_t *tile)
     lv_obj_set_style_pad_left(p, X_PAD, 0);
     lv_obj_set_style_pad_right(p, X_PAD, 0);
     lv_obj_set_style_pad_top(p, 16, 0);
-    lv_obj_set_style_pad_bottom(p, 24, 0);
+    lv_obj_set_style_pad_bottom(p, 32, 0);
     lv_obj_set_style_pad_row(p, 16, 0);
     lv_obj_set_flex_flow(p, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(p, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_scroll_dir(p, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(p, LV_SCROLLBAR_MODE_AUTO);
 
-    lv_obj_t *cap = add_label(p, "ESCANEIE COM O CELULAR", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
-    lv_obj_set_style_text_align(cap, LV_TEXT_ALIGN_CENTER, 0);
-
     s_qr = lv_qrcode_create(p);
-    lv_qrcode_set_size(s_qr, 188);
+    lv_qrcode_set_size(s_qr, 156);
     lv_qrcode_set_dark_color(s_qr, lv_color_hex(KIT_COLOR_BG));
     lv_qrcode_set_light_color(s_qr, lv_color_white());
     lv_qrcode_set_quiet_zone(s_qr, true);
-    lv_obj_set_style_border_width(s_qr, 10, 0);
+    lv_obj_set_style_border_width(s_qr, 8, 0);
     lv_obj_set_style_border_color(s_qr, lv_color_white(), 0);
-    lv_obj_set_style_radius(s_qr, 4, 0);
+    lv_obj_set_style_radius(s_qr, 3, 0);
 
-    s_qr_tag = add_label(p, "BINGO 1-75", s_accent, &kit_mono_20, 2);
+    s_qr_tag = add_label(p, "BINGO 1-75", s_accent, &kit_mono_20, 3);
 
-    lv_obj_t *note = add_label(p,
-        "NO SITE D\xC3\x81 PRA BAIXAR, IMPRIMIR OU MARCAR POR L\xC3\x81. "
-        "MAS O KIT TORCE POR PAPEL E CANETA, N\xC3\x83O POR MAIS TEMPO DE TELA.",
-        KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
-    lv_label_set_long_mode(note, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(note, X_CONTENT);
-    lv_obj_set_style_text_align(note, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_t *body = add_label(p, CARDS_NOTE, KIT_COLOR_TEXT, &kit_sans_28, 0);
+    lv_label_set_long_mode(body, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(body, X_CONTENT);
 }
 
 static void build_tileview(void)
