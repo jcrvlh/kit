@@ -7,6 +7,18 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [0.3.2] — 2026-09-04
+
+### Corrigido
+- **`KIT_VERSION_STRING` (`kit_runtime.h`) ficou em "0.3.0" no release do
+  0.3.1** — o Tool Manager usa essa constante (não o `esp_app_desc`/`version.txt`)
+  pro gate de `min_runtime`, e ela não tinha sido bumpada junto. Resultado: com
+  o app já em "0.3.1", Tools que exigem `min_runtime "0.3.1"` (ex.: Adedonha
+  v1.1.1) continuavam **ignoradas** ("instala, dá 'pronto', mas o botão do
+  catálogo não sai de INSTALAR"). `KIT_VERSION_STRING` → `"0.3.2"`, igual ao
+  `version.txt` — as duas strings de versão do firmware SEMPRE andam juntas
+  daqui pra frente.
+
 ## [0.3.1] — 2026-09-04
 
 ### Corrigido
@@ -21,7 +33,9 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   KILOBYTES`, builtin malloc) era de **64 KB** e estourava em telas pesadas —
   fontes de 44/72 px, máscaras de canto arredondado, scrollbar. `lv_malloc`
   devolvia NULL → `LV_ASSERT_MALLOC` → `LV_ASSERT_HANDLER` (`while(1)`) → trava
-  permanente. Pool → **256 KB** (vai pra PSRAM, sobra de 6 MB), e o
+  permanente. LVGL passou do builtin malloc pro **malloc da libc**
+  (`CONFIG_LV_USE_CLIB_MALLOC=y`, aloca do heap do ESP-IDF — interno + PSRAM,
+  MB de folga; o bump direto do pool builtin não coube na DRAM), e o
   `LV_ASSERT_HANDLER` passou de `while(1)` para `esp_system_abort` — um OOM
   futuro reinicia (recuperável) em vez de congelar. Bug pré-existente, exposto
   só no hardware.

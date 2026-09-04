@@ -8,10 +8,18 @@ extern "C" {
 
 #define KIT_VERSION_MAJOR 0
 #define KIT_VERSION_MINOR 3
-#define KIT_VERSION_PATCH 0
+#define KIT_VERSION_PATCH 2
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
-#define KIT_VERSION_STRING "0.3.0"
+// 0.3.1: runtime LVGL das Tools ganha strcpy/strncpy/strlcpy/strcat
+//        (esquecido de bumpar junto de firmware/version.txt no fw-v0.3.1 —
+//        o Tool Manager ficou lendo "0.3.0" aqui e ignorando Tools que exigem
+//        0.3.1, mesmo com o app já em 0.3.1. As duas strings SEMPRE andam
+//        juntas: qualquer PR que mude firmware/version.txt por causa de
+//        superfície nova pras Tools (símbolo novo em kit_tool_symbols.c) tem
+//        que bumpar esta também.)
+// 0.3.2: alinha com firmware/version.txt (nenhuma superfície nova)
+#define KIT_VERSION_STRING "0.3.2"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.
