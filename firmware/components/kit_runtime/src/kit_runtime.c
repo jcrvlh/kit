@@ -19,7 +19,10 @@
 #include "kit_tool_loader.h"
 #include "kit_network.h"
 #include "kit_catalog.h"
+#include "kit_ota.h"
 #include "kit_launcher.h"
+
+#include <time.h>
 
 #include "kit_theme.h"
 #include "kit_fonts.h"
@@ -252,6 +255,27 @@ static void poll_system_buttons(void)
     s_boot_prev = lvl;
 }
 
+// Callback do kit_ota: roda na task de rede. Só toca em NVS (kit_config) e
+// marca flags no launcher — nada de LVGL aqui.
+static void ota_bg_cb(kit_ota_state_t st, void *user)
+{
+    (void)user;
+    if (st != KIT_OTA_AVAILABLE && st != KIT_OTA_UP_TO_DATE) return;
+
+    kit_config_set_u32("ota_last_chk", (uint32_t)time(NULL));
+    if (st != KIT_OTA_AVAILABLE) return;
+
+    kit_ota_release_t rel;
+    if (!kit_ota_get_release(&rel) || !rel.newer) return;
+
+    // Não repetir o toast para a mesma versão a cada boot.
+    uint32_t seen = 0, vc = rel.version_code ? rel.version_code : 1;
+    kit_config_get_u32("ota_seen_vc", &seen, 0);
+    if (vc == seen) return;
+    kit_config_set_u32("ota_seen_vc", vc);
+    kit_launcher_notify_update_available(rel.version);
+}
+
 kit_err_t kit_runtime_init(void)
 {
     ESP_LOGI(TAG, "Iniciando subsistemas do KIT Runtime...");
@@ -342,6 +366,14 @@ kit_err_t kit_runtime_init(void)
         ESP_LOGW(TAG, "Catálogo de Tools indisponível");
     }
 
+    // 8e. Atualização de firmware pela internet (só cria a task, ociosa). A
+    //     verificação em background é disparada em kit_runtime_run após o boot.
+    if (kit_ota_init() != KIT_OK) {
+        ESP_LOGW(TAG, "Atualização de firmware indisponível");
+    } else {
+        kit_ota_set_cb(ota_bg_cb, NULL);
+    }
+
     // 9. Inicializa Launcher UI
     err = kit_launcher_init();
     if (err != KIT_OK) {
@@ -370,6 +402,7 @@ void kit_runtime_run(void)
     int64_t last_inact_us = 0;
     int64_t last_wake_us = 0;
     bool    wifi_autostart_done = false;
+    bool    ota_check_done = false;
     while (1) {
         // Incrementa o tempo do LVGL e processa tarefas gráficas
         uint32_t delay_ms = kit_display_process();
@@ -385,6 +418,21 @@ void kit_runtime_run(void)
             if (wifi_en && kit_network_saved_count() > 0) {
                 ESP_LOGI(TAG, "Wi-Fi: religando às redes memorizadas");
                 kit_network_start();
+            }
+        }
+
+        // Verificação de firmware em background — uma vez por boot, ~30 s depois
+        // de subir (já com IP), no máximo 1x/dia. Só marca um aviso; a
+        // instalação é sempre manual (Ajustes > Atualizar firmware).
+        if (!ota_check_done && now >= 30000000 && kit_network_is_connected()) {
+            ota_check_done = true;
+            uint8_t ota_auto = 1;
+            kit_config_get_u8("ota_auto", &ota_auto, 1);
+            uint32_t last = 0;
+            kit_config_get_u32("ota_last_chk", &last, 0);
+            if (ota_auto && (last == 0 || (uint32_t)time(NULL) - last > 86400)) {
+                ESP_LOGI(TAG, "OTA: verificando atualização em background");
+                kit_ota_check();
             }
         }
 

@@ -14,6 +14,7 @@ idf_component_register(
         kit_tool_loader
         kit_network
         kit_catalog
+        kit_ota
         kit_launcher
         kit_random
         kit_power

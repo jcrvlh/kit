@@ -10,6 +10,7 @@
 #include "kit_usb_msc.h"
 #include "kit_network.h"
 #include "kit_catalog.h"
+#include "kit_ota.h"
 #include "esp_log.h"
 #include "lvgl.h"
 #include <stdio.h>
@@ -52,6 +53,9 @@ static lv_obj_t *s_catalog_screen = NULL;       // Catálogo de Tools
 static lv_obj_t *s_catalog_detail_screen = NULL;
 static lv_obj_t *s_catalog_busy_screen = NULL;
 static lv_obj_t *s_catalog_confirm_screen = NULL;
+static lv_obj_t *s_fwupdate_screen = NULL;      // Ajustes > Atualizar firmware (OTA)
+static lv_obj_t *s_fwupdate_busy = NULL;        // overlay de progresso (baixando/gravando)
+static lv_timer_t *s_fwupdate_poll = NULL;
 static lv_obj_t *s_onboarding_screen = NULL;   // introdução do primeiro boot (repetível)
 static lv_obj_t *s_home_deck = NULL;       // lv_tileview horizontal — slideshow de Tools
 static lv_obj_t *s_home_dots_box = NULL;   // fileira de pontos de página (rodapé da Home)
@@ -69,6 +73,13 @@ static lv_obj_t *s_toast = NULL;
 
 static bool s_was_charging = false;
 static bool s_low_batt_warned = false;   // aviso de "bateria baixa" já mostrado nesta descarga
+
+// Atualização de firmware detectada em background (kit_ota). Marcadas pela task
+// de rede via kit_launcher_notify_update_available(); consumidas na task LVGL
+// pelo batt_tick_cb (toast + ponto no card Ajustes).
+static volatile bool s_fw_update_badge = false;
+static volatile bool s_fw_update_toast_pending = false;
+static char          s_fw_update_ver[16] = {0};
 
 // Grade de Tools da Home. Cada Tool built-in só entra aqui quando já está
 // implementada (o campo `available` cobre o caso de uma Tool em
@@ -256,6 +267,8 @@ static void open_wifi_cb(lv_event_t *e);
 static void close_wifi_cb(lv_event_t *e);
 static void open_catalog_cb(lv_event_t *e);
 static void close_catalog_cb(lv_event_t *e);
+static void open_fwupdate_cb(lv_event_t *e);
+static void close_fwupdate_cb(lv_event_t *e);
 static void wifi_toggle_cb(lv_event_t *e);
 static void wifi_forget_cb(lv_event_t *e);
 static void wifi_portal_open_cb(lv_event_t *e);
@@ -878,6 +891,19 @@ static void make_settings_tile(lv_obj_t *grid)
 
     lv_obj_t *lbl = add_label(tile, "Ajustes", KIT_COLOR_TEXT_MUTED, &kit_sans_22, 0);
     lv_obj_align(lbl, LV_ALIGN_BOTTOM_LEFT, 14, -14);
+
+    // Ponto âmbar quando o kit_ota achou firmware novo em background.
+    if (s_fw_update_badge) {
+        lv_obj_t *dot = lv_obj_create(tile);
+        lv_obj_set_size(dot, 14, 14);
+        lv_obj_set_style_bg_color(dot, lv_color_hex(KIT_COLOR_YELLOW), 0);
+        lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(dot, 0, 0);
+        lv_obj_set_style_radius(dot, 7, 0);
+        lv_obj_set_style_pad_all(dot, 0, 0);
+        lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_align(dot, LV_ALIGN_TOP_RIGHT, -14, 14);
+    }
 }
 
 // -- Card de Catálogo: ao lado de Ajustes na seção SISTEMA da grade. --
@@ -1122,7 +1148,8 @@ static bool home_is_covered(void)
            s_storage_screen || s_sd_format_screen || s_usbmsc_screen ||
            s_wifi_screen || s_wifi_portal_screen || s_catalog_screen ||
            s_catalog_detail_screen || s_catalog_busy_screen ||
-           s_catalog_confirm_screen || s_onboarding_screen || s_feedback_screen;
+           s_catalog_confirm_screen || s_fwupdate_screen || s_fwupdate_busy ||
+           s_onboarding_screen || s_feedback_screen;
 }
 
 // Recallback do Tool Manager: o catálogo do cartão mudou (instalou/removeu Tool,
@@ -1376,6 +1403,7 @@ static void open_settings_cb(lv_event_t *e)
     make_row(body, NULL, 0, "Wi-Fi",            false, open_wifi_cb,      NULL);
     make_row(body, NULL, 0, "Armazenamento",    false, open_storage_cb,   NULL);
     make_row(body, NULL, 0, "Modo pen drive",   false, open_usbmsc_cb,    NULL);
+    make_row(body, NULL, 0, "Atualizar firmware", false, open_fwupdate_cb, NULL);
     make_row(body, NULL, 0, "Bateria",          false, open_battery_cb,   NULL);
     make_row(body, NULL, 0, "Repetir introdu\xC3\xA7\xC3\xA3o", false, repeat_onboarding_cb, NULL);
     make_row(body, NULL, 0, "Sobre o KIT",      false, open_about_cb,     NULL);
@@ -1756,7 +1784,13 @@ static void open_about_cb(lv_event_t *e)
     make_logo_trio(logo);
     add_label(logo, "KIT", KIT_COLOR_TEXT, &kit_display_44, 3);
 
+    char fw_ver[24];
+    char fw_raw[16];
+    kit_ota_current_version(fw_raw, sizeof(fw_raw));
+    snprintf(fw_ver, sizeof(fw_ver), "v%s", fw_raw);
+
     make_spec(body, "DISPOSITIVO", kit_power_get_device_id());
+    make_spec(body, "FIRMWARE", fw_ver);
     make_spec(body, "RUNTIME", "v0.1.0");
     make_spec(body, "HARDWARE", "ESP32-S3 V2");
     make_spec(body, "FLASH", "16 MB \xC2\xB7 7 MB LFS");
@@ -2872,6 +2906,269 @@ static void catalog_confirm_do_cb(lv_event_t *e)
 }
 
 // ---------------------------------------------------------------------------
+// Ajustes > Atualizar firmware (OTA — kit_ota)
+// ---------------------------------------------------------------------------
+
+static int         s_fwupdate_last_state = -1;
+
+static void fwupdate_check_cb(lv_event_t *e);
+static void fwupdate_install_cb(lv_event_t *e);
+static void fwupdate_reboot_cb(lv_event_t *e);
+static void fwupdate_goto_wifi_cb(lv_event_t *e);
+static void fwupdate_rebuild(void);
+
+static void fwupdate_busy_show(const char *title)
+{
+    if (s_fwupdate_busy) return;
+    kit_power_keep_awake_impl(true);
+    s_fwupdate_busy = make_overlay(KIT_COLOR_BG);
+    lv_obj_t *col = make_group(s_fwupdate_busy, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(col, 18, 0);
+    lv_obj_center(col);
+    add_label(col, title, KIT_COLOR_TEXT_MUTED, &kit_mono_20, 4);
+    lv_obj_t *pct = add_label(col, "", KIT_COLOR_TEXT, &kit_display_72, 0);
+    lv_obj_set_user_data(s_fwupdate_busy, pct);
+    add_label(col, "N\xC3\x83O DESLIGUE O KIT", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+}
+
+static void fwupdate_busy_update(void)
+{
+    if (!s_fwupdate_busy) return;
+    lv_obj_t *pct = lv_obj_get_user_data(s_fwupdate_busy);
+    if (!pct) return;
+    int p = kit_ota_progress();
+    if (p < 0) lv_label_set_text(pct, "");
+    else       lv_label_set_text_fmt(pct, "%d", p);
+}
+
+static void fwupdate_busy_hide(void)
+{
+    if (s_fwupdate_busy) { lv_obj_delete(s_fwupdate_busy); s_fwupdate_busy = NULL; }
+    kit_power_keep_awake_impl(false);
+}
+
+static void fwupdate_rebuild(void)
+{
+    if (!s_fwupdate_screen) return;
+    lv_obj_clean(s_fwupdate_screen);
+    make_titlebar(s_fwupdate_screen, "FIRMWARE", close_fwupdate_cb);
+
+    lv_obj_t *body = make_scroll_body(s_fwupdate_screen, KIT_BTN_H + 28);
+
+    char cur[16];
+    kit_ota_current_version(cur, sizeof(cur));
+    char curspec[24];
+    snprintf(curspec, sizeof(curspec), "v%s", cur);
+    make_spec(body, "VERS\xC3\x83O ATUAL", curspec);
+
+    kit_ota_state_t st = kit_ota_get_state();
+
+    if (!kit_network_is_connected() || st == KIT_OTA_OFFLINE) {
+        lv_obj_t *m = add_label(body,
+            "A atualiza\xC3\xA7\xC3\xA3o precisa de Wi-Fi. Conecte o KIT a uma rede.",
+            KIT_COLOR_TEXT, &kit_sans_22, 0);
+        lv_label_set_long_mode(m, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(m, KIT_CONTENT);
+        lv_obj_t *b = make_button(s_fwupdate_screen, "IR PARA WI-FI", fwupdate_goto_wifi_cb, true);
+        lv_obj_align(b, LV_ALIGN_BOTTOM_MID, 0, -14);
+        return;
+    }
+
+    if (st == KIT_OTA_CHECKING) {
+        lv_obj_t *m = add_label(body, "Procurando atualiza\xC3\xA7\xC3\xA3o...",
+                                KIT_COLOR_TEXT_MUTED, &kit_mono_20, 3);
+        lv_obj_set_style_pad_top(m, 20, 0);
+        return;
+    }
+
+    if (st == KIT_OTA_DONE) {
+        lv_obj_t *m = add_label(body,
+            "Firmware instalado. Reinicie o KIT para usar a vers\xC3\xA3o nova.",
+            KIT_COLOR_GREEN, &kit_sans_22, 0);
+        lv_label_set_long_mode(m, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(m, KIT_CONTENT);
+        lv_obj_t *b = make_button(s_fwupdate_screen, "REINICIAR AGORA", fwupdate_reboot_cb, true);
+        lv_obj_align(b, LV_ALIGN_BOTTOM_MID, 0, -14);
+        return;
+    }
+
+    kit_ota_release_t rel;
+    bool have = kit_ota_get_release(&rel);
+
+    if (st == KIT_OTA_ERR) {
+        lv_obj_t *m = add_label(body, kit_ota_last_error(), KIT_COLOR_TEXT, &kit_sans_22, 0);
+        lv_label_set_long_mode(m, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(m, KIT_CONTENT);
+        lv_obj_t *b = make_button(s_fwupdate_screen, "TENTAR DE NOVO", fwupdate_check_cb, true);
+        lv_obj_align(b, LV_ALIGN_BOTTOM_MID, 0, -14);
+        return;
+    }
+
+    if ((st == KIT_OTA_AVAILABLE || st == KIT_OTA_NO_POWER) && have) {
+        char nv[32];
+        snprintf(nv, sizeof(nv), "Vers\xC3\xA3o nova: v%s", rel.version);
+        lv_obj_t *h = add_label(body, nv, KIT_COLOR_TEXT, &kit_sans_28, 1);
+        lv_obj_set_width(h, KIT_CONTENT);
+        lv_label_set_long_mode(h, LV_LABEL_LONG_DOT);
+
+        if (rel.notes[0]) {
+            lv_obj_t *n = add_label(body, rel.notes, KIT_COLOR_TEXT, &kit_sans_22, 0);
+            lv_label_set_long_mode(n, LV_LABEL_LONG_WRAP);
+            lv_obj_set_width(n, KIT_CONTENT);
+        }
+        if (rel.size) {
+            char sz[32];
+            snprintf(sz, sizeof(sz), "Download ~%lu KB", (unsigned long)((rel.size + 512) / 1024));
+            add_label(body, sz, KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+        }
+
+        bool usb = kit_power_is_usb_connected();
+        if (!usb) {
+            lv_obj_t *w = add_label(body,
+                "Conecte o cabo USB para instalar (evita brick por queda de energia).",
+                KIT_COLOR_YELLOW, &kit_sans_22, 0);
+            lv_label_set_long_mode(w, LV_LABEL_LONG_WRAP);
+            lv_obj_set_width(w, KIT_CONTENT);
+            lv_obj_set_style_pad_top(w, 8, 0);
+        }
+
+        lv_obj_t *b = make_button(s_fwupdate_screen, "INSTALAR", fwupdate_install_cb, true);
+        lv_obj_align(b, LV_ALIGN_BOTTOM_MID, 0, -14);
+        if (!usb) {
+            lv_obj_set_style_bg_opa(b, LV_OPA_40, 0);
+            lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);   // ainda clica: mostra o toast
+        }
+        return;
+    }
+
+    // IDLE / UP_TO_DATE
+    const char *msg = (st == KIT_OTA_UP_TO_DATE)
+        ? "Voc\xC3\xAA est\xC3\xA1 na vers\xC3\xA3o mais recente."
+        : "Verifique se h\xC3\xA1 uma vers\xC3\xA3o nova de firmware.";
+    lv_obj_t *m = add_label(body, msg, KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(m, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(m, KIT_CONTENT);
+    lv_obj_t *b = make_button(s_fwupdate_screen, "PROCURAR ATUALIZA\xC3\x87\xC3\x83O", fwupdate_check_cb, true);
+    lv_obj_align(b, LV_ALIGN_BOTTOM_MID, 0, -14);
+}
+
+static void fwupdate_poll_cb(lv_timer_t *t)
+{
+    (void)t;
+    if (!s_fwupdate_screen) return;
+
+    kit_ota_state_t st = kit_ota_get_state();
+    fwupdate_busy_update();
+
+    if ((int)st == s_fwupdate_last_state) return;
+    s_fwupdate_last_state = (int)st;
+
+    switch (st) {
+    case KIT_OTA_DOWNLOADING:
+        if (!s_fwupdate_busy) fwupdate_busy_show("BAIXANDO");
+        break;
+    case KIT_OTA_APPLYING:
+        if (!s_fwupdate_busy) fwupdate_busy_show("GRAVANDO");
+        break;
+    case KIT_OTA_DONE:
+        fwupdate_busy_hide();
+        s_fw_update_badge = false;
+        kit_audio_sfx_impl(KIT_SFX_CONFIRM);
+        fwupdate_rebuild();
+        break;
+    case KIT_OTA_ERR:
+    case KIT_OTA_NO_POWER:
+        fwupdate_busy_hide();
+        kit_audio_beep_impl(400, 60);
+        show_toast(kit_ota_last_error());
+        fwupdate_rebuild();
+        break;
+    case KIT_OTA_AVAILABLE:
+        s_fw_update_badge = false;   // já está vendo
+        fwupdate_rebuild();
+        break;
+    case KIT_OTA_UP_TO_DATE:
+    case KIT_OTA_CHECKING:
+    case KIT_OTA_OFFLINE:
+        fwupdate_rebuild();
+        break;
+    default:
+        break;
+    }
+}
+
+static void open_fwupdate_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_fwupdate_screen) return;
+
+    s_fwupdate_screen = make_overlay(KIT_COLOR_BG);
+    s_fwupdate_last_state = -1;
+    fwupdate_rebuild();
+
+    kit_ota_state_t st = kit_ota_get_state();
+    if (kit_network_is_connected() && (st == KIT_OTA_IDLE || st == KIT_OTA_OFFLINE)) {
+        kit_ota_check();
+    }
+    s_fwupdate_poll = lv_timer_create(fwupdate_poll_cb, 400, NULL);
+}
+
+static void close_fwupdate_cb(lv_event_t *e)
+{
+    (void)e;
+    // Trava o "voltar" enquanto grava — sair no meio deixa o slot pela metade.
+    kit_ota_state_t st = kit_ota_get_state();
+    if (st == KIT_OTA_DOWNLOADING || st == KIT_OTA_APPLYING) return;
+
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_fwupdate_poll) { lv_timer_delete(s_fwupdate_poll); s_fwupdate_poll = NULL; }
+    fwupdate_busy_hide();
+    if (s_fwupdate_screen) { lv_obj_delete(s_fwupdate_screen); s_fwupdate_screen = NULL; }
+}
+
+static void fwupdate_check_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    s_fwupdate_last_state = -1;
+    kit_ota_check();
+    fwupdate_rebuild();
+}
+
+static void fwupdate_install_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (!kit_power_is_usb_connected()) { show_toast("CONECTE O CABO USB"); return; }
+    s_fwupdate_last_state = -1;
+    if (kit_ota_apply() != KIT_OK) { show_toast("OCUPADO"); return; }
+    fwupdate_busy_show("BAIXANDO");
+}
+
+static void fwupdate_reboot_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_ota_reboot();
+}
+
+static void fwupdate_goto_wifi_cb(lv_event_t *e)
+{
+    close_fwupdate_cb(NULL);
+    open_wifi_cb(NULL);
+}
+
+// Chamada pela task de rede do kit_ota (ver kit_runtime) quando um check em
+// background acha uma versão nova. Só marca flags; o toast/ponto sobem na task
+// LVGL pelo batt_tick_cb.
+void kit_launcher_notify_update_available(const char *version)
+{
+    strlcpy(s_fw_update_ver, version ? version : "", sizeof(s_fw_update_ver));
+    s_fw_update_badge = true;
+    s_fw_update_toast_pending = true;
+}
+
+// ---------------------------------------------------------------------------
 // Ações
 // ---------------------------------------------------------------------------
 
@@ -2967,6 +3264,10 @@ void kit_launcher_go_home(void)
     if (s_catalog_confirm_screen) { lv_obj_delete(s_catalog_confirm_screen); s_catalog_confirm_screen = NULL; }
     if (s_catalog_detail_screen)  { lv_obj_delete(s_catalog_detail_screen);  s_catalog_detail_screen = NULL; }
     if (s_catalog_screen)         { lv_obj_delete(s_catalog_screen);         s_catalog_screen = NULL; }
+    if (s_fwupdate_poll)  { lv_timer_delete(s_fwupdate_poll); s_fwupdate_poll = NULL; }
+    if (s_fwupdate_busy)  { lv_obj_delete(s_fwupdate_busy);   s_fwupdate_busy = NULL;
+                            kit_power_keep_awake_impl(false); }
+    if (s_fwupdate_screen)        { lv_obj_delete(s_fwupdate_screen);        s_fwupdate_screen = NULL; }
     if (s_usbmsc_screen)     { lv_obj_delete(s_usbmsc_screen);     s_usbmsc_screen = NULL; }
     if (s_about_screen)      { lv_obj_delete(s_about_screen);      s_about_screen = NULL; }
     if (s_sd_format_screen)  { lv_obj_delete(s_sd_format_screen);  s_sd_format_screen = NULL; }
@@ -3024,6 +3325,16 @@ static void batt_tick_cb(lv_timer_t *t)
         s_low_batt_warned = true;
         kit_audio_beep_impl(500, 90);
         show_feedback(KIT_COLOR_YELLOW, KIT_ICON_TRIANGLE, "BATERIA BAIXA");
+    }
+
+    // Atualização de firmware achada em background: um toast quando a Home
+    // estiver à mostra (ver kit_launcher_notify_update_available).
+    if (s_fw_update_toast_pending && !home_is_covered()) {
+        s_fw_update_toast_pending = false;
+        char msg[52];
+        snprintf(msg, sizeof(msg),
+                 "Atualiza\xC3\xA7\xC3\xA3o dispon\xC3\xADvel: v%s", s_fw_update_ver);
+        show_toast(msg);
     }
 }
 

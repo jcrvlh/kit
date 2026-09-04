@@ -22,6 +22,13 @@ void      kit_launcher_go_home(void);
  */
 void      kit_launcher_release_home_deck(void);
 
+/**
+ * Avisa o launcher que o kit_ota achou uma versão nova de firmware num check
+ * em background. Só marca estado (chamável de qualquer task); o aviso visual
+ * (toast + ponto no card Ajustes) sobe no próximo tick da UI.
+ */
+void      kit_launcher_notify_update_available(const char *version);
+
 #ifdef __cplusplus
 }
 #endif
