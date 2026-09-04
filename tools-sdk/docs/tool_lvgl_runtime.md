@@ -53,6 +53,12 @@ do firmware + registrar aqui.
 `lv_label_set_long_mode`
 **Imagens / Bitmaps:** `lv_image_create` · `lv_image_set_src` ·
 `lv_obj_set_style_image_recolor` · `lv_obj_set_style_image_recolor_opa`
+**QR code** (runtime ≥ 0.3.0 — Adedonha põe um QR pro gerador de folhas web,
+como o Bingo): `lv_qrcode_create` · `lv_qrcode_set_size` ·
+`lv_qrcode_set_dark_color` · `lv_qrcode_set_light_color` ·
+`lv_qrcode_set_quiet_zone` · `lv_qrcode_update`. O QR precisa de fundo claro pra
+ler numa câmera — é a exceção ao preto AMOLED: quadrado branco, código no
+`KIT_COLOR_BG`.
 **Tileview** (páginas que deslizam na horizontal — o padrão das Tools nativas
 Dados/Bingo): `lv_tileview_create` · `lv_tileview_add_tile` ·
 `lv_tileview_set_tile_by_index` · `lv_tileview_get_tile_active`. O evento de

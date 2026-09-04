@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kit-cli"
-version = "0.2.0"
+version = "0.3.0"
 description = "KIT Tool SDK CLI — Ferramenta oficial para criar, validar, compilar, empacotar e instalar Tools para o KIT."
 readme = "README.md"
 requires-python = ">=3.9"
