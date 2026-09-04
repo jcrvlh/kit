@@ -158,6 +158,11 @@ def _build_xtensa(source_dir: Path, build_dir: Path, sdk_root: Path) -> Tuple[bo
         f"-I{sdk_root / 'include'}",
         f"-I{lvgl}", f"-I{lvgl / 'src'}",
         "-DLV_CONF_SKIP=1",
+        # O firmware liga o widget QR do LVGL (CONFIG_LV_USE_QRCODE, em
+        # sdkconfig.defaults) e exporta lv_qrcode_* na tabela de símbolos das
+        # Tools. Sem este define, o protótipo fica atrás de `#if LV_USE_QRCODE`
+        # e a Tool não compila a chamada. Ver tools-sdk/docs/tool_lvgl_runtime.md.
+        "-DLV_USE_QRCODE=1",
     ]
     ldflags = ["-Wl,--gc-sections", "-Wl,--strip-all", "-Wl,--allow-shlib-undefined"]
 

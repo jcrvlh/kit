@@ -17,8 +17,12 @@ papel.
 > O Core mantém: o ícone geométrico da Home (`TOOL_ICON_ADEDONHA` — uma folha de
 > cartela com três linhas; `home_icon` `"order"` até o validador do SDK ganhar
 > `"adedonha"`), os 4 SFX (`KIT_SFX_ADEDONHA_*`) e os símbolos LVGL
-> `lv_obj_clean` / `lv_obj_set_style_border_color` / `_border_opa` na tabela do
-> `kit_tool_loader`.
+> `lv_obj_clean` / `lv_obj_set_style_border_color` / `_border_opa` / `lv_qrcode_*`
+> na tabela do `kit_tool_loader`.
+>
+> A partir da **v1.1.0** exige **runtime ≥ 0.3.0** — a versão que exporta
+> `lv_qrcode_*` (usado no QR da página CARTELA, ver
+> [tool_lvgl_runtime.md](../../tools-sdk/docs/tool_lvgl_runtime.md)).
 
 Card **azul**, mini-jogo. Baralho de 43 categorias, licença CC0.
 
@@ -26,7 +30,8 @@ Card **azul**, mini-jogo. Baralho de 43 categorias, licença CC0.
 
 ## Fluxo
 
-1. **Sorteia a cartela uma vez** → todos copiam as categorias como colunas.
+1. **Sorteia a cartela uma vez** → todos copiam as categorias como colunas (ou
+   apontam a câmera no **QR** da página CARTELA e imprimem as folhas prontas).
 2. **Sorteia uma letra** (botão, toque no palco ou **chacoalhando** — a Tool
    externa não tem a ação do PWR) → o tempo começa a correr.
 3. Todos preenchem uma palavra por coluna com aquela letra, até **o tempo
@@ -67,8 +72,22 @@ toque cala o alarme** (a dica vira `CONFIRAM NO PAPEL` e aparece o botão); o 2�
 
 ### Página 2 — CARTELA
 
-A lista numerada das categorias sorteadas em `kit_sans_28` (o que se copia pro
-papel). Antes do primeiro sorteio, mostra os **4 passos** do "como joga".
+Antes do primeiro sorteio, o **"como joga"** no padrão da Mímica — um corpo
+único em `kit_sans_28` (caixa normal, quebra linha), não mais quatro linhas de
+mono apagado em caixa alta.
+
+Depois do sorteio: a **lista numerada das categorias** em `kit_sans_28` +, no
+fim, um **QR** (fundo branco, exceção ao preto AMOLED) pro **gerador de folhas
+web** — [`web-installer/adedonha.html`](../../web-installer/adedonha.html),
+publicado em `jcrvlh.github.io/kit/adedonha.html`. A URL leva os _slugs_ das
+categorias da rodada (`?c=nome,animal,fruta,…` — mesma normalização nos dois
+lados: minúscula ASCII, sem acento nem espaço). A página monta **uma folha A4
+por pessoa** (coluna da LETRA + uma coluna por categoria + PONTOS, N rodadas em
+branco) e imprime; aberta sem `?c=` ela traz um seletor das 43 categorias. Um
+alternador **CATEGORIAS / PREENCHER** deixa anotar as respostas no próprio
+celular (rodada = letra + resposta por categoria + pontos, com total), salvo em
+`localStorage`. A nota do QR puxa pro **papel e caneta** — a web fica como
+alternativa, e ela também imprime.
 
 ---
 

@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Folha de Adedonha</title>
+<link rel="icon" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600&family=Archivo+Black&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* --------------------------------------------------------------------------
+   Folha de Adedonha — gerador do KIT.
+   Mesma ideia da Cartela de Bingo: o KIT sorteia (a cartela de categorias e as
+   letras), o papel confere. Esta página monta a folha pra jogar de caneta:
+   uma grade por jogador, coluna da LETRA + uma coluna por categoria + PONTOS.
+   Linguagem "Brutalist Bauhaus" (docs/design/design-language.md): preto AMOLED,
+   tipografia mono em caixa alta, uma superfície colorida por vez. Azul = a Tool
+   Adedonha. Tudo roda no navegador; nada é enviado a lugar nenhum.
+   -------------------------------------------------------------------------- */
+
+:root {
+  --bg:          #000000;
+  --surface:     #171719;
+  --surface-alt: #222226;
+  --line:        #2C2C2E;
+  --paper:       #EFEADD;
+  --muted:       #6E6C66;
+
+  --red:    #C6472F;
+  --blue:   #2C3CC4;
+  --yellow: #E9B23C;
+  --green:  #45A05B;
+
+  --on-blue: #EFEADD;
+
+  --mono: "Space Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --disp: "Archivo Black", "Arial Black", system-ui, sans-serif;
+  --body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; }
+[hidden] { display: none !important; }
+
+html, body { background: var(--bg); }
+
+body {
+  font-family: var(--body);
+  color: var(--paper);
+  line-height: 1.5;
+  min-height: 100dvh;
+  touch-action: manipulation;
+  padding: max(18px, env(safe-area-inset-top)) 16px
+           calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.wrap { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 20px; }
+
+/* ---- Masthead ---------------------------------------------------------- */
+
+.mast {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.primitives { display: flex; align-items: center; gap: 7px; }
+.primitives i { display: block; width: 13px; height: 13px; }
+.primitives .sq { background: var(--red); }
+.primitives .ci { background: var(--blue); border-radius: 50%; }
+.primitives .tr {
+  width: 0; height: 0; background: none;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 13px solid var(--yellow);
+}
+
+.wordmark {
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  font-size: 17px;
+  text-indent: 0.32em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.iconbtn {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: var(--surface);
+  color: var(--paper);
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.iconbtn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+
+/* ---- Cartela: lista de categorias ----------------------------------- */
+
+.kick {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+
+.cats { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cats li {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cats li:last-child { border-bottom: 0; }
+.cats .n {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--blue);
+  min-width: 22px;
+  text-align: right;
+}
+.cats .c { font-size: 18px; }
+
+.howto {
+  font-size: 13px;
+  color: var(--muted);
+  text-wrap: balance;
+}
+
+/* ---- Seletor de categorias ---------------------------------------- */
+
+.picker { display: flex; flex-direction: column; gap: 12px; }
+.picker h2 {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper);
+}
+.chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.chip {
+  font-family: var(--body);
+  font-size: 13px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.chip[aria-pressed="true"] {
+  background: var(--blue);
+  color: var(--on-blue);
+  border-color: var(--blue);
+}
+.picker .count {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+/* ---- Ações --------------------------------------------------------- */
+
+.actions { display: flex; flex-direction: column; gap: 10px; }
+
+.btn {
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  font-size: 14px;
+  padding: 16px 0;
+  border-radius: 16px;
+  border: 0;
+  cursor: pointer;
+  width: 100%;
+}
+.btn-primary { background: var(--yellow); color: #000; }
+.btn-primary:disabled { background: var(--surface); color: var(--muted); cursor: not-allowed; }
+.btn-ghost {
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 13px 0;
+  font-size: 12px;
+}
+.btn:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
+
+/* ---- Alternador CATEGORIAS / PREENCHER --------------------------- */
+
+.seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.seg button {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  padding: 12px 0;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.seg button[aria-pressed="true"] { background: var(--blue); color: var(--on-blue); }
+.seg button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ---- Preencher no celular -------------------------------------- */
+
+.fill { display: flex; flex-direction: column; gap: 14px; }
+
+.round {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.round-hd { display: flex; align-items: center; gap: 10px; }
+.round-hd .rn {
+  flex: 1;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.round-hd .rl-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.round-hd .rl-wrap span {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.round-hd .rl {
+  width: 54px;
+  height: 54px;
+  text-align: center;
+  font-family: var(--disp);
+  font-size: 26px;
+  text-transform: uppercase;
+  background: var(--bg);
+  color: var(--blue);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.round-hd .rl::placeholder { color: var(--line); }
+.round-hd .rx {
+  align-self: flex-start;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.frow { display: flex; flex-direction: column; gap: 5px; }
+.frow label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.frow input, .round-hd .rl {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.frow input {
+  font-family: var(--body);
+  font-size: 16px;
+  padding: 9px 12px;
+  background: var(--bg);
+  color: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.round input:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 1px;
+  border-color: var(--blue);
+}
+.fill-total {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper);
+  text-align: right;
+}
+
+/* ---- Diálogo de impressão --------------------------------------- */
+
+.dlg {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: calc(100% - 32px);
+  max-width: 340px;
+  height: fit-content;
+  max-height: calc(100% - 32px);
+  border: 0;
+  border-radius: 18px;
+  padding: 0;
+  background: var(--surface-alt);
+  color: var(--paper);
+}
+.dlg::backdrop { background: rgba(0, 0, 0, 0.6); }
+.dlg-in { display: flex; flex-direction: column; gap: 14px; padding: 22px; }
+.dlg h2 {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.dlg p { font-size: 13px; color: var(--muted); }
+.dlg label {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dlg input {
+  font-family: var(--disp);
+  font-size: 24px;
+  padding: 10px 14px;
+  background: var(--bg);
+  color: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  width: 100%;
+}
+.dlg-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.dlg-row .btn { font-size: 12px; padding: 13px 4px; letter-spacing: 0.04em; }
+
+.sheet { display: none; }
+
+footer {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ---- Impressão ------------------------------------------------- --
+   Só as folhas vão pro papel: A4 retrato, uma grade por jogador (uma folha
+   cada), tudo em preto — logo do KIT incluída. A tela (.wrap) e o diálogo
+   somem. */
+
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  html, body { background: #fff; }
+  body { padding: 0; display: block; }
+  .wrap, .dlg { display: none !important; }
+  .sheet {
+    display: block;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .ppage { break-after: page; }
+  .ppage:last-child { break-after: auto; }
+
+  .psheet { display: flex; flex-direction: column; gap: 5mm; color: #000; }
+
+  .psheet-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom: 1.5pt solid #000;
+    padding-bottom: 2mm;
+  }
+  .klogo {
+    display: flex;
+    align-items: center;
+    gap: 1.6mm;
+    font-family: var(--mono);
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    font-size: 10pt;
+  }
+  .klogo i { display: block; width: 3mm; height: 3mm; background: #000; }
+  .klogo .ci { border-radius: 50%; }
+  .klogo .tr {
+    width: 0; height: 0; background: none;
+    border-left: 1.7mm solid transparent;
+    border-right: 1.7mm solid transparent;
+    border-bottom: 3mm solid #000;
+  }
+  .psheet-title {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 8pt;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .pplayer {
+    font-family: var(--mono);
+    font-size: 9pt;
+    letter-spacing: 0.06em;
+  }
+  .pplayer u {
+    display: inline-block;
+    min-width: 46mm;
+    border-bottom: 0.75pt solid #000;
+    text-decoration: none;
+  }
+
+  table.pgrid {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+  .pgrid th, .pgrid td {
+    border: 0.75pt solid #000;
+    text-align: center;
+    vertical-align: bottom;
+    padding: 1mm;
+  }
+  .pgrid thead th {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 6.5pt;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.15;
+    height: 16mm;
+    vertical-align: bottom;
+    word-break: break-word;
+    hyphens: auto;
+  }
+  .pgrid col.c-letra { width: 13mm; }
+  .pgrid col.c-pts   { width: 15mm; }
+  .pgrid thead th.h-letra,
+  .pgrid thead th.h-pts { background: #000; color: #fff; }
+
+  .pgrid tbody td { height: 15mm; }
+  .pgrid tbody td.t-letra {
+    font-family: var(--disp);
+    font-size: 15pt;
+    vertical-align: middle;
+  }
+  .pgrid tbody tr:nth-child(even) td { background: #f0f0f0; }
+
+  .pgrid tfoot td {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: 7pt;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    height: 10mm;
+    text-align: right;
+    padding-right: 2mm;
+  }
+
+  .pnote {
+    font-family: var(--mono);
+    font-size: 6.5pt;
+    letter-spacing: 0.08em;
+    color: #000;
+  }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div class="primitives" aria-hidden="true"><i class="sq"></i><i class="ci"></i><i class="tr"></i></div>
+    <div class="wordmark">ADEDONHA</div>
+    <button type="button" class="iconbtn" id="print" aria-label="Imprimir folhas" title="Imprimir folhas">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M8 14h8v7H8z"/>
+      </svg>
+    </button>
+  </header>
+
+  <div class="seg" id="seg" role="group" aria-label="Modo" hidden>
+    <button type="button" data-mode="cats" aria-pressed="true">CATEGORIAS</button>
+    <button type="button" data-mode="fill" aria-pressed="false">PREENCHER</button>
+  </div>
+
+  <main id="view">
+    <section id="cartela" hidden>
+      <div class="kick" id="kick">Cartela</div>
+      <ol class="cats" id="cats"></ol>
+    </section>
+    <section class="fill" id="fill" hidden></section>
+  </main>
+
+  <p class="howto" id="howto"></p>
+
+  <section class="picker" id="picker" hidden>
+    <h2>Escolha as categorias</h2>
+    <div class="chips" id="chips" role="group" aria-label="Categorias"></div>
+    <div class="count" id="count">0 escolhidas</div>
+  </section>
+
+  <div class="actions">
+    <button type="button" class="btn btn-primary" id="doprint">IMPRIMIR FOLHAS</button>
+    <button type="button" class="btn btn-ghost" id="edit">TROCAR CATEGORIAS</button>
+    <button type="button" class="btn btn-ghost" id="apply" hidden>USAR ESTAS CATEGORIAS</button>
+    <button type="button" class="btn btn-ghost" id="copy">COPIAR LINK DA CARTELA</button>
+  </div>
+
+  <footer>KIT</footer>
+</div>
+
+<dialog class="dlg" id="printbox">
+  <form method="dialog" class="dlg-in">
+    <h2>Imprimir folhas</h2>
+    <p>Uma folha A4 por pessoa, todas iguais. Sai em preto e branco.</p>
+    <label>Quantas folhas
+      <input type="number" id="players" min="1" max="12" value="4" inputmode="numeric">
+    </label>
+    <label>Quantas rodadas (linhas)
+      <input type="number" id="rounds" min="1" max="24" value="12" inputmode="numeric">
+    </label>
+    <div class="dlg-row">
+      <button type="button" class="btn btn-ghost" id="dlgcancel">Cancelar</button>
+      <button type="submit" value="ok" class="btn btn-primary">Gerar e imprimir</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="sheet" id="sheet" aria-hidden="true"></div>
+
+<script>
+"use strict";
+
+/* Pool fixo de categorias — espelha CATS[] em
+   kit-tools/tools/io.github.jcrvlh.adedonha/src/main.c. A ordem não importa;
+   serve pro seletor e pra reconhecer o que veio na URL. */
+const POOL = [
+  "Nome", "Sobrenome", "Animal", "Fruta", "Cor",
+  "Objeto", "Comida", "País", "Cidade", "Profissão",
+  "Parte do corpo", "Marca", "Filme", "Desenho animado", "Cantor(a)",
+  "Banda", "Instrumento musical", "Esporte", "Time de futebol", "Flor",
+  "Árvore", "Verdura ou legume", "Bebida", "Doce", "Roupa",
+  "Calçado", "Móvel", "Eletrodoméstico", "Meio de transporte", "Personagem",
+  "Super-herói", "Vilão de filme", "Jogo", "Aplicativo", "Rede social",
+  "Signo", "Palavra em inglês", "Nome de bebê", "Tem na cozinha",
+  "Coisa gelada", "Item de praia", "Desculpa pra faltar", "Música",
+];
+
+/* "Desenho Animado" ~ "desenho animado" ~ "desenho-animado": tira acento,
+   pontuação e espaço/traço pra casar o que veio na URL com o pool. */
+const norm = (s) => s
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+const POOL_BY_NORM = new Map(POOL.map((c) => [norm(c), c]));
+
+/* --- Categorias da URL: ?c=nome,animal,fruta,... --------------------- */
+function catsFromURL() {
+  const raw = new URLSearchParams(location.search).get("c");
+  if (!raw) return [];
+  const out = [];
+  const seen = new Set();
+  for (let part of raw.split(",")) {
+    part = part.trim();
+    if (!part) continue;
+    let dec = part;
+    try { dec = decodeURIComponent(part); } catch (e) { /* usa cru */ }
+    const k = norm(dec);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(POOL_BY_NORM.get(k) || dec.replace(/\b\w/g, (m) => m.toUpperCase()));
+  }
+  return out;
+}
+
+function catsToParam(list) {
+  return list.map((c) => encodeURIComponent(norm(c))).join(",");
+}
+
+let cats = catsFromURL();
+let draft = cats.slice();          // seleção no seletor
+let editing = cats.length === 0;   // sem categorias na URL → já abre o seletor
+let mode = "cats";                 // "cats" (lista + impressão) | "fill" (preenche no celular)
+
+/* --- Elementos ----------------------------------------------------- */
+const elCartela = document.getElementById("cartela");
+const elCats    = document.getElementById("cats");
+const elKick    = document.getElementById("kick");
+const elHowto   = document.getElementById("howto");
+const elPicker  = document.getElementById("picker");
+const elChips   = document.getElementById("chips");
+const elCount   = document.getElementById("count");
+const elSeg     = document.getElementById("seg");
+const elFill    = document.getElementById("fill");
+const btnPrint  = document.getElementById("doprint");
+const btnEdit   = document.getElementById("edit");
+const btnApply  = document.getElementById("apply");
+const btnCopy   = document.getElementById("copy");
+
+/* --- Preencher no celular: estado por conjunto de categorias -------
+   Fica só no navegador de quem abriu (localStorage), sob a chave dos slugs
+   das categorias — trocar a cartela troca a folha. */
+let fill = { rounds: [] };
+
+const fillKey = () => "kit.adedonha.fill." + catsToParam(cats);
+
+function blankRound() { return { l: "", a: cats.map(() => ""), p: "" }; }
+
+function coerceRound(r) {
+  const a = (r && Array.isArray(r.a)) ? r.a : [];
+  return {
+    l: (r && typeof r.l === "string") ? r.l.slice(0, 1).toUpperCase() : "",
+    a: cats.map((_, i) => (typeof a[i] === "string" ? a[i] : "")),
+    p: (r && (typeof r.p === "string" || typeof r.p === "number")) ? String(r.p) : "",
+  };
+}
+
+function loadFill() {
+  fill = { rounds: [] };
+  try {
+    const s = JSON.parse(localStorage.getItem(fillKey()));
+    if (s && Array.isArray(s.rounds)) fill.rounds = s.rounds.slice(0, 40).map(coerceRound);
+  } catch (e) { /* storage indisponível — começa vazio */ }
+  if (!fill.rounds.length) fill.rounds.push(blankRound());
+}
+
+function saveFill() {
+  try { localStorage.setItem(fillKey(), JSON.stringify(fill)); } catch (e) { /* ok */ }
+}
+
+/* Chips do seletor — uma vez só. */
+for (const c of POOL) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "chip";
+  b.textContent = c;
+  b.setAttribute("aria-pressed", "false");
+  b.addEventListener("click", () => {
+    const i = draft.findIndex((x) => norm(x) === norm(c));
+    if (i >= 0) draft.splice(i, 1);
+    else draft.push(c);
+    render();
+  });
+  elChips.appendChild(b);
+}
+
+/* --- Render ------------------------------------------------------- */
+function render() {
+  const has = cats.length > 0;
+  const showFill = has && !editing && mode === "fill";
+
+  elCartela.hidden = !has || editing || mode === "fill";
+  if (has && !editing && mode === "cats") {
+    elKick.textContent = cats.length + (cats.length === 1 ? " categoria" : " categorias");
+    elCats.replaceChildren(...cats.map((c, i) => {
+      const li = document.createElement("li");
+      const n = document.createElement("span"); n.className = "n"; n.textContent = i + 1;
+      const t = document.createElement("span"); t.className = "c"; t.textContent = c;
+      li.append(n, t);
+      return li;
+    }));
+  }
+
+  elSeg.hidden = !has || editing;
+  for (const b of elSeg.children)
+    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+
+  elFill.hidden = !showFill;
+  if (showFill) renderFill();
+
+  elPicker.hidden = !editing;
+  if (editing) {
+    for (const b of elChips.children)
+      b.setAttribute("aria-pressed", String(draft.some((x) => norm(x) === norm(b.textContent))));
+    elCount.textContent = draft.length + (draft.length === 1 ? " escolhida" : " escolhidas");
+  }
+
+  btnEdit.hidden  = editing;
+  btnApply.hidden = !editing;
+  btnApply.disabled = draft.length < 2;
+  btnApply.classList.toggle("btn-primary", draft.length >= 2);
+  btnApply.classList.toggle("btn-ghost", draft.length < 2);
+  btnCopy.hidden  = editing || !has;
+  btnPrint.hidden = editing;
+  btnPrint.disabled = !has;
+
+  if (editing) {
+    elHowto.hidden = has;
+    elHowto.textContent = has ? "" :
+      "Monte a cartela pelas categorias abaixo — ou volte pra Adedonha no KIT e deixe o aparelho sortear.";
+  } else if (showFill) {
+    elHowto.hidden = false;
+    elHowto.textContent =
+      "O KIT sorteia a letra; anote aqui uma resposta por categoria antes do STOP. Fica salvo só neste celular.";
+  } else {
+    elHowto.hidden = false;
+    elHowto.textContent =
+      "Imprima uma folha por pessoa e jogue de caneta — ou toque em PREENCHER pra anotar aqui no celular. O KIT sorteia a letra; todos preenchem uma coluna até dar STOP.";
+  }
+}
+
+/* --- Preencher: uma lista de rodadas (letra + resposta por categoria) --- */
+function renderFill() {
+  const frag = document.createDocumentFragment();
+
+  fill.rounds.forEach((r, ri) => {
+    const card = document.createElement("div");
+    card.className = "round";
+
+    const hd = document.createElement("div");
+    hd.className = "round-hd";
+
+    const rn = document.createElement("span");
+    rn.className = "rn";
+    rn.textContent = "Rodada " + (ri + 1);
+
+    const rlWrap = document.createElement("div");
+    rlWrap.className = "rl-wrap";
+    const rlCap = document.createElement("span");
+    rlCap.textContent = "Letra";
+    const rl = document.createElement("input");
+    rl.className = "rl";
+    rl.type = "text";
+    rl.maxLength = 1;
+    rl.value = r.l;
+    rl.placeholder = "?";
+    rl.setAttribute("aria-label", "Letra da rodada " + (ri + 1));
+    rl.autocapitalize = "characters";
+    rl.addEventListener("input", () => {
+      r.l = rl.value.toUpperCase();
+      rl.value = r.l;
+      saveFill();
+    });
+    rlWrap.append(rlCap, rl);
+
+    const rx = document.createElement("button");
+    rx.className = "rx";
+    rx.type = "button";
+    rx.textContent = "×";
+    rx.setAttribute("aria-label", "Remover rodada " + (ri + 1));
+    rx.addEventListener("click", () => {
+      fill.rounds.splice(ri, 1);
+      if (!fill.rounds.length) fill.rounds.push(blankRound());
+      saveFill();
+      render();
+    });
+
+    hd.append(rn, rlWrap, rx);
+    card.appendChild(hd);
+
+    cats.forEach((c, ci) => {
+      const row = document.createElement("div");
+      row.className = "frow";
+      const lab = document.createElement("label");
+      const id = "f" + ri + "-" + ci;
+      lab.htmlFor = id;
+      lab.textContent = c;
+      const inp = document.createElement("input");
+      inp.id = id;
+      inp.type = "text";
+      inp.value = r.a[ci] || "";
+      inp.autocomplete = "off";
+      inp.addEventListener("input", () => { r.a[ci] = inp.value; saveFill(); });
+      row.append(lab, inp);
+      card.appendChild(row);
+    });
+
+    const prow = document.createElement("div");
+    prow.className = "frow";
+    const plab = document.createElement("label");
+    const pid = "p" + ri;
+    plab.htmlFor = pid;
+    plab.textContent = "Pontos";
+    const pinp = document.createElement("input");
+    pinp.id = pid;
+    pinp.type = "number";
+    pinp.inputMode = "numeric";
+    pinp.value = r.p || "";
+    pinp.addEventListener("input", () => { r.p = pinp.value; saveFill(); updateTotal(); });
+    prow.append(plab, pinp);
+    card.appendChild(prow);
+
+    frag.appendChild(card);
+  });
+
+  const add = document.createElement("button");
+  add.className = "btn btn-ghost";
+  add.type = "button";
+  add.textContent = "+ NOVA RODADA";
+  add.addEventListener("click", () => {
+    fill.rounds.push(blankRound());
+    saveFill();
+    render();
+  });
+  frag.appendChild(add);
+
+  const total = document.createElement("div");
+  total.className = "fill-total";
+  total.id = "filltotal";
+  frag.appendChild(total);
+
+  elFill.replaceChildren(frag);
+  updateTotal();
+}
+
+function updateTotal() {
+  const el = document.getElementById("filltotal");
+  if (!el) return;
+  const sum = fill.rounds.reduce((a, r) => a + (parseInt(r.p, 10) || 0), 0);
+  el.textContent = "Total: " + sum;
+}
+
+/* --- Ações ------------------------------------------------------ */
+for (const b of elSeg.children) {
+  b.addEventListener("click", () => {
+    if (mode === b.dataset.mode) return;
+    mode = b.dataset.mode;
+    try { localStorage.setItem("kit.adedonha.mode", mode); } catch (e) { /* ok */ }
+    render();
+  });
+}
+
+btnEdit.addEventListener("click", () => { draft = cats.slice(); editing = true; render(); });
+
+btnApply.addEventListener("click", () => {
+  if (draft.length < 2) return;
+  cats = draft.slice();
+  editing = false;
+  const u = new URL(location.href);
+  u.search = "?c=" + catsToParam(cats);
+  history.replaceState(null, "", u);
+  loadFill();
+  render();
+});
+
+btnCopy.addEventListener("click", async () => {
+  const u = new URL(location.href);
+  u.search = "?c=" + catsToParam(cats);
+  try {
+    await navigator.clipboard.writeText(u.toString());
+    btnCopy.textContent = "LINK COPIADO";
+    setTimeout(() => (btnCopy.textContent = "COPIAR LINK DA CARTELA"), 1600);
+  } catch (e) {
+    prompt("Copie o link da cartela:", u.toString());
+  }
+});
+
+/* --- Impressão -------------------------------------------------- */
+const sheet    = document.getElementById("sheet");
+const printbox = document.getElementById("printbox");
+const elPlayers = document.getElementById("players");
+const elRounds  = document.getElementById("rounds");
+
+btnPrint.addEventListener("click", () => {
+  if (!cats.length) return;
+  if (typeof printbox.showModal === "function") printbox.showModal();
+  else runPrint(4, 12);
+});
+
+document.getElementById("dlgcancel").addEventListener("click", () => printbox.close("cancel"));
+
+printbox.addEventListener("close", () => {
+  if (printbox.returnValue !== "ok") return;
+  const p = clamp(parseInt(elPlayers.value, 10), 1, 12, 4);
+  const r = clamp(parseInt(elRounds.value, 10), 1, 24, 12);
+  runPrint(p, r);
+});
+
+function clamp(v, lo, hi, dflt) {
+  return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : dflt;
+}
+
+function buildSheet(rounds) {
+  const wrap = document.createElement("div");
+  wrap.className = "psheet";
+
+  const head = document.createElement("div");
+  head.className = "psheet-head";
+  const logo = document.createElement("span");
+  logo.className = "klogo";
+  logo.innerHTML = '<i class="sq"></i><i class="ci"></i><i class="tr"></i>KIT';
+  const right = document.createElement("div");
+  right.innerHTML =
+    '<div class="psheet-title">Adedonha</div>' +
+    '<div class="pplayer">Nome: <u></u></div>';
+  head.append(logo, right);
+
+  const table = document.createElement("table");
+  table.className = "pgrid";
+
+  const cg = document.createElement("colgroup");
+  cg.innerHTML = '<col class="c-letra">' +
+    cats.map(() => "<col>").join("") +
+    '<col class="c-pts">';
+  table.appendChild(cg);
+
+  const thead = document.createElement("thead");
+  const htr = document.createElement("tr");
+  htr.appendChild(th("LETRA", "h-letra"));
+  for (const c of cats) htr.appendChild(th(c));
+  htr.appendChild(th("PONTOS", "h-pts"));
+  thead.appendChild(htr);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  for (let i = 0; i < rounds; i++) {
+    const tr = document.createElement("tr");
+    const letra = document.createElement("td");
+    letra.className = "t-letra";
+    tr.appendChild(letra);
+    for (let k = 0; k < cats.length; k++) tr.appendChild(document.createElement("td"));
+    tr.appendChild(document.createElement("td"));
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+
+  const tfoot = document.createElement("tfoot");
+  const ftr = document.createElement("tr");
+  const label = document.createElement("td");
+  label.colSpan = cats.length + 1;
+  label.textContent = "Total";
+  ftr.appendChild(label);
+  ftr.appendChild(document.createElement("td"));
+  tfoot.appendChild(ftr);
+  table.appendChild(tfoot);
+
+  const note = document.createElement("div");
+  note.className = "pnote";
+  note.textContent =
+    "Palavra repetida por duas pessoas vale 5 · palavra única vale 10 · ninguém mais achou vale 15.";
+
+  wrap.append(head, table, note);
+  return wrap;
+}
+
+function th(text, cls) {
+  const el = document.createElement("th");
+  el.textContent = text;
+  if (cls) el.className = cls;
+  return el;
+}
+
+function runPrint(players, rounds) {
+  sheet.replaceChildren();
+  for (let i = 0; i < players; i++) {
+    const page = document.createElement("div");
+    page.className = "ppage";
+    page.appendChild(buildSheet(rounds));
+    sheet.appendChild(page);
+  }
+  window.print();
+}
+
+window.addEventListener("afterprint", () => sheet.replaceChildren());
+
+try {
+  const m = localStorage.getItem("kit.adedonha.mode");
+  if (m === "fill" || m === "cats") mode = m;
+} catch (e) { /* ok */ }
+
+loadFill();
+render();
+</script>
+</body>
+</html>

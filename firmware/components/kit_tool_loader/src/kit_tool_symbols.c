@@ -101,6 +101,14 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
     ESP_ELFSYM_EXPORT(lv_obj_set_style_image_recolor),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_image_recolor_opa),
 
+    /* --- QR code (Adedonha: link pro gerador de folhas; padrão do Bingo) - */
+    ESP_ELFSYM_EXPORT(lv_qrcode_create),
+    ESP_ELFSYM_EXPORT(lv_qrcode_set_size),
+    ESP_ELFSYM_EXPORT(lv_qrcode_set_dark_color),
+    ESP_ELFSYM_EXPORT(lv_qrcode_set_light_color),
+    ESP_ELFSYM_EXPORT(lv_qrcode_set_quiet_zone),
+    ESP_ELFSYM_EXPORT(lv_qrcode_update),
+
     /* --- Tileview (páginas que deslizam na horizontal, padrão da Dice) - */
     ESP_ELFSYM_EXPORT(lv_tileview_create),
     ESP_ELFSYM_EXPORT(lv_tileview_add_tile),
