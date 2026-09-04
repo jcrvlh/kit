@@ -899,9 +899,10 @@ static void build_page_board(lv_obj_t *tile)
 // (caixa normal, quebra linha, corpo rolável) — mono em caixa alta e apagado
 // numa tela de 1,8" não se lê.
 static const char CARDS_NOTE[] =
-    "Aponte a câmera do celular no código para pegar a sua cartela.\n\n"
-    "O site também imprime ou marca por você. Mas papel e caneta rende "
-    "mais que tempo de tela.";
+    "Aponte a câmera do seu celular para o QR Code para baixar e imprimir "
+    "cartelas.\n\n"
+    "Se preferir, você pode marcar a cartela pelo próprio celular, mas "
+    "recomendamos o uso de papel e caneta... é mais legal!";
 
 static void build_page_cards(lv_obj_t *tile)
 {
