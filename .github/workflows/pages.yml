@@ -11,6 +11,9 @@ on:
       - 'web-installer/**'
       - 'firmware/**'
       - '.github/workflows/pages.yml'
+  # Republica o site (e o firmware.json) quando sai uma Release de firmware.
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -30,6 +33,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+          fetch-depth: 0
 
       - name: Versão
         run: echo "KIT_VERSION=$(date -u +%Y.%m.%d)+${GITHUB_SHA::7}" >> "$GITHUB_ENV"
@@ -71,6 +77,38 @@ jobs:
               json.dump(manifest, f, indent=2)
           print(json.dumps(manifest, indent=2))
           PY
+
+      - name: Gerar firmware.json (manifesto OTA)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VER="$(tr -d '[:space:]' < firmware/version.txt)"
+          TAG="fw-v${VER}"
+          BIN="firmware/build/kit_core.bin"
+
+          # Só publica o manifesto OTA quando a Release com o .bin já existe —
+          # senão o dispositivo baixaria uma URL 404.
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG ainda não existe — pulando firmware.json."
+            exit 0
+          fi
+
+          SHA="$(sha256sum "$BIN" | cut -d' ' -f1)"
+          SIZE="$(stat -c%s "$BIN")"
+          VC="$(echo "$VER" | awk -F. '{ printf "%d", ($1*10000)+($2*100)+$3 }')"
+          NOTES="$(git tag -l --format='%(contents:subject)' "$TAG" | head -c 160)"
+          [ -n "$NOTES" ] || NOTES="Atualização do KIT Core ${VER}."
+
+          jq -n \
+            --arg version "$VER" \
+            --argjson version_code "$VC" \
+            --arg notes "$NOTES" \
+            --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/kit_core.bin" \
+            --arg sha256 "$SHA" \
+            --argjson size "$SIZE" \
+            '{version:$version, version_code:$version_code, notes:$notes, url:$url, sha256:$sha256, size:$size}' \
+            | tee _site/firmware.json
 
       - uses: actions/configure-pages@v5
         with:

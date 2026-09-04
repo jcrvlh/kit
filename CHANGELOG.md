@@ -10,6 +10,17 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ## [Não lançado]
 
 ### Adicionado
+- **Atualização de firmware via OTA (`kit_ota`):** o KIT consulta um manifesto
+  `firmware.json` por HTTPS (GitHub Pages), compara com a versão rodando e, em
+  **Ajustes → Atualizar firmware**, baixa o `kit_core.bin` de uma GitHub Release
+  direto para o slot OTA inativo (streaming + SHA-256 incremental), confere o
+  `project_name` da imagem e agenda o boot no slot novo — o rollback do
+  bootloader continua sendo a rede de segurança. Exige cabo USB conectado e
+  segura o keep-awake durante a gravação. Verificação automática em background
+  1×/dia com aviso discreto (toast + ponto no card *Ajustes*). O projeto agora
+  tem versão explícita (`firmware/version.txt`, `0.2.0`), mostrada em *Sobre*.
+  CI: `firmware-release.yml` publica a Release na tag `fw-v*`; `pages.yml` gera o
+  `firmware.json`. Ver [ADR-0013](docs/decisions/ADR-0013-ota-firmware-update.md).
 - **Gesto de inclinar no IMU (Runtime v0.2.0):** `kit_api.imu` ganha
   `register_tilt_callback` — o QMI8658 detecta o aparelho virado pra baixo/cima
   a partir da vertical (jogo estilo *Heads Up!*). O Runtime só faz o polling

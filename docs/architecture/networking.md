@@ -15,8 +15,8 @@ O subsistema de rede é projetado com o princípio de **independência operacion
   RAM interna/DMA com o `esp_lcd` QSPI). A religação automática às redes
   memorizadas é adiada ~3 s, já com a UI renderizando.
 - **Casos de Uso Conectados:**
-  1. Download e atualização de Tools a partir de catálogo remoto.
-  2. Atualizações de firmware via OTA (Over-The-Air).
+  1. Download e atualização de Tools a partir de catálogo remoto (`kit_catalog`).
+  2. Atualizações de firmware via OTA (`kit_ota` — ver [ota.md](ota.md)).
   3. Sincronização de horário via NTP (para alimentar o RTC PCF85063A).
 
 ### Economia de bateria
