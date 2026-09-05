@@ -91,6 +91,7 @@ typedef enum {
     TOOL_ICON_BINGO, TOOL_ICON_ORDER, TOOL_ICON_TIMER, TOOL_ICON_FIRST,
     TOOL_ICON_TEAMS, TOOL_ICON_ASK, TOOL_ICON_PAVIO, TOOL_ICON_ADEDONHA,
     TOOL_ICON_PLACAR, TOOL_ICON_VETO, TOOL_ICON_MIMICA, TOOL_ICON_TESTA,
+    TOOL_ICON_PHONE, TOOL_ICON_ESTOURO,
     TOOL_ICON_EXTERNAL
 } tool_icon_t;
 
@@ -116,6 +117,7 @@ static const home_tool_t HOME_TOOLS_BUILTIN[] = {
     // MIMICA / TESTA e seus mapas em icon_from_name ficam pra Tool do cartão reusar
     // via "home_icon" no manifest.
     { "com.kit.placar", "Placar", KIT_COLOR_GREEN, TOOL_ICON_PLACAR, true, false },
+    { "com.kit.estouro", "Estouro", KIT_COLOR_YELLOW, TOOL_ICON_ESTOURO, true, true },
 };
 #define HOME_TOOLS_BUILTIN_N ((int)(sizeof(HOME_TOOLS_BUILTIN) / sizeof(HOME_TOOLS_BUILTIN[0])))
 
@@ -160,6 +162,8 @@ static tool_icon_t icon_from_name(const char *name)
         { "pavio", TOOL_ICON_PAVIO },   { "adedonha", TOOL_ICON_ADEDONHA },
         { "placar", TOOL_ICON_PLACAR }, { "veto", TOOL_ICON_VETO },
         { "mimica", TOOL_ICON_MIMICA }, { "testa", TOOL_ICON_TESTA },
+        { "phone", TOOL_ICON_PHONE },
+        { "estouro", TOOL_ICON_ESTOURO },
         { "card", TOOL_ICON_EXTERNAL },
     };
     for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); i++)
@@ -805,6 +809,22 @@ static void make_tool_icon(lv_obj_t *badge, tool_icon_t kind, uint32_t color)
         lv_obj_align(icon_shape(ic, 10, 18, color, 2, 2), LV_ALIGN_CENTER, 4, 0);
         lv_obj_align(icon_shape(ic, 8, 3, color, 1, 0), LV_ALIGN_CENTER, 12, -7);
         lv_obj_align(icon_shape(ic, 8, 3, color, 1, 0), LV_ALIGN_CENTER, 12,  7);
+        break;
+    }
+    case TOOL_ICON_PHONE: {
+        // celular: corpo (contorno arredondado) + alto-falante em cima + botão embaixo
+        lv_obj_t *body = icon_shape(ic, 14, 22, color, 5, 3);
+        lv_obj_center(body);
+        lv_obj_align(icon_shape(ic, 6, 2, color, 1, 0), LV_ALIGN_CENTER, 0, -8);
+        lv_obj_align(icon_shape(ic, 4, 4, color, LV_RADIUS_CIRCLE, 0), LV_ALIGN_CENTER, 0, 8);
+        break;
+    }
+    case TOOL_ICON_ESTOURO: {
+        // balão: corpo redondo + nó embaixo + barbante curto
+        lv_obj_t *body = icon_shape(ic, 19, 21, color, LV_RADIUS_CIRCLE, 0);
+        lv_obj_align(body, LV_ALIGN_CENTER, 0, -4);
+        lv_obj_align(icon_shape(ic, 4, 4, color, 1, 0), LV_ALIGN_CENTER, 0, 8);
+        lv_obj_align(icon_shape(ic, 2, 7, color, 1, 0), LV_ALIGN_CENTER, 0, 14);
         break;
     }
     case TOOL_ICON_EXTERNAL: {
