@@ -8,7 +8,7 @@ extern "C" {
 
 #define KIT_VERSION_MAJOR 0
 #define KIT_VERSION_MINOR 3
-#define KIT_VERSION_PATCH 4
+#define KIT_VERSION_PATCH 5
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
 // 0.3.1: runtime LVGL das Tools ganha strcpy/strncpy/strlcpy/strcat
@@ -23,7 +23,10 @@ extern "C" {
 //        superfície nova)
 // 0.3.4: alinha com firmware/version.txt (buffer de headers do portal
 //        cativo do Wi-Fi, nenhuma superfície nova)
-#define KIT_VERSION_STRING "0.3.4"
+// 0.3.5: Telefonema e Estouro saem do Core pro catálogo; KIT_TOOL_CATALOG_MAX
+//        8->16 (catálogo do cartão ficava mudo depois da 8ª Tool instalada,
+//        nenhuma superfície nova)
+#define KIT_VERSION_STRING "0.3.5"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.
