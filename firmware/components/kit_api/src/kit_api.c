@@ -36,6 +36,11 @@ extern void      kit_system_exit_impl(void);
 
 extern kit_err_t kit_imu_register_shake_callback_impl(kit_shake_callback_t cb, void *user_data);
 extern kit_err_t kit_imu_register_tilt_callback_impl(kit_tilt_callback_t cb, void *user_data);
+extern kit_err_t kit_imu_gyro_start(void);
+extern kit_err_t kit_imu_gyro_rezero(void);
+extern bool      kit_imu_gyro_poll_centi(int32_t *yaw_cdeg, int32_t *pitch_cdeg,
+                                         int32_t *roll_cdeg, int32_t *rate_cdps);
+extern void      kit_imu_gyro_stop(void);
 
 // Definição das tabelas estáticas de APIs
 static const kit_display_api_t s_display_api = {
@@ -89,6 +94,10 @@ static const kit_system_api_t s_system_api = {
 static const kit_imu_api_t s_imu_api = {
     .register_shake_callback = kit_imu_register_shake_callback_impl,
     .register_tilt_callback = kit_imu_register_tilt_callback_impl,
+    .gyro_start   = kit_imu_gyro_start,
+    .gyro_rezero  = kit_imu_gyro_rezero,
+    .gyro_poll    = kit_imu_gyro_poll_centi,
+    .gyro_stop    = kit_imu_gyro_stop,
 };
 
 static const kit_api_table_t s_master_api_table = {
