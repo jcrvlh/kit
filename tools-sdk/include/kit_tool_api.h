@@ -31,10 +31,10 @@ extern "C" {
  * ----------------------------------------------------------------------- */
 
 /** Versão do SDK no formato string "MAJOR.MINOR.PATCH". */
-#define KIT_SDK_VERSION       "0.2.0"
+#define KIT_SDK_VERSION       "0.3.0"
 
 /** Versão do SDK como inteiro (major * 10000 + minor * 100 + patch). */
-#define KIT_SDK_VERSION_CODE  200
+#define KIT_SDK_VERSION_CODE  300
 
 /**
  * Nível da API do Runtime com o qual este SDK é compatível.
@@ -509,6 +509,45 @@ typedef struct {
      * @return KIT_OK em caso de sucesso.
      */
     kit_err_t (*register_tilt_callback)(kit_tilt_callback_t cb, void *user_data);
+
+    /* --- Giroscópio sob demanda (requer `min_runtime` >= "0.4.0") ---------
+     *
+     * Ângulo relativo ao instante em que a Tool zerou — sem magnetômetro não
+     * há "norte" absoluto. Ligue somente com o aparelho parado: o bias
+     * (zero-rate offset) é calibrado na hora, tirando a média de algumas
+     * amostras (~60 ms). O giroscópio consome mais que o acelerômetro
+     * sozinho — chame `gyro_stop()` assim que terminar de medir.
+     *
+     * Todos os valores em CENTIGRAUS (grau × 100) e centigraus/s: a Tool
+     * roda como `.so` e o carregador do KIT não resolve aritmética de float.
+     */
+
+    /** Liga o giroscópio e zera bias + ângulo acumulado. */
+    kit_err_t (*gyro_start)(void);
+
+    /**
+     * Re-zera bias e ângulo sem religar o sensor (liga sozinho se estiver
+     * desligado). Use isto entre tentativas em vez de `gyro_start()`:
+     * religar o sensor a cada vez puxa corrente extra do PMIC e pisca o
+     * AMOLED. Chame só com o aparelho parado.
+     */
+    kit_err_t (*gyro_rezero)(void);
+
+    /**
+     * Integra a rotação desde o último `gyro_start()`/`gyro_rezero()`.
+     * @param yaw_cdeg   Ângulo no eixo normal à tela, centigraus (pode ser NULL).
+     * @param pitch_cdeg Ângulo de inclinar, centigraus (pode ser NULL).
+     * @param roll_cdeg  Ângulo do terceiro eixo, centigraus (pode ser NULL).
+     * @param rate_cdps  Módulo da velocidade angular atual, centigraus/s —
+     *                   use para detectar "parou de girar" (pode ser NULL).
+     * Sem wrap: passar de 360° continua somando. Retorna false se a leitura
+     * I2C falhou (os últimos valores são mantidos).
+     */
+    bool (*gyro_poll)(int32_t *yaw_cdeg, int32_t *pitch_cdeg,
+                      int32_t *roll_cdeg, int32_t *rate_cdps);
+
+    /** Desliga o giroscópio (economia de energia). */
+    void (*gyro_stop)(void);
 } kit_imu_api_t;
 
 /* -----------------------------------------------------------------------
