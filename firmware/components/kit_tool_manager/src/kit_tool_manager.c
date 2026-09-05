@@ -37,7 +37,7 @@ static const char *TAG = "KIT_TOOL_MGR";
 // Varredura de /sdcard/tools/<pasta>/manifest.json na inicialização. Cada
 // entrada válida e compatível vira um item no catálogo; o Launcher usa
 // kit_tool_manager_get_count/get_entry para desenhar os cards dinâmicos.
-#define KIT_TOOL_CATALOG_MAX  8
+#define KIT_TOOL_CATALOG_MAX  16
 #define KIT_TOOL_SD_TOOLS_DIR "/sdcard/tools"
 
 typedef struct {
