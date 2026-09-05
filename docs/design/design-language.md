@@ -19,8 +19,11 @@ O sistema vive em código:
 > **Sortear Times** (`kit_times`), **Globo de Bingo** (`kit_bingo`) e
 > **Placar** (`kit_placar`).
 > As Tools do catálogo (**Adedonha**, **Veto**, **Pavio**, **Quebra-Gelo**,
-> **Mímica** `io.github.jcrvlh.mimica`, **Testa** `io.github.jcrvlh.testa` …)
-> seguem a mesma linguagem.
+> **Mímica** `io.github.jcrvlh.mimica`, **Testa** `io.github.jcrvlh.testa`,
+> **Telefonema** `io.github.jcrvlh.telefonema`, **Estouro**
+> `io.github.jcrvlh.estouro` …) seguem a mesma linguagem — as duas últimas
+> são a referência atual do padrão descrito em
+> [🎮 Padrão de Tool](#-padrão-de-tool-ajuste--jogo--como-joga), abaixo.
 
 ---
 
@@ -242,6 +245,101 @@ Tratados em [`kit_runtime`](../architecture/runtime.md) (`poll_system_buttons`,
 | **PWR** | tecla PWRON do AXP2101 (IRQ `INTSTS2` bit 3) | **Na Home:** liga/desliga o painel AMOLED (`kit_display_set_on_impl`) e o touch do LVGL — com a tela apagada, ela volta com o PWR ou com um toque na tela (leitura crua do CST820 em `poll_wake_touch`, ~a cada 80 ms; o toque que acorda é consumido e não chega à UI). **Dentro de uma Tool:** dispara a _ação principal_ da Tool (`kit_runtime_set_tool_primary_action`) — na Dice Tool, rola os dados. Toque longo = desliga o sistema (hardware). |
 | **Chacoalhar** | acelerômetro QMI8658 (`kit_imu`) | Dentro de uma Tool, agitar o aparelho (`|a| > 2,2 g`) dispara a mesma _ação principal_ que o PWR. Polling a ~60 ms, só enquanto há Tool ativa. |
 | **BOOT** | GPIO0, ativo-baixo | Volta para a Home fechando qualquer sub-tela (`kit_launcher_go_home`), ou sai da Tool ativa (`kit_system_exit_impl`). |
+
+---
+
+## 🎮 Padrão de Tool (Ajuste · Jogo · Como Joga)
+
+A partir do Telefonema e do Estouro (catálogo), consolidando o que já valia
+pra Pavio/Placar/Veto/Mímica: este é o formato **padrão pra qualquer Tool
+nova** (built-in ou catálogo) que tenha ajuste e/ou uma regra pra explicar —
+não se reinventa layout por Tool. O formato "enxuto" de página única (Quem
+Vai Primeiro, Quebra-Gelo, Moeda) continua válido, mas só **enquanto a Tool
+não tiver nem ajuste nem regra que precise de explicação**; no momento em que
+qualquer um dos dois aparecer, ela migra pra este padrão.
+
+### 1. Três páginas, sempre nesta ordem
+
+`lv_tileview` horizontal de 3 tiles: **AJUSTE** (esquerda) ◄──► **JOGO**
+(centro) ◄──► **COMO JOGA** (direita). A Tool **sempre abre no JOGO**
+(`lv_tileview_set_tile_by_index(tv, 1, 0, LV_ANIM_OFF)`) — é o conteúdo
+protagonista; nunca abre na configuração nem na regra. A titlebar fixa mostra
+3 pontos de página (o ativo cresce e pega a cor da Tool) pra deixar claro
+onde a pessoa está e que dá pra arrastar.
+
+Ref.: `kit_pavio`, `kit_placar`, `io.github.jcrvlh.veto`,
+`io.github.jcrvlh.mimica`, `io.github.jcrvlh.telefonema`,
+`io.github.jcrvlh.estouro`.
+
+### 2. AJUSTE: alvo de toque grande, nunca espremido
+
+Era aqui que mais aparecia controle pequeno demais pra caber tudo numa tela
+de 1,8". Padrão corrigido em Telefonema/Estouro:
+
+* **Chips/pílulas de opção:** altura mínima **80–84 px**
+  (`KIT_TOUCH_TARGET_COMFORTABLE`, não os 54 px dos chips mais antigos da
+  Moeda/Dados) e **no máximo 2 por linha** — com mais de 2 opções, quebra em
+  outra linha em vez de espremer 3–4 na mesma (rótulo ilegível, dedo erra o
+  alvo). Ref.: `build_chip_grid()` em `io.github.jcrvlh.telefonema`
+  (grade `SEM`/`POUCOS`/`PADRÃO`/`MUITOS` em duas linhas de dois).
+* **Stepper numérico `[ − valor + ]`:** botões quadrados **≥ 76–80 px**
+  (`E_STEP = 80` em `io.github.jcrvlh.estouro`, mesmo padrão do `PESSOAS` da
+  Sortear Times), valor central em fonte grande (`kit_display_44`) — nunca
+  em mono.
+* No AJUSTE especificamente, mirar o **COMFORTABLE** (80 px) como piso, não
+  como teto — a regra geral de `KIT_TOUCH_TARGET_MIN` (56 px, ver
+  [👆 Área de toque](#-área-de-toque)) é o mínimo absoluto pro resto da
+  interface, não a meta aqui.
+
+### 3. COMO JOGA é obrigatória em qualquer mini-jogo
+
+Toda Tool com mecânica que precise de explicação (mini-jogo, ferramenta com
+regra não óbvia) tem a terceira página **COMO JOGA** — a regra nunca fica só
+no README do catálogo. Formato fixo, referência `io.github.jcrvlh.mimica`
+(`build_page_help()`):
+
+* Título `COMO JOGA` em `kit_mono_26` CAIXA ALTA.
+* Corpo em **`kit_sans_28`** — não mono, não `kit_mono_16`. É a única tela da
+  Tool onde um parágrafo comprido em caixa normal é lido de verdade; mono em
+  bloco longo cansa a vista. `lv_label_set_long_mode(LV_LABEL_LONG_WRAP)`,
+  rola na vertical, passos numerados (`1.`, `2.`, `3.`…), sem "wrap box" ao
+  redor do texto.
+* Sem botão fixo no rodapé — o botão de ação é filho só do tile do JOGO (ver
+  §4), então esta página usa a altura inteira pra ler.
+
+### 4. O botão de ação é filho do tile do JOGO, não da tela
+
+Bug encontrado e corrigido no Telefonema: criar o botão fixo (`COMEÇAR` /
+ação principal) como filho de `s_screen` faz ele flutuar sobre — ou deixar
+uma tarja preta atrás — das outras páginas do `lv_tileview`, porque a faixa
+reservada pra ele fica fora da altura calculada de cada tile. O botão tem que
+nascer dentro do tile do JOGO (`build_game_page()`), ancorado no rodapé
+**daquele tile só**; assim ele só existe ali, e AJUSTE/COMO JOGA ocupam a
+tela inteira sem sobra.
+
+### 5. O protagonista da tela é sempre fonte grande
+
+Generalizando o que corrigiu o Telefonema, o Estouro já fazia e a Mímica
+também: o elemento **protagonista** da página do JOGO — a palavra sorteada,
+o número, o resultado, o texto de referência — vai em fonte grande
+(`kit_display_44` ou maior; `kit_display_120` pra número isolado tipo o
+contador do Estouro), **nunca em `kit_mono_26`** só por ser "o padrão de
+título". `kit_mono_26` fica pro status secundário (`FIQUE ATENTO...`,
+`TOQUE EM COMEÇAR`) — o que precisa ser lido de relance, a um braço de
+distância da mesa, é sempre o protagonista, não a legenda.
+
+* **Telefonema** — a referência do toque certo (`ESSE É O TOQUE CERTO`) e o
+  resultado (`342 MS` / `CEDO DEMAIS!`) subiram de `kit_mono_26` pra
+  `kit_display_44` depois de reportado como "fonte pequena demais".
+* **Estouro** — o contador de jogadores no palco vai em `kit_display_120`; o
+  valor do stepper no AJUSTE, em `kit_display_44`.
+* **Mímica** — a palavra a ser atuada vai em `kit_display_44` (ou
+  `kit_sans_28` se for longa demais pra caber) — nunca em mono, mesmo sendo
+  texto e não número.
+* Lembrete de kerning: `kit_display_44` distorce palavras longas (ver nota
+  em [🔤 Tipografia](#-tipografia)) — se o conteúdo grande for uma **frase**
+  e não um número/palavra curta, prefira quebrar em duas linhas ou cair pra
+  `kit_sans_28` a forçar tudo numa linha só.
 
 ---
 
