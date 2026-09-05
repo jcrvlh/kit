@@ -10,6 +10,7 @@
 #include "kit_times.h"
 #include "kit_bingo.h"
 #include "kit_placar.h"
+#include "kit_estouro.h"
 #include "kit_fonts.h"
 #include "kit_theme.h"
 #include "kit_tool_loader.h"
@@ -651,6 +652,9 @@ kit_err_t kit_tool_manager_start(const char *tool_id)
         primary_action = kit_bingo_draw;       // PWR físico sorteia o próximo número
     } else if (strcmp(tool_id, "com.kit.placar") == 0) {
         err = kit_placar_start(KIT_COLOR_GREEN);  // cor do card "Placar" na Home
+    } else if (strcmp(tool_id, "com.kit.estouro") == 0) {
+        err = kit_estouro_start(KIT_COLOR_YELLOW); // cor do card "Estouro" na Home
+        primary_action = kit_estouro_action;       // PWR físico / chacoalhar = passo do jogo
     } else {
         // Não é uma Tool built-in: procura no catálogo do cartão SD (Marco 2)
         // pelo caminho exato do entry_point; sem manifest, cai no layout
@@ -720,6 +724,8 @@ void kit_tool_manager_stop_current(void)
         kit_bingo_destroy();
     } else if (strcmp(s_current_tool, "com.kit.placar") == 0) {
         kit_placar_destroy();
+    } else if (strcmp(s_current_tool, "com.kit.estouro") == 0) {
+        kit_estouro_destroy();
     } else if (kit_tool_loader_is_active()) {
         kit_tool_loader_stop();
     } else if (s_test_tool_screen) {

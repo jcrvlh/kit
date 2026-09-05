@@ -457,6 +457,97 @@ static void render_sfx(kit_sfx_t sfx)
         break;
     }
 
+    case KIT_SFX_TELEFONEMA_RING_A: {
+        // Toque de verdade, variante A: trinado clássico entre duas
+        // frequências (o "brrring" de telefone antigo), dois ciclos
+        // completos. As variantes B/C dão o mesmo papel com timbre/ritmo
+        // diferentes — a Tool sorteia uma por rodada. Amplitude no teto já
+        // validado do app (o mesmo pico do KIT_SFX_PAVIO_BOOM): precisa
+        // "gritar" pra mesa inteira ouvir, sem estourar o alto-falante.
+        for (int burst = 0; burst < 2; burst++) {
+            for (int i = 0; i < 6; i++) {
+                render_tone((i & 1) ? 950 : 1400, 30, 15500.0f);
+            }
+            render_silence(90);
+        }
+        break;
+    }
+
+    case KIT_SFX_TELEFONEMA_RING_B: {
+        // Variante B: mais grave e num ritmo picado de três "brrr" curtos em
+        // vez de dois longos — reconhecível pelo compasso, não só pelo tom.
+        for (int burst = 0; burst < 3; burst++) {
+            for (int i = 0; i < 4; i++) {
+                render_tone((i & 1) ? 700 : 1050, 26, 15500.0f);
+            }
+            render_silence(70);
+        }
+        break;
+    }
+
+    case KIT_SFX_TELEFONEMA_RING_C: {
+        // Variante C: mais aguda e mais lenta — cada nota dura mais que nas
+        // outras duas, dá um "toque arrastado".
+        for (int burst = 0; burst < 2; burst++) {
+            for (int i = 0; i < 5; i++) {
+                render_tone((i & 1) ? 650 : 1100, 45, 15500.0f);
+            }
+            render_silence(110);
+        }
+        break;
+    }
+
+    case KIT_SFX_TELEFONEMA_FAKE: {
+        // Trote: o início de UMA das três variantes acima, cortado antes do
+        // segundo ciclo — no MESMO volume do toque de verdade (senão dava
+        // pra distinguir só pelo volume), então só termina os dois ciclos
+        // ajuda a saber se era o certo.
+        uint32_t v = rnd(3);
+        if (v == 0) {
+            for (int i = 0; i < 4; i++) render_tone((i & 1) ? 950 : 1400, 26, 15500.0f);
+        } else if (v == 1) {
+            for (int i = 0; i < 3; i++) render_tone((i & 1) ? 700 : 1050, 24, 15500.0f);
+        } else {
+            for (int i = 0; i < 3; i++) render_tone((i & 1) ? 650 : 1100, 30, 15500.0f);
+        }
+        break;
+    }
+
+    case KIT_SFX_TELEFONEMA_PICKUP:
+        // Atendeu certo: um "clique" seco de gancho levantado e uma nota
+        // subindo, breve — não é uma fanfarra, é só a confirmação do acerto.
+        render_tone(1800, 14, 12000.0f);
+        render_silence(18);
+        render_tone(1319, 55, 13500.0f);   // E6
+        render_tone(1976, 85, 14000.0f);   // B6
+        break;
+
+    case KIT_SFX_TELEFONEMA_MISS:
+        // Errou (cedo, trote ou não atendeu a tempo): buzina curta de dois
+        // tons descendo — reconhecível na hora como "não foi dessa vez".
+        render_tone(392, 90, 14000.0f);    // G4
+        render_tone(311, 130, 14000.0f);   // ~D#4
+        break;
+
+    case KIT_SFX_ESTOURO_POP:
+        // Balão estourando: estalo seco e agudo + uma fuga de ar caindo bem
+        // rápido — bem mais curto que o KIT_SFX_PAVIO_BOOM, sem cascata, pra
+        // não se confundir com a explosão do Pavio.
+        render_tone(3100, 16, 15800.0f);
+        render_silence(8);
+        render_tone(1900, 20, 13000.0f);
+        render_silence(10);
+        render_tone(950,  28,  9000.0f);
+        break;
+
+    case KIT_SFX_ESTOURO_SHAKE:
+        // Confirma a chacoalhada: um "thump" grave e curto, bem mais forte e
+        // mais grave que o tique fino do `fuse()` (que continua tocando por
+        // baixo) — pra ninguém ficar em dúvida se a chacoalhada valeu.
+        render_tone(520, 26, 15500.0f);
+        render_tone(340, 20, 13500.0f);
+        break;
+
     default:
         break;
     }

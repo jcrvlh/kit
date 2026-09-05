@@ -27,7 +27,7 @@ ACCENT_REGEX = re.compile(r"^#?[0-9a-fA-F]{6}$")
 VALID_HOME_ICONS = {
     "card", "dice", "spin", "coin", "triangle",
     "bingo", "order", "timer", "first", "teams", "ask",
-    "pavio", "adedonha", "placar", "veto", "mimica", "testa",
+    "pavio", "adedonha", "placar", "veto", "mimica", "testa", "phone",
 }
 
 # Tipo da Tool na listagem da Home: ferramenta ou mini-jogo.

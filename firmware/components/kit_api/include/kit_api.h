@@ -126,6 +126,14 @@ typedef enum {
     KIT_SFX_PAVIO_TICK,    // Pavio: tique do pavio — um "tec" seco (com silêncio pro DMA), clicado em série acelerando
     KIT_SFX_PAVIO_TICK_HOT,// Pavio: tique do pavio quase estourando — mesmo "tec", mais agudo e aflito
     KIT_SFX_PAVIO_BOOM,    // Pavio: explodiu — estalo agudo + cascata caindo (~0,35 s)
+    KIT_SFX_TELEFONEMA_RING_A, // Telefonema: toque de verdade, variante A — o "brrring" clássico
+    KIT_SFX_TELEFONEMA_RING_B, // Telefonema: toque de verdade, variante B — mais grave, ritmo em 3
+    KIT_SFX_TELEFONEMA_RING_C, // Telefonema: toque de verdade, variante C — mais aguda e arrastada
+    KIT_SFX_TELEFONEMA_FAKE, // Telefonema: toque falso (trote) — início de uma das variantes, cortado
+    KIT_SFX_TELEFONEMA_PICKUP, // Telefonema: atendeu certo — "clique" de secretária + nota subindo
+    KIT_SFX_TELEFONEMA_MISS,  // Telefonema: errou (cedo, trote ou não atendeu) — buzina curta descendo
+    KIT_SFX_ESTOURO_POP,      // Estouro: estalo agudo + fuga de ar curtíssima (~0,1 s, sem cascata)
+    KIT_SFX_ESTOURO_SHAKE,    // Estouro: "thump" curto e forte a cada chacoalhada registrada
 } kit_sfx_t;
 
 typedef struct {
