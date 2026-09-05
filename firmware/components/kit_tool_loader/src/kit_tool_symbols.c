@@ -65,6 +65,7 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
     ESP_ELFSYM_EXPORT(lv_obj_set_style_bg_opa),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_border_width),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_border_color),  /* botão contornado, anel pulsante */
+    ESP_ELFSYM_EXPORT(lv_obj_set_style_border_side),   /* separador de linha (placar do Vira Certo) */
     ESP_ELFSYM_EXPORT(lv_obj_set_style_border_opa),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_shadow_width),
     ESP_ELFSYM_EXPORT(lv_obj_set_style_radius),

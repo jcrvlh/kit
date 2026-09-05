@@ -319,6 +319,42 @@ static kit_err_t stub_imu_register_tilt_callback(kit_tilt_callback_t cb, void *u
     return KIT_OK;
 }
 
+/* Giroscópio: no desktop não há sensor — o ângulo fica sempre em zero e o
+ * rate baixo (como um aparelho parado na mesa). Suficiente pra exercitar a
+ * lógica da Tool no build nativo. */
+static bool s_stub_gyro_on = false;
+
+static kit_err_t stub_imu_gyro_start(void)
+{
+    s_stub_gyro_on = true;
+    printf("[STUB IMU] giroscópio ligado (stub — sempre 0).\n");
+    return KIT_OK;
+}
+
+static kit_err_t stub_imu_gyro_rezero(void)
+{
+    s_stub_gyro_on = true;
+    printf("[STUB IMU] giroscópio re-zerado (stub).\n");
+    return KIT_OK;
+}
+
+static bool stub_imu_gyro_poll(int32_t *yaw_cdeg, int32_t *pitch_cdeg,
+                               int32_t *roll_cdeg, int32_t *rate_cdps)
+{
+    if (!s_stub_gyro_on) return false;
+    if (yaw_cdeg)   *yaw_cdeg   = 0;
+    if (pitch_cdeg) *pitch_cdeg = 0;
+    if (roll_cdeg)  *roll_cdeg  = 0;
+    if (rate_cdps)  *rate_cdps  = 0;
+    return true;
+}
+
+static void stub_imu_gyro_stop(void)
+{
+    s_stub_gyro_on = false;
+    printf("[STUB IMU] giroscópio desligado (stub).\n");
+}
+
 /* -----------------------------------------------------------------------
  * Montagem das Tabelas de API (Stubs)
  * ----------------------------------------------------------------------- */
@@ -374,6 +410,10 @@ static const kit_system_api_t s_stub_system = {
 static const kit_imu_api_t s_stub_imu = {
     .register_shake_callback = stub_imu_register_shake_callback,
     .register_tilt_callback = stub_imu_register_tilt_callback,
+    .gyro_start  = stub_imu_gyro_start,
+    .gyro_rezero = stub_imu_gyro_rezero,
+    .gyro_poll   = stub_imu_gyro_poll,
+    .gyro_stop   = stub_imu_gyro_stop,
 };
 
 static const kit_api_table_t s_stub_api_table = {

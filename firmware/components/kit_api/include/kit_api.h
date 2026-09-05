@@ -173,6 +173,26 @@ typedef struct {
     // Registra o callback de inclinar. O Runtime só faz o polling do gesto
     // enquanto a Tool ativa o pediu (kit_runtime_set_tool_tilt_enabled).
     kit_err_t (*register_tilt_callback)(kit_tilt_callback_t cb, void *user_data);
+
+    // --- Giroscópio sob demanda (>= runtime 0.4.0) --------------------------
+    // Ângulo relativo ao instante em que a Tool zerou (sem magnetômetro não há
+    // "norte"). Ligue só com o aparelho parado — o bias é calibrado na hora.
+    // Consome mais que o acelerômetro sozinho: chame gyro_stop() ao terminar.
+    // Tudo em CENTIGRAUS (grau * 100) pra não expor float ao .so da Tool.
+
+    // Liga o giroscópio e zera bias + ângulo acumulado.
+    kit_err_t (*gyro_start)(void);
+    // Re-zera bias e ângulo sem religar o sensor (liga se estiver desligado).
+    // Use entre tentativas: religar o sensor a cada vez pisca o AMOLED.
+    kit_err_t (*gyro_rezero)(void);
+    // Integra desde o último start/rezero. yaw/pitch/roll em centigraus (sem
+    // wrap — passar de 360° soma normal); rate = módulo da velocidade angular
+    // atual em centigraus/s (pra detectar "parou de girar"). Qualquer ponteiro
+    // pode ser NULL. false se o I2C falhou (mantém os últimos valores).
+    bool (*gyro_poll)(int32_t *yaw_cdeg, int32_t *pitch_cdeg,
+                      int32_t *roll_cdeg, int32_t *rate_cdps);
+    // Desliga o giroscópio (economia de energia).
+    void (*gyro_stop)(void);
 } kit_imu_api_t;
 
 // Export Table Consolidada
