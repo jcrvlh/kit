@@ -204,6 +204,7 @@ body {
   padding: 13px 0;
   font-size: 12px;
 }
+.btn-ghost:disabled { opacity: .4; cursor: not-allowed; }
 .btn:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
 
 /* ---- Alternador CATEGORIAS / PREENCHER --------------------------- */
@@ -320,6 +321,55 @@ body {
   color: var(--paper);
   text-align: right;
 }
+
+/* ---- Contabilizar pontos (rodapé do card + diálogo) --------------- */
+
+.round-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+}
+.round-foot .btn { width: auto; flex: 1; padding: 11px 0; font-size: 11px; }
+.round-total {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--paper);
+  white-space: nowrap;
+}
+
+.score-progress {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.score-answer {
+  font-family: var(--disp);
+  font-size: 26px;
+  line-height: 1.2;
+  color: var(--bg);
+  background: var(--paper);
+  padding: 12px 14px;
+  border-radius: 10px;
+  text-align: center;
+  word-break: break-word;
+}
+.score-q {
+  font-size: 13px;
+  color: var(--muted);
+}
+.score-opts { display: flex; flex-direction: column; gap: 8px; }
+.score-opt { font-size: 13px; letter-spacing: 0.06em; }
+.score-opt.rep  { background: var(--red);   color: #fff; }
+.score-opt.uni  { background: var(--yellow); color: #000; }
+.score-opt.solo { background: var(--green); color: #fff; }
+.score-opt.inv  { background: var(--surface); color: var(--muted); border: 1px solid var(--line); }
 
 /* ---- Diálogo de impressão --------------------------------------- */
 
@@ -565,6 +615,22 @@ footer {
   </form>
 </dialog>
 
+<dialog class="dlg" id="scorebox">
+  <div class="dlg-in">
+    <p class="score-progress" id="scoreProgress"></p>
+    <h2 id="scoreCat"></h2>
+    <p class="score-answer" id="scoreAnswer"></p>
+    <p class="score-q">Essa resposta foi:</p>
+    <div class="score-opts">
+      <button type="button" class="btn score-opt rep"  data-val="5">Repetida com alguém · 5 pts</button>
+      <button type="button" class="btn score-opt uni"  data-val="10">Única, mas outros acertaram · 10 pts</button>
+      <button type="button" class="btn score-opt solo" data-val="15">Só eu acertei essa categoria · 15 pts</button>
+      <button type="button" class="btn score-opt inv"  data-val="0">Não valeu · 0 pts</button>
+    </div>
+    <button type="button" class="btn btn-ghost" id="scoreCancel">Cancelar contagem</button>
+  </div>
+</dialog>
+
 <div class="sheet" id="sheet" aria-hidden="true"></div>
 
 <script>
@@ -643,15 +709,28 @@ let fill = { rounds: [] };
 
 const fillKey = () => "kit.adedonha.fill." + catsToParam(cats);
 
-function blankRound() { return { l: "", a: cats.map(() => ""), p: "" }; }
+function blankRound() { return { l: "", a: cats.map(() => ""), s: cats.map(() => null) }; }
 
 function coerceRound(r) {
   const a = (r && Array.isArray(r.a)) ? r.a : [];
+  const s = (r && Array.isArray(r.s)) ? r.s : [];
   return {
     l: (r && typeof r.l === "string") ? r.l.slice(0, 1).toUpperCase() : "",
     a: cats.map((_, i) => (typeof a[i] === "string" ? a[i] : "")),
-    p: (r && (typeof r.p === "string" || typeof r.p === "number")) ? String(r.p) : "",
+    s: cats.map((_, i) => (typeof s[i] === "number" ? s[i] : null)),
   };
+}
+
+/* Pontos de uma rodada: soma dos valores tabulados (0/5/10/15) por
+   categoria; categoria em branco vale 0 e nunca é perguntada. */
+function roundTotal(r) {
+  return cats.reduce((sum, _, ci) => sum + (r.a[ci].trim() ? (r.s[ci] || 0) : 0), 0);
+}
+
+/* Índices das categorias respondidas nesta rodada — é o que o diálogo
+   de contagem pergunta, uma de cada vez. */
+function answeredCats(r) {
+  return cats.map((_, ci) => ci).filter((ci) => r.a[ci].trim());
 }
 
 function loadFill() {
@@ -730,7 +809,7 @@ function render() {
   } else if (showFill) {
     elHowto.hidden = false;
     elHowto.textContent =
-      "O KIT sorteia a letra; anote aqui uma resposta por categoria antes do STOP. Fica salvo só neste celular.";
+      "O KIT sorteia a letra; anote aqui uma resposta por categoria antes do STOP. Depois toque em CONTABILIZAR PONTOS pra fechar a rodada. Fica salvo só neste celular.";
   } else {
     elHowto.hidden = false;
     elHowto.textContent =
@@ -787,6 +866,22 @@ function renderFill() {
     hd.append(rn, rlWrap, rx);
     card.appendChild(hd);
 
+    // Declarados antes do loop de categorias pra syncFoot() poder ser
+    // chamada a cada resposta digitada, sem precisar de um render() inteiro
+    // (que tiraria o foco do campo em que a pessoa está digitando).
+    let scoreBtn, totalEl;
+    function syncFoot() {
+      // Cada toque em "contabilizar" pergunta TODAS as categorias respondidas
+      // de novo, do início — não retoma de onde parou. O rótulo só avisa que
+      // já existe alguma pontuação registrada (então tocar de novo reconta).
+      const answered = answeredCats(r);
+      scoreBtn.disabled = answered.length === 0;
+      scoreBtn.textContent = answered.length === 0
+        ? "Sem respostas"
+        : (answered.every((ci) => r.s[ci] === null) ? "Contabilizar pontos" : "Recontar pontos");
+      totalEl.textContent = "Pontos: " + roundTotal(r);
+    }
+
     cats.forEach((c, ci) => {
       const row = document.createElement("div");
       row.className = "frow";
@@ -799,25 +894,31 @@ function renderFill() {
       inp.type = "text";
       inp.value = r.a[ci] || "";
       inp.autocomplete = "off";
-      inp.addEventListener("input", () => { r.a[ci] = inp.value; saveFill(); });
+      inp.addEventListener("input", () => {
+        r.a[ci] = inp.value;
+        r.s[ci] = null;   // resposta mudou — a contagem antiga não vale mais
+        saveFill();
+        updateTotal();
+        syncFoot();
+      });
       row.append(lab, inp);
       card.appendChild(row);
     });
 
-    const prow = document.createElement("div");
-    prow.className = "frow";
-    const plab = document.createElement("label");
-    const pid = "p" + ri;
-    plab.htmlFor = pid;
-    plab.textContent = "Pontos";
-    const pinp = document.createElement("input");
-    pinp.id = pid;
-    pinp.type = "number";
-    pinp.inputMode = "numeric";
-    pinp.value = r.p || "";
-    pinp.addEventListener("input", () => { r.p = pinp.value; saveFill(); updateTotal(); });
-    prow.append(plab, pinp);
-    card.appendChild(prow);
+    const foot = document.createElement("div");
+    foot.className = "round-foot";
+
+    scoreBtn = document.createElement("button");
+    scoreBtn.type = "button";
+    scoreBtn.className = "btn btn-ghost";
+    scoreBtn.addEventListener("click", () => startScoring(ri));
+
+    totalEl = document.createElement("div");
+    totalEl.className = "round-total";
+
+    foot.append(scoreBtn, totalEl);
+    card.appendChild(foot);
+    syncFoot();
 
     frag.appendChild(card);
   });
@@ -845,9 +946,64 @@ function renderFill() {
 function updateTotal() {
   const el = document.getElementById("filltotal");
   if (!el) return;
-  const sum = fill.rounds.reduce((a, r) => a + (parseInt(r.p, 10) || 0), 0);
+  const sum = fill.rounds.reduce((a, r) => a + roundTotal(r), 0);
   el.textContent = "Total: " + sum;
 }
+
+/* --- Contabilizar pontos: diálogo passo a passo, uma categoria por vez --
+   Pergunta só as categorias respondidas (em branco já vale 0 sem perguntar)
+   e some tudo em roundTotal(). Cada toque no botão pergunta TODAS de novo,
+   do início — não existe "retomar de onde parou". Cancelar no meio mantém
+   as respostas já tocadas até ali (a rodada fica com pontuação parcial) e
+   o próximo toque no botão reconta tudo de novo. */
+let scoreCtx = null;
+
+const scorebox       = document.getElementById("scorebox");
+const elScoreProgress = document.getElementById("scoreProgress");
+const elScoreCat      = document.getElementById("scoreCat");
+const elScoreAnswer   = document.getElementById("scoreAnswer");
+
+function startScoring(ri) {
+  const r = fill.rounds[ri];
+  const list = answeredCats(r);
+  if (!list.length) return;
+  scoreCtx = { ri, list, pos: 0 };
+  renderScoreStep();
+  if (typeof scorebox.showModal === "function") scorebox.showModal();
+}
+
+function renderScoreStep() {
+  const { ri, list, pos } = scoreCtx;
+  const ci = list[pos];
+  const r = fill.rounds[ri];
+  elScoreProgress.textContent =
+    "Rodada " + (ri + 1) + " · " + (pos + 1) + " de " + list.length;
+  elScoreCat.textContent = cats[ci];
+  elScoreAnswer.textContent = r.a[ci];
+}
+
+function answerScore(val) {
+  const { ri, list, pos } = scoreCtx;
+  fill.rounds[ri].s[list[pos]] = val;
+  saveFill();
+  if (pos + 1 < list.length) {
+    scoreCtx.pos++;
+    renderScoreStep();
+  } else {
+    scoreCtx = null;
+    scorebox.close();
+  }
+}
+
+for (const b of document.querySelectorAll(".score-opt"))
+  b.addEventListener("click", () => answerScore(parseInt(b.dataset.val, 10)));
+
+document.getElementById("scoreCancel").addEventListener("click", () => {
+  scoreCtx = null;
+  scorebox.close();
+});
+
+scorebox.addEventListener("close", () => render());
 
 /* --- Ações ------------------------------------------------------ */
 for (const b of elSeg.children) {
