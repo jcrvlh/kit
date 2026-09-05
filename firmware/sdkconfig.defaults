@@ -151,4 +151,14 @@ CONFIG_LV_USE_QRCODE=y
 CONFIG_LV_FONT_MONTSERRAT_14=y
 CONFIG_LV_FONT_DEFAULT_MONTSERRAT_14=y
 
+# Portal cativo do Wi-Fi (kit_net_portal): o buffer default de 512 B para
+# cabeçalhos/URI do esp_http_server é suficiente para o iPhone, mas o Chrome
+# do Android manda mais headers na sondagem de captive portal
+# (generate_204/gen_204: Accept, Accept-Language, X-Requested-With,
+# User-Agent, etc.) e estoura o limite — o servidor responde com
+# "essp_http_server: httpd_parse.c: ... header fields are too long". 1024 B
+# cobre a sondagem do Android com folga.
+CONFIG_HTTPD_MAX_REQ_HDR_LEN=1024
+CONFIG_HTTPD_MAX_URI_LEN=1024
+
 
