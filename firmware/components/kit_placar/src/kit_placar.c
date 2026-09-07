@@ -79,6 +79,19 @@ static bool s_announced[NP_MAX];                // meta já anunciada p/ este jo
 
 static int  s_name_sel = 0;                     // jogador em edição no AJUSTE
 
+// Roleta de sigla (mesmo gesto do kit_ui_sigla das Tools do catálogo): toque
+// avança a letra, arraste pra cima/baixo gira como uma roleta. Como o Placar é
+// componente do firmware, o arraste lê o vetor de toque do LVGL direto em vez
+// do stream cru do SDK.
+#define SIGLA_DRAG_PX  24    // px de arraste por letra
+#define SIGLA_TAP_SLOP 12    // até aqui ainda conta como toque, não arraste
+static int  s_slot_drag   = -1;   // caixa sendo arrastada, -1 = nenhuma
+static int  s_slot_accum  = 0;    // resto de px pro próximo passo de letra
+static int  s_slot_gross  = 0;    // deslocamento total (px) — toque x arraste
+static bool s_slot_moved  = false;// passou do slop → o toque de soltar não conta
+static lv_dir_t s_pg_scroll_dir = LV_DIR_VER;   // scroll_dir salvo da página
+static lv_dir_t s_tv_scroll_dir = LV_DIR_HOR;   // scroll_dir salvo do tileview
+
 static bool        s_zerar_armed = false;
 static lv_timer_t *s_zerar_timer = NULL;
 static lv_timer_t *s_flash_timer = NULL;
@@ -92,6 +105,7 @@ static lv_obj_t *s_tiles[PAGES];
 static lv_obj_t *s_dots[PAGES];
 
 // Página 0 — AJUSTE
+static lv_obj_t *s_adjust_page = NULL;   // container rolável do tile 0
 static lv_obj_t *s_players_pills[3];  static lv_obj_t *s_players_lbls[3];
 static lv_obj_t *s_meta_pills[META_N]; static lv_obj_t *s_meta_lbls[META_N];
 static lv_obj_t *s_name_hdr   = NULL;   // "JOGADOR N"
@@ -582,19 +596,80 @@ static void name_sel_cb(lv_event_t *e)
     beep(660, 12);
 }
 
-static void slot_cb(lv_event_t *e)
+// Um passo na letra da caixa `k` do jogador em edição. dir > 0 avança
+// (' '→A→…→Z→' '), dir < 0 volta. Persiste e repinta a coluna.
+static void name_step(int k, int dir)
 {
-    int k = (int)(intptr_t)lv_event_get_user_data(e);
     char sl[3];
     name_slots(s_name_sel, sl);
     char c = sl[k];
-    sl[k] = (c == ' ') ? 'A' : (c == 'Z') ? ' ' : (char)(c + 1);
+    if (dir >= 0) c = (c == ' ') ? 'A' : (c == 'Z') ? ' ' : (char)(c + 1);
+    else          c = (c == ' ') ? 'Z' : (c == 'A') ? ' ' : (char)(c - 1);
+    sl[k] = c;
     name_store(s_name_sel, sl);
     sync_name_editor();
     sync_col(s_name_sel);
     lv_obj_update_layout(s_board);
     save_prefs();
     beep(760, 12);
+}
+
+// Congela/solta o scroll da página e do tileview durante o arraste da letra,
+// pra a roleta não virar rolagem vertical nem troca de página.
+static void sigla_lock_scroll(bool lock)
+{
+    if (lock) {
+        if (s_adjust_page) {
+            s_pg_scroll_dir = lv_obj_get_scroll_dir(s_adjust_page);
+            lv_obj_set_scroll_dir(s_adjust_page, LV_DIR_NONE);
+        }
+        if (s_tv) {
+            s_tv_scroll_dir = lv_obj_get_scroll_dir(s_tv);
+            lv_obj_set_scroll_dir(s_tv, LV_DIR_NONE);
+        }
+    } else {
+        if (s_adjust_page) lv_obj_set_scroll_dir(s_adjust_page, s_pg_scroll_dir);
+        if (s_tv)          lv_obj_set_scroll_dir(s_tv, s_tv_scroll_dir);
+    }
+}
+
+static void slot_press_cb(lv_event_t *e)
+{
+    s_slot_drag  = (int)(intptr_t)lv_event_get_user_data(e);
+    s_slot_accum = 0;
+    s_slot_gross = 0;
+    s_slot_moved = false;
+    sigla_lock_scroll(true);
+}
+
+static void slot_pressing_cb(lv_event_t *e)
+{
+    if (s_slot_drag < 0) return;
+    lv_point_t v = { 0, 0 };
+    lv_indev_get_vect(lv_indev_active(), &v);
+    int dy = (int)v.y;
+    if (dy > 64 || dy < -64) return;   // salto de coordenada = lixo, ignora
+
+    s_slot_gross += dy < 0 ? -dy : dy;
+    if (s_slot_gross >= SIGLA_TAP_SLOP) s_slot_moved = true;
+
+    s_slot_accum += dy;
+    // arrastar pra CIMA (y diminui) avança a letra; pra BAIXO, volta
+    while (s_slot_accum <= -SIGLA_DRAG_PX) { name_step(s_slot_drag, +1); s_slot_accum += SIGLA_DRAG_PX; }
+    while (s_slot_accum >=  SIGLA_DRAG_PX) { name_step(s_slot_drag, -1); s_slot_accum -= SIGLA_DRAG_PX; }
+}
+
+static void slot_release_cb(lv_event_t *e)
+{
+    (void)e;
+    s_slot_drag = -1;   // s_slot_moved fica — o CLICKED vem depois do RELEASED
+    sigla_lock_scroll(false);
+}
+
+static void slot_cb(lv_event_t *e)
+{
+    if (s_slot_moved) return;   // foi arraste, não toque
+    name_step((int)(intptr_t)lv_event_get_user_data(e), +1);
 }
 
 static void name_clear_cb(lv_event_t *e)
@@ -714,16 +789,25 @@ static void build_name_editor(lv_obj_t *parent)
     lv_obj_set_style_pad_row(sec, 14, 0);
     field_label(sec, "INICIAIS (OPCIONAL)");
 
-    // Linha: [◄]  JOGADOR N  [►]
+    // Stepper do jogador em edição: ◄ | JOGADOR N | ► — mesmo formato do Fora.
     lv_obj_t *pick = plain_box(sec);
-    lv_obj_set_size(pick, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_size(pick, lv_pct(100), 58);
     lv_obj_set_flex_flow(pick, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(pick, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_flex_align(pick, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(pick, 10, 0);
 
     for (int s = 0; s < 2; s++) {
+        if (s == 1) {
+            s_name_hdr = add_label(pick, "JOGADOR 1", KIT_COLOR_TEXT, &kit_mono_20, 1);
+            lv_obj_set_flex_grow(s_name_hdr, 1);
+            lv_obj_set_style_text_align(s_name_hdr, LV_TEXT_ALIGN_CENTER, 0);
+        }
         lv_obj_t *b = lv_obj_create(pick);
         lv_obj_remove_style_all(b);
-        lv_obj_set_size(b, 48, 48);
+        lv_obj_set_size(b, 58, 58);
+        lv_obj_set_style_bg_color(b, lv_color_hex(KIT_COLOR_SURFACE), 0);
+        lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(b, 16, 0);
         lv_obj_clear_flag(b, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_flag(b, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_ext_click_area(b, 10);
@@ -731,12 +815,9 @@ static void build_name_editor(lv_obj_t *parent)
         lv_obj_t *g = add_label(b, s ? KIT_ICON_CHEVRON : KIT_ICON_BACK,
                                 KIT_COLOR_TEXT, &kit_display_44, 0);
         lv_obj_center(g);
-        if (s == 0) {
-            s_name_hdr = add_label(pick, "JOGADOR 1", KIT_COLOR_TEXT, &kit_mono_20, 1);
-        }
     }
 
-    // 3 caixas de letra
+    // 3 caixas de letra — toque avança, arraste gira como roleta.
     lv_obj_t *slots = plain_box(sec);
     lv_obj_set_size(slots, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(slots, LV_FLEX_FLOW_ROW);
@@ -753,7 +834,11 @@ static void build_name_editor(lv_obj_t *parent)
         lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_add_flag(box, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_ext_click_area(box, 4);
-        lv_obj_add_event_cb(box, slot_cb, LV_EVENT_CLICKED, (void *)(intptr_t)k);
+        lv_obj_add_event_cb(box, slot_cb,         LV_EVENT_CLICKED,  (void *)(intptr_t)k);
+        lv_obj_add_event_cb(box, slot_press_cb,    LV_EVENT_PRESSED,    (void *)(intptr_t)k);
+        lv_obj_add_event_cb(box, slot_pressing_cb, LV_EVENT_PRESSING,   (void *)(intptr_t)k);
+        lv_obj_add_event_cb(box, slot_release_cb,  LV_EVENT_RELEASED,   (void *)(intptr_t)k);
+        lv_obj_add_event_cb(box, slot_release_cb,  LV_EVENT_PRESS_LOST, (void *)(intptr_t)k);
         s_slot_lbl[k] = add_label(box, "-", KIT_COLOR_TEXT_MUTED, &kit_display_72, 0);
         lv_obj_center(s_slot_lbl[k]);
     }
@@ -787,6 +872,7 @@ static void build_page_adjust(lv_obj_t *tile)
     lv_obj_set_flex_align(p, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_scroll_dir(p, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(p, LV_SCROLLBAR_MODE_AUTO);
+    s_adjust_page = p;   // a roleta da sigla congela o scroll deste container
 
     seg_row(p, "JOGADORES", PLAYERS_LBL, 3, players_cb, s_players_pills, s_players_lbls);
     build_name_editor(p);
@@ -908,8 +994,9 @@ static void build_page_help(lv_obj_t *tile)
               "NO AJUSTE: SEM META, 3, 5, 10, 21 OU 50. AO BATER, APARECE \"VENCEU\". "
               "TOQUE FORA DO BOT\xC3\x83O PARA SEGUIR JOGANDO.");
     help_step(p, "INICIAIS (OPCIONAL)",
-              "NO AJUSTE: ESCOLHA O JOGADOR E TOQUE CADA CAIXA. CADA TOQUE AVAN\xC3\x87""A A "
-              "LETRA (VAZIO, A, B ... Z E VOLTA). SEM ISSO, A COLUNA MOSTRA #1 A #4.");
+              "NO AJUSTE: ESCOLHA O JOGADOR E MEXA NAS 3 CAIXAS. TOQUE AVAN\xC3\x87""A A LETRA "
+              "(VAZIO, A, B ... Z E VOLTA); ARRASTE PRA CIMA OU PRA BAIXO PRA GIRAR. "
+              "SEM ISSO, A COLUNA MOSTRA #1 A #4.");
     help_step(p, "ZERAR",
               "DOIS TOQUES NO BOT\xC3\x83O ZERAR LIMPAM O PLACAR. O N\xC3\x9AMERO DE "
               "JOGADORES, A META E AS INICIAIS FICAM.");
@@ -988,6 +1075,8 @@ kit_err_t kit_placar_start(uint32_t accent)
     s_nplayers = NP_MIN;
     s_meta_idx = 0;
     s_name_sel = 0;
+    s_slot_drag = -1;
+    s_slot_moved = false;
     s_zerar_armed = false;
     memset(s_score, 0, sizeof(s_score));
     memset(s_name, 0, sizeof(s_name));
@@ -1032,6 +1121,7 @@ void kit_placar_destroy(void)
         s_col_bar[i] = s_col_fill[i] = NULL;
     }
     s_name_hdr = s_name_clear = NULL;
+    s_adjust_page = NULL;
     s_board = s_zerar_btn = s_zerar_lbl = NULL;
     s_win_ov = s_win_title = s_win_who = s_win_btn = s_win_btn_lbl = NULL;
 }

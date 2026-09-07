@@ -46,6 +46,7 @@ static lv_obj_t *s_poweroff_screen = NULL;
 static lv_obj_t *s_about_screen = NULL;
 static lv_obj_t *s_storage_screen = NULL;       // Ajustes > Armazenamento
 static lv_obj_t *s_sd_format_screen = NULL;     // confirmação de formatar o cartão
+static lv_obj_t *s_factory_reset_screen = NULL; // confirmação de restaurar padrão de fábrica
 static lv_obj_t *s_usbmsc_screen = NULL;        // Ajustes > Modo pen drive (USB MSC)
 static lv_obj_t *s_wifi_screen = NULL;          // Ajustes > Wi-Fi
 static lv_obj_t *s_wifi_portal_screen = NULL;   // Wi-Fi > Configurar rede (portal)
@@ -53,6 +54,9 @@ static lv_obj_t *s_catalog_screen = NULL;       // Catálogo de Tools
 static lv_obj_t *s_catalog_detail_screen = NULL;
 static lv_obj_t *s_catalog_busy_screen = NULL;
 static lv_obj_t *s_catalog_confirm_screen = NULL;
+static lv_obj_t *s_toolmgr_screen = NULL;       // toque longo numa Tool do catálogo (atualizar/desinstalar)
+static lv_obj_t *s_toolmgr_confirm_screen = NULL;
+static lv_timer_t *s_toolmgr_poll = NULL;
 static lv_obj_t *s_fwupdate_screen = NULL;      // Ajustes > Atualizar firmware (OTA)
 static lv_obj_t *s_fwupdate_busy = NULL;        // overlay de progresso (baixando/gravando)
 static lv_timer_t *s_fwupdate_poll = NULL;
@@ -71,9 +75,11 @@ static lv_obj_t *s_batt_lbl = NULL;
 static lv_obj_t *s_batt_fill = NULL;
 static lv_obj_t *s_wifi_icon = NULL;
 static lv_obj_t *s_toast = NULL;
+static lv_obj_t *s_banner = NULL;   // aviso transitório na top layer (visível por cima de uma Tool)
 
 static bool s_was_charging = false;
-static bool s_low_batt_warned = false;   // aviso de "bateria baixa" já mostrado nesta descarga
+static bool s_low_batt_warned = false;   // aviso de "bateria baixa" (<=20%) já mostrado nesta descarga
+static bool s_crit_batt_warned = false;  // aviso crítico (<=10%) já mostrado nesta descarga
 
 // Atualização de firmware detectada em background (kit_ota). Marcadas pela task
 // de rede via kit_launcher_notify_update_available(); consumidas na task LVGL
@@ -81,6 +87,13 @@ static bool s_low_batt_warned = false;   // aviso de "bateria baixa" já mostrad
 static volatile bool s_fw_update_badge = false;
 static volatile bool s_fw_update_toast_pending = false;
 static char          s_fw_update_ver[16] = {0};
+
+// Tools do catálogo com versão nova, achadas por uma checagem em background
+// (kit_catalog). Marcadas pela task do catálogo via kit_launcher_notify_tool_updates();
+// consumidas na task LVGL pelo batt_tick_cb (toast + ponto no card Catálogo).
+static volatile bool     s_tool_upd_badge = false;
+static volatile bool     s_tool_upd_toast_pending = false;
+static volatile uint32_t s_tool_upd_count = 0;
 
 // Grade de Tools da Home. Cada Tool built-in só entra aqui quando já está
 // implementada (o campo `available` cobre o caso de uma Tool em
@@ -102,22 +115,27 @@ typedef struct {
     tool_icon_t icon;
     bool        available;
     bool        is_game;     // true = mini-jogo; false = ferramenta ("tool")
+    bool        is_external; // veio do catálogo do cartão SD (não é built-in)
+    bool        is_new;      // Tool do catálogo ainda não aberta -> seção "Novos"
+    bool        is_pinned;   // fixada pelo usuário (toque longo) -> seção FIXADOS da grade
 } home_tool_t;
 
+// Campos is_external / is_new / is_pinned ficam em 0 (o valor real de is_pinned
+// vem do NVS em build_home_tools; built-in nunca entra em "Novos").
 static const home_tool_t HOME_TOOLS_BUILTIN[] = {
-    { "com.kit.dice",    "Dados",   KIT_COLOR_RED,    TOOL_ICON_DICE, true, false },
-    { "com.kit.bottle",  "Garrafa", KIT_COLOR_BLUE,   TOOL_ICON_SPIN, true, false },
-    { "com.kit.coin",    "Moeda",   KIT_COLOR_YELLOW, TOOL_ICON_COIN, true, false },
-    { "com.kit.timer",   "Timer",   KIT_COLOR_GREEN,  TOOL_ICON_TIMER, true, false },
-    { "com.kit.primeiro","Primeiro",KIT_COLOR_RED, TOOL_ICON_FIRST, true, false },
-    { "com.kit.times",   "Times",   KIT_COLOR_BLUE,   TOOL_ICON_TEAMS, true, false },
-    { "com.kit.bingo",   "Bingo",   KIT_COLOR_GREEN,  TOOL_ICON_BINGO, true, true },
+    { "com.kit.dice",    "Dados",   KIT_COLOR_RED,    TOOL_ICON_DICE, true, false, false, false, false },
+    { "com.kit.bottle",  "Garrafa", KIT_COLOR_BLUE,   TOOL_ICON_SPIN, true, false, false, false, false },
+    { "com.kit.coin",    "Moeda",   KIT_COLOR_YELLOW, TOOL_ICON_COIN, true, false, false, false, false },
+    { "com.kit.timer",   "Timer",   KIT_COLOR_GREEN,  TOOL_ICON_TIMER, true, false, false, false, false },
+    { "com.kit.primeiro","Primeiro",KIT_COLOR_RED, TOOL_ICON_FIRST, true, false, false, false, false },
+    { "com.kit.times",   "Times",   KIT_COLOR_BLUE,   TOOL_ICON_TEAMS, true, false, false, false, false },
+    { "com.kit.bingo",   "Bingo",   KIT_COLOR_GREEN,  TOOL_ICON_BINGO, true, true, false, false, false },
     // Quebra-Gelo, Pavio, Adedonha, Veto, Mímica, Testa, Telefonema, Estouro e
     // Vira Certo saíram do Core — vivem no catálogo (io.github.jcrvlh.*).
     // TOOL_ICON_ASK / PAVIO / ADEDONHA / VETO / MIMICA / TESTA / PHONE /
     // ESTOURO / DIAL e seus mapas em icon_from_name ficam pra Tool do cartão
     // reusar via "home_icon" no manifest.
-    { "com.kit.placar", "Placar", KIT_COLOR_GREEN, TOOL_ICON_PLACAR, true, false },
+    { "com.kit.placar", "Placar", KIT_COLOR_GREEN, TOOL_ICON_PLACAR, true, false, false, false, false },
 };
 #define HOME_TOOLS_BUILTIN_N ((int)(sizeof(HOME_TOOLS_BUILTIN) / sizeof(HOME_TOOLS_BUILTIN[0])))
 
@@ -172,6 +190,52 @@ static tool_icon_t icon_from_name(const char *name)
     return TOOL_ICON_EXTERNAL;
 }
 
+// Flags por-Tool em NVS (namespace kit_sys). O id do catálogo
+// (io.github.jcrvlh.xxx) estoura o limite de 15 chars de chave, então a chave é
+// um prefixo curto + hash FNV-1a de 32 bits do id:
+//   "nu_" -> "Já abri esta Tool ao menos uma vez?"  (0/ausente = ainda em Novos)
+//   "pin" -> "Fixada na Home pelo usuário?"         (1 = fixada)
+static const char *tool_flag_key(const char *prefix, const char *id, char buf[16])
+{
+    uint32_t h = 2166136261u;
+    for (const char *p = id; *p; p++) { h ^= (uint8_t)*p; h *= 16777619u; }
+    snprintf(buf, 16, "%s%08lx", prefix, (unsigned long)h);
+    return buf;
+}
+
+static bool tool_flag_get(const char *prefix, const char *id)
+{
+    char key[16];
+    uint8_t v = 0;
+    kit_config_get_u8(tool_flag_key(prefix, id, key), &v, 0);
+    return v != 0;
+}
+
+static bool tool_is_unseen(const char *id)  { return !tool_flag_get("nu_", id); }
+
+static void tool_mark_seen(const char *id)
+{
+    char key[16];
+    kit_config_set_u8(tool_flag_key("nu_", id, key), 1);
+}
+
+static bool tool_is_pinned(const char *id) { return tool_flag_get("pin", id); }
+
+static void tool_set_pinned(const char *id, bool on)
+{
+    char key[16];
+    kit_config_set_u8(tool_flag_key("pin", id, key), on ? 1 : 0);
+}
+
+// A Tool foi desinstalada: esquece as flags por-id, pra que uma reinstalação
+// futura entre em "Novos" de novo e comece sem estar fixada.
+static void tool_forget_flags(const char *id)
+{
+    char key[16];
+    kit_config_set_u8(tool_flag_key("nu_", id, key), 0);
+    kit_config_set_u8(tool_flag_key("pin", id, key), 0);
+}
+
 // Monta a grade efetiva da Home: as Tools built-in (compiladas no firmware)
 // seguidas do catálogo dinâmico que o Tool Manager varreu em /sdcard/tools.
 // A Tool do cartão pode declarar `accent` (cor do card) e `home_icon` no
@@ -180,13 +244,29 @@ static void build_home_tools(void)
 {
     s_home_tools_n = 0;
     for (int i = 0; i < HOME_TOOLS_BUILTIN_N && s_home_tools_n < KIT_HOME_TOOLS_MAX; i++) {
-        s_home_tools[s_home_tools_n++] = HOME_TOOLS_BUILTIN[i];
+        home_tool_t *t = &s_home_tools[s_home_tools_n++];
+        *t = HOME_TOOLS_BUILTIN[i];
+        t->is_pinned = tool_is_pinned(t->id);
     }
 
     static const uint32_t kExtPalette[] = {
         KIT_COLOR_RED, KIT_COLOR_BLUE, KIT_COLOR_YELLOW, KIT_COLOR_GREEN,
     };
     uint32_t ext_n = kit_tool_manager_get_count();
+
+    // Migração única: na 1ª vez que a feature "Novos" roda, as Tools do catálogo
+    // já instaladas contam como vistas (senão TODAS entrariam em "Novos" de uma
+    // vez). Daqui pra frente só instalação nova aparece lá.
+    uint8_t novos_init = 0;
+    kit_config_get_u8("novos_init", &novos_init, 0);
+    if (!novos_init) {
+        for (uint32_t i = 0; i < ext_n; i++) {
+            kit_tool_entry_t e;
+            if (kit_tool_manager_get_entry(i, &e) == KIT_OK) tool_mark_seen(e.id);
+        }
+        kit_config_set_u8("novos_init", 1);
+    }
+
     for (uint32_t i = 0; i < ext_n && s_home_tools_n < KIT_HOME_TOOLS_MAX; i++) {
         kit_tool_entry_t e;
         if (kit_tool_manager_get_entry(i, &e) != KIT_OK) continue;
@@ -199,6 +279,9 @@ static void build_home_tools(void)
         t->icon      = icon_from_name(e.icon);
         t->available = true;
         t->is_game   = e.is_game;
+        t->is_external = true;
+        t->is_new    = tool_is_unseen(e.id);
+        t->is_pinned = tool_is_pinned(e.id);
     }
 
     ESP_LOGI(TAG, "Home: %d Tool(s) built-in + %d do cartão SD.",
@@ -270,6 +353,9 @@ static void sd_scan_cb(lv_event_t *e);
 static void open_sd_format_cb(lv_event_t *e);
 static void close_sd_format_cb(lv_event_t *e);
 static void do_sd_format_cb(lv_event_t *e);
+static void open_factory_reset_cb(lv_event_t *e);
+static void close_factory_reset_cb(lv_event_t *e);
+static void do_factory_reset_cb(lv_event_t *e);
 static void open_usbmsc_cb(lv_event_t *e);
 static void close_usbmsc_cb(lv_event_t *e);
 static void open_wifi_cb(lv_event_t *e);
@@ -293,6 +379,7 @@ static void volume_released_cb(lv_event_t *e);
 static void sound_toggle_cb(lv_event_t *e);
 static void run_test_tool_cb(lv_event_t *e);
 static void home_tile_cb(lv_event_t *e);
+static void home_tool_longpress_cb(lv_event_t *e);
 static void onboarding_show(int step);
 static void onboarding_start_if_needed(void);
 static void home_hints_show(void);
@@ -660,6 +747,32 @@ static void show_toast(const char *msg)
     lv_timer_set_repeat_count(t, 1);
 }
 
+// -- Banner transitório na TOP LAYER do LVGL: fica por cima de qualquer screen,
+//    inclusive a de uma Tool ativa (a Home fica oculta enquanto uma Tool roda).
+//    Alinhado ao TOPO pra não brigar com o botão de ação fixo das Tools no
+//    rodapé. Sem overlay de tela cheia / sem transform_scale (watchdog do
+//    CO5300, ver show_feedback). --
+
+static void banner_timer_cb(lv_timer_t *t)
+{
+    if (s_banner) { lv_obj_delete(s_banner); s_banner = NULL; }
+    lv_timer_delete(t);
+}
+
+static void show_banner(uint32_t bg, uint32_t ink, const char *msg)
+{
+    if (s_banner) { lv_obj_delete(s_banner); s_banner = NULL; }
+    s_banner = add_label(lv_layer_top(), msg, ink, &kit_mono_20, 3);
+    lv_obj_set_style_bg_color(s_banner, lv_color_hex(bg), 0);
+    lv_obj_set_style_bg_opa(s_banner, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(s_banner, 16, 0);
+    lv_obj_set_style_pad_hor(s_banner, 18, 0);
+    lv_obj_set_style_pad_ver(s_banner, 12, 0);
+    lv_obj_align(s_banner, LV_ALIGN_TOP_MID, 0, 12);
+    lv_timer_t *t = lv_timer_create(banner_timer_cb, 2200, NULL);
+    lv_timer_set_repeat_count(t, 1);
+}
+
 // -- Ícones das Tools: composições geométricas simples (linha, sem glifo
 //    dedicado), na cor de contraste do card. --
 
@@ -866,6 +979,7 @@ static void make_tool_tile(lv_obj_t *grid, int index)
     lv_obj_add_flag(tile, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_ext_click_area(tile, 4);
     lv_obj_add_event_cb(tile, home_tile_cb, LV_EVENT_CLICKED, (void *)(intptr_t)index);
+    lv_obj_add_event_cb(tile, home_tool_longpress_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)index);
 
     lv_obj_t *badge = lv_obj_create(tile);
     lv_obj_set_size(badge, 42, 42);
@@ -886,6 +1000,21 @@ static void make_tool_tile(lv_obj_t *grid, int index)
 
     lv_obj_t *lbl = add_label(tile, tool->label, ink, &kit_sans_22, 0);
     lv_obj_align(lbl, LV_ALIGN_BOTTOM_LEFT, 14, -14);
+}
+
+// Ponto âmbar no canto de um card da seção SISTEMA (algo pendente em background:
+// firmware novo no card Ajustes, Tool com update no card Catálogo).
+static void tile_corner_dot(lv_obj_t *tile)
+{
+    lv_obj_t *dot = lv_obj_create(tile);
+    lv_obj_set_size(dot, 14, 14);
+    lv_obj_set_style_bg_color(dot, lv_color_hex(KIT_COLOR_YELLOW), 0);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(dot, 0, 0);
+    lv_obj_set_style_radius(dot, 7, 0);
+    lv_obj_set_style_pad_all(dot, 0, 0);
+    lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(dot, LV_ALIGN_TOP_RIGHT, -14, 14);
 }
 
 // -- Card de Ajustes: sempre o último da grade "VER TODOS", em cinza. --
@@ -927,17 +1056,7 @@ static void make_settings_tile(lv_obj_t *grid)
     lv_obj_align(lbl, LV_ALIGN_BOTTOM_LEFT, 14, -14);
 
     // Ponto âmbar quando o kit_ota achou firmware novo em background.
-    if (s_fw_update_badge) {
-        lv_obj_t *dot = lv_obj_create(tile);
-        lv_obj_set_size(dot, 14, 14);
-        lv_obj_set_style_bg_color(dot, lv_color_hex(KIT_COLOR_YELLOW), 0);
-        lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
-        lv_obj_set_style_border_width(dot, 0, 0);
-        lv_obj_set_style_radius(dot, 7, 0);
-        lv_obj_set_style_pad_all(dot, 0, 0);
-        lv_obj_clear_flag(dot, LV_OBJ_FLAG_SCROLLABLE);
-        lv_obj_align(dot, LV_ALIGN_TOP_RIGHT, -14, 14);
-    }
+    if (s_fw_update_badge) tile_corner_dot(tile);
 }
 
 // -- Card de Catálogo: ao lado de Ajustes na seção SISTEMA da grade. --
@@ -971,6 +1090,9 @@ static void make_catalog_tile(lv_obj_t *grid)
 
     lv_obj_t *lbl = add_label(tile, "Cat\xC3\xA1logo", KIT_COLOR_TEXT_MUTED, &kit_sans_22, 0);
     lv_obj_align(lbl, LV_ALIGN_BOTTOM_LEFT, 14, -14);
+
+    // Ponto âmbar quando a checagem em background achou Tool com versão nova.
+    if (s_tool_upd_badge) tile_corner_dot(tile);
 }
 
 // -- Slide de destaque: uma Tool por tela, ocupando tudo na cor dela. `slot` é
@@ -994,6 +1116,7 @@ static void make_tool_slide(lv_obj_t *tile, int index, int slot)
     lv_obj_add_flag(card, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_ext_click_area(card, 4);
     lv_obj_add_event_cb(card, home_tile_cb, LV_EVENT_CLICKED, (void *)(intptr_t)index);
+    lv_obj_add_event_cb(card, home_tool_longpress_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)index);
 
     lv_obj_t *badge = lv_obj_create(card);
     lv_obj_set_size(badge, 52, 52);
@@ -1054,23 +1177,46 @@ static void make_all_slide(lv_obj_t *tile)
     lv_obj_set_scroll_dir(grid, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(grid, LV_SCROLLBAR_MODE_AUTO);
 
-    int n_games = 0;
-    for (int i = 0; i < s_home_tools_n; i++)
-        if (s_home_tools[i].is_game) n_games++;
+    // Cada Tool entra em UMA seção só, nesta precedência: fixada > nova >
+    // (ferramenta | mini-jogo). FIXADOS é a lista curada do usuário (toque longo
+    // num card → FIXAR); NOVOS são Tools do catálogo instaladas e ainda não
+    // abertas (migram pra sua categoria no 1º uso).
+    int n_pin = 0, n_new = 0, n_games = 0, n_ferr = 0;
+    for (int i = 0; i < s_home_tools_n; i++) {
+        if (s_home_tools[i].is_pinned) n_pin++;
+        else if (s_home_tools[i].is_new) n_new++;
+        else if (s_home_tools[i].is_game) n_games++;
+        else n_ferr++;
+    }
+    bool first = true;
 
-    // Ferramentas em cima, mini-jogos no meio, sistema (Ajustes) embaixo —
-    // cada bloco com seu cabeçalho de seção.
-    make_grid_header(grid, "FERRAMENTAS", true);
-    for (int i = 0; i < s_home_tools_n; i++)
-        if (!s_home_tools[i].is_game) make_tool_tile(grid, i);
-
-    if (n_games > 0) {
-        make_grid_header(grid, "MINI-JOGOS", false);
+    if (n_pin > 0) {
+        make_grid_header(grid, "FIXADOS", first); first = false;
         for (int i = 0; i < s_home_tools_n; i++)
-            if (s_home_tools[i].is_game) make_tool_tile(grid, i);
+            if (s_home_tools[i].is_pinned) make_tool_tile(grid, i);
     }
 
-    make_grid_header(grid, "SISTEMA", false);
+    if (n_new > 0) {
+        make_grid_header(grid, "NOVOS", first); first = false;
+        for (int i = 0; i < s_home_tools_n; i++)
+            if (s_home_tools[i].is_new && !s_home_tools[i].is_pinned) make_tool_tile(grid, i);
+    }
+
+    if (n_ferr > 0) {
+        make_grid_header(grid, "FERRAMENTAS", first); first = false;
+        for (int i = 0; i < s_home_tools_n; i++)
+            if (!s_home_tools[i].is_game && !s_home_tools[i].is_new && !s_home_tools[i].is_pinned)
+                make_tool_tile(grid, i);
+    }
+
+    if (n_games > 0) {
+        make_grid_header(grid, "MINI-JOGOS", first); first = false;
+        for (int i = 0; i < s_home_tools_n; i++)
+            if (s_home_tools[i].is_game && !s_home_tools[i].is_new && !s_home_tools[i].is_pinned)
+                make_tool_tile(grid, i);
+    }
+
+    make_grid_header(grid, "SISTEMA", first);
     make_settings_tile(grid);
     make_catalog_tile(grid);
 }
@@ -1119,8 +1265,8 @@ static void home_build_deck_async_cb(void *unused)
 
 // Monta o slideshow (tileview horizontal) + os pontos de página, a partir da
 // ordem de recência atual em s_mru. Slide 0 = "VER TODOS"; slides 1..n_tools =
-// Tools recentes. Ao terminar de montar, salta pro slide 1 (a Tool mais
-// recente) — deslizar pra direita volta um passo e cai na visão geral.
+// Tools usadas mais recentemente (independente de estarem fixadas — as fixadas
+// vivem na seção FIXADOS da grade "VER TODOS"). Ao terminar, salta pro slide 1.
 static void home_build_deck(void)
 {
     int n_tools = s_mru_n < HOME_MRU_SLOTS ? s_mru_n : HOME_MRU_SLOTS;
@@ -1186,10 +1332,12 @@ static bool home_is_covered(void)
 {
     return s_settings_screen || s_display_screen || s_brightness_screen || s_volume_screen ||
            s_sleep_screen || s_battery_screen || s_poweroff_screen || s_about_screen ||
-           s_storage_screen || s_sd_format_screen || s_usbmsc_screen ||
+           s_storage_screen || s_sd_format_screen || s_factory_reset_screen ||
+           s_usbmsc_screen ||
            s_wifi_screen || s_wifi_portal_screen || s_catalog_screen ||
            s_catalog_detail_screen || s_catalog_busy_screen ||
-           s_catalog_confirm_screen || s_fwupdate_screen || s_fwupdate_busy ||
+           s_catalog_confirm_screen || s_toolmgr_screen || s_toolmgr_confirm_screen ||
+           s_fwupdate_screen || s_fwupdate_busy ||
            s_onboarding_screen || s_home_hints_screen || s_feedback_screen;
 }
 
@@ -1525,6 +1673,7 @@ static void open_settings_cb(lv_event_t *e)
     make_row(body, NULL, 0, "Bateria",          false, open_battery_cb,   NULL);
     make_row(body, NULL, 0, "Repetir introdu\xC3\xA7\xC3\xA3o", false, repeat_onboarding_cb, NULL);
     make_row(body, NULL, 0, "Sobre o KIT",      false, open_about_cb,     NULL);
+    make_row(body, NULL, 0, "Restaurar padr\xC3\xA3o de f\xC3\xA1" "brica", false, open_factory_reset_cb, NULL);
 }
 
 static void close_settings_cb(lv_event_t *e)
@@ -2118,6 +2267,55 @@ static void do_sd_format_cb(lv_event_t *e)
 }
 
 // ---------------------------------------------------------------------------
+// Restaurar padrão de fábrica  —  Ajustes > Restaurar padrão de fábrica
+// ---------------------------------------------------------------------------
+
+static void open_factory_reset_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_factory_reset_screen) return;
+    s_factory_reset_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_factory_reset_screen, "RESTAURAR", close_factory_reset_cb);
+
+    lv_obj_t *body = make_scroll_body(s_factory_reset_screen, 2 * KIT_BTN_H + 40);
+    lv_obj_t *warn = add_label(body,
+        "Isso apaga todos os ajustes, as redes Wi-Fi salvas e os recordes dos "
+        "jogos, e reinicia o KIT. As Tools instaladas no cart\xC3\xA3o continuam. "
+        "N\xC3\xA3o d\xC3\xA1 pra desfazer.", KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(warn, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(warn, KIT_CONTENT);
+
+    lv_obj_t *ok = make_button(s_factory_reset_screen, "RESTAURAR AGORA", do_factory_reset_cb, true);
+    lv_obj_set_style_bg_color(ok, lv_color_hex(KIT_COLOR_RED), 0);
+    lv_obj_t *okl = lv_obj_get_child(ok, 0);
+    if (okl) lv_obj_set_style_text_color(okl, lv_color_hex(KIT_COLOR_ON_COLOR), 0);
+    lv_obj_align(ok, LV_ALIGN_BOTTOM_MID, 0, -(14 + KIT_BTN_H + 12));
+
+    lv_obj_t *no = make_button(s_factory_reset_screen, "CANCELAR", close_factory_reset_cb, false);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_MID, 0, -14);
+}
+
+static void close_factory_reset_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_factory_reset_screen) { lv_obj_delete(s_factory_reset_screen); s_factory_reset_screen = NULL; }
+}
+
+static void do_factory_reset_cb(lv_event_t *e)
+{
+    (void)e;
+    // Desenha "RESTAURANDO..." antes da chamada que não retorna.
+    lv_obj_t *busy = make_overlay(KIT_COLOR_BG);
+    lv_obj_t *msg = add_label(busy, "RESTAURANDO...", KIT_COLOR_TEXT, &kit_mono_20, 3);
+    lv_obj_center(msg);
+    lv_refr_now(NULL);
+
+    kit_config_factory_reset();   // apaga a NVS e reinicia — não volta
+}
+
+// ---------------------------------------------------------------------------
 // Modo pen drive (USB Mass Storage)  —  Ajustes > Modo pen drive
 // ---------------------------------------------------------------------------
 
@@ -2636,12 +2834,18 @@ static lv_timer_t *s_catalog_poll = NULL;
 static int         s_catalog_last_state = -1;
 static char        s_catalog_sel_id[40] = {0};
 static bool        s_catalog_op_was_install = false;   // último trabalho: baixar (true) x remover
+static bool        s_cat_update_all = false;           // fila "ATUALIZAR TODAS" em andamento
+static lv_obj_t   *s_catalog_tv = NULL;                // READY: lista <-> "sobre o limite"
+static lv_obj_t   *s_catalog_tiles[2] = { NULL, NULL };
+static lv_obj_t   *s_catalog_dots[2] = { NULL, NULL };
 
 static void catalog_list_rebuild(void);
 static void catalog_detail_rebuild(void);
 static void catalog_row_cb(lv_event_t *e);
 static void catalog_refresh_cb(lv_event_t *e);
 static void catalog_action_cb(lv_event_t *e);
+static void cat_update_all_cb(lv_event_t *e);
+static bool catalog_next_update(char *out, size_t n);
 static void catalog_remove_cb(lv_event_t *e);
 static void catalog_detail_close_cb(lv_event_t *e);
 static void catalog_confirm_close_cb(lv_event_t *e);
@@ -2722,11 +2926,121 @@ static void catalog_make_row(lv_obj_t *body, const kit_catalog_entry_t *e, int i
     lv_obj_align(chip, LV_ALIGN_RIGHT_MID, -18, 0);
 }
 
+// Barra "TOOLS  X/16" — quantas Tools do catálogo cabem no cartão. Trilho fino
+// + preenchimento proporcional (verde; vermelho quando lotou). Mesmo desenho da
+// barra de meta do Placar (trilho + filho preenchendo), sem widget de progresso.
+static void catalog_capacity_bar(lv_obj_t *parent)
+{
+    uint32_t used = kit_tool_manager_get_count();
+    uint32_t cap  = kit_tool_manager_catalog_capacity();
+    bool full = used >= cap;
+
+    lv_obj_t *sec = lv_obj_create(parent);
+    lv_obj_remove_style_all(sec);
+    lv_obj_set_size(sec, KIT_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(sec, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(sec, 6, 0);
+    lv_obj_clear_flag(sec, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *hdr = lv_obj_create(sec);
+    lv_obj_remove_style_all(hdr);
+    lv_obj_set_size(hdr, lv_pct(100), 22);
+    lv_obj_clear_flag(hdr, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t *k = add_label(hdr, "TOOLS", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
+    lv_obj_align(k, LV_ALIGN_LEFT_MID, 0, 0);
+    char cnt[16];
+    snprintf(cnt, sizeof(cnt), "%lu/%lu", (unsigned long)used, (unsigned long)cap);
+    lv_obj_t *v = add_label(hdr, cnt, full ? KIT_COLOR_RED : KIT_COLOR_TEXT, &kit_mono_16, 1);
+    lv_obj_align(v, LV_ALIGN_RIGHT_MID, 0, 0);
+
+    lv_obj_t *track = lv_obj_create(sec);
+    lv_obj_remove_style_all(track);
+    lv_obj_set_size(track, lv_pct(100), 6);
+    lv_obj_set_style_radius(track, 3, 0);
+    lv_obj_set_style_bg_color(track, lv_color_hex(KIT_COLOR_LINE), 0);
+    lv_obj_set_style_bg_opa(track, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(track, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *fill = lv_obj_create(track);
+    lv_obj_remove_style_all(fill);
+    int pct = cap ? (int)(used * 100 / cap) : 0;
+    if (pct > 100) pct = 100;
+    lv_obj_set_size(fill, lv_pct(pct), lv_pct(100));
+    lv_obj_set_style_radius(fill, 3, 0);
+    lv_obj_set_style_bg_color(fill, lv_color_hex(full ? KIT_COLOR_RED : KIT_COLOR_GREEN), 0);
+    lv_obj_set_style_bg_opa(fill, LV_OPA_COVER, 0);
+    lv_obj_align(fill, LV_ALIGN_LEFT_MID, 0, 0);
+}
+
+// Página "SOBRE O LIMITE" — arrasta pro lado a partir da lista, no espírito do
+// "Como joga" das Tools. Texto pra leigos.
+static void catalog_limit_page(lv_obj_t *tile)
+{
+    lv_obj_set_style_pad_all(tile, 0, 0);
+    lv_obj_t *p = lv_obj_create(tile);
+    lv_obj_remove_style_all(p);
+    lv_obj_set_size(p, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_pad_hor(p, KIT_PAD, 0);
+    lv_obj_set_style_pad_top(p, 8, 0);
+    lv_obj_set_style_pad_bottom(p, 24, 0);
+    lv_obj_set_style_pad_row(p, 18, 0);
+    lv_obj_set_flex_flow(p, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(p, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_set_scroll_dir(p, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(p, LV_SCROLLBAR_MODE_AUTO);
+
+    add_label(p, "SOBRE O LIMITE", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 3);
+
+    struct { const char *t, *b; } steps[] = {
+        { "POR QUE TEM UM LIMITE?",
+          "O KIT guarda as Tools que voc\xC3\xAA baixa num cart\xC3\xA3ozinho de mem\xC3\xB3ria. "
+          "Cabe at\xC3\xA9 16 Tools do cat\xC3\xA1logo ao mesmo tempo, al\xC3\xA9m das que j\xC3\xA1 "
+          "v\xC3\xAAm de f\xC3\xA1" "brica." },
+        { "DEU O LIMITE?",
+          "Segure o card de uma Tool que voc\xC3\xAA n\xC3\xA3o usa, na tela inicial, e toque "
+          "DESINSTALAR. Isso abre espa\xC3\xA7o pra outra." },
+        { "N\xC3\x83O PERDE NADA",
+          "A Tool continua no cat\xC3\xA1logo. D\xC3\xA1 pra baixar de novo quando quiser." },
+    };
+    for (size_t i = 0; i < sizeof(steps) / sizeof(steps[0]); i++) {
+        lv_obj_t *sec = lv_obj_create(p);
+        lv_obj_remove_style_all(sec);
+        lv_obj_set_size(sec, KIT_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(sec, LV_FLEX_FLOW_COLUMN);
+        lv_obj_set_style_pad_row(sec, 4, 0);
+        lv_obj_clear_flag(sec, LV_OBJ_FLAG_SCROLLABLE);
+        add_label(sec, steps[i].t, KIT_COLOR_TEXT, &kit_mono_20, 1);
+        lv_obj_t *bd = add_label(sec, steps[i].b, KIT_COLOR_TEXT, &kit_sans_22, 0);
+        lv_label_set_long_mode(bd, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(bd, KIT_CONTENT);
+    }
+}
+
+static void catalog_sync_dots(void)
+{
+    if (!s_catalog_tv || !s_catalog_dots[0]) return;
+    lv_obj_t *act = lv_tileview_get_tile_active(s_catalog_tv);
+    for (int i = 0; i < 2; i++) {
+        bool cur = (act == s_catalog_tiles[i]);
+        lv_obj_set_size(s_catalog_dots[i], cur ? 20 : 8, 8);
+        lv_obj_set_style_bg_color(s_catalog_dots[i],
+            lv_color_hex(cur ? KIT_COLOR_TEXT : KIT_COLOR_LINE), 0);
+    }
+}
+
+static void catalog_tv_changed_cb(lv_event_t *e)
+{
+    (void)e;
+    catalog_sync_dots();
+}
+
 // Reconstrói o corpo da tela de lista conforme o estado do kit_catalog.
 static void catalog_list_rebuild(void)
 {
     if (!s_catalog_screen) return;
-    lv_obj_clean(s_catalog_screen);
+    lv_obj_clean(s_catalog_screen);   // invalida o tileview/pontos da montagem anterior
+    s_catalog_tv = s_catalog_tiles[0] = s_catalog_tiles[1] = NULL;
+    s_catalog_dots[0] = s_catalog_dots[1] = NULL;
     make_titlebar(s_catalog_screen, "CAT\xC3\x81LOGO", close_catalog_cb);
 
     kit_catalog_state_t st = kit_catalog_get_state();
@@ -2760,8 +3074,41 @@ static void catalog_list_rebuild(void)
         return;
     }
 
-    // READY (ou WORK_OK/ERR — a lista segue visível)
-    lv_obj_t *body = make_scroll_body(s_catalog_screen, KIT_BTN_H + 28);
+    // READY (ou WORK_OK/ERR — a lista segue visível): tileview de 2 páginas —
+    // [lista + barra de capacidade]  <->  [SOBRE O LIMITE] — com pontos embaixo.
+    s_catalog_tv = lv_tileview_create(s_catalog_screen);
+    lv_obj_set_size(s_catalog_tv, KIT_DISPLAY_WIDTH, KIT_DISPLAY_HEIGHT - KIT_TITLEBAR - 34);
+    lv_obj_set_pos(s_catalog_tv, 0, KIT_TITLEBAR);
+    lv_obj_set_style_bg_opa(s_catalog_tv, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_catalog_tv, 0, 0);
+    lv_obj_set_scrollbar_mode(s_catalog_tv, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_add_event_cb(s_catalog_tv, catalog_tv_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+    s_catalog_tiles[0] = lv_tileview_add_tile(s_catalog_tv, 0, 0, LV_DIR_HOR);
+    s_catalog_tiles[1] = lv_tileview_add_tile(s_catalog_tv, 1, 0, LV_DIR_HOR);
+
+    // Tile 0 — lista
+    lv_obj_t *body = lv_obj_create(s_catalog_tiles[0]);
+    lv_obj_remove_style_all(body);
+    lv_obj_set_size(body, lv_pct(100), lv_pct(100));
+    lv_obj_set_style_pad_hor(body, KIT_PAD, 0);
+    lv_obj_set_style_pad_top(body, 6, 0);
+    lv_obj_set_style_pad_bottom(body, 16, 0);
+    lv_obj_set_style_pad_row(body, 12, 0);
+    lv_obj_set_flex_flow(body, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_scroll_dir(body, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(body, LV_SCROLLBAR_MODE_AUTO);
+
+    catalog_capacity_bar(body);
+
+    uint32_t n_upd = kit_catalog_update_count();
+    if (n_upd > 0) {
+        char lbl[40];
+        snprintf(lbl, sizeof(lbl), "ATUALIZAR TODAS (%u)", (unsigned)n_upd);
+        make_button(body, lbl, cat_update_all_cb, true);
+    }
+
     uint32_t n = kit_catalog_get_count();
     if (n == 0) {
         add_label(body, "Nenhuma Tool no cat\xC3\xA1logo ainda.",
@@ -2771,8 +3118,30 @@ static void catalog_list_rebuild(void)
         kit_catalog_entry_t e;
         if (kit_catalog_get_entry(i, &e) == KIT_OK) catalog_make_row(body, &e, (int)i);
     }
-    lv_obj_t *b = make_button(s_catalog_screen, "ATUALIZAR LISTA", catalog_refresh_cb, false);
-    lv_obj_align(b, LV_ALIGN_BOTTOM_MID, 0, -14);
+    make_button(body, "ATUALIZAR LISTA", catalog_refresh_cb, false);
+
+    // Tile 1 — explicação do limite
+    catalog_limit_page(s_catalog_tiles[1]);
+
+    // Pontos de página
+    lv_obj_t *dots = lv_obj_create(s_catalog_screen);
+    lv_obj_remove_style_all(dots);
+    lv_obj_set_size(dots, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(dots, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(dots, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(dots, 8, 0);
+    lv_obj_clear_flag(dots, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(dots, LV_ALIGN_BOTTOM_MID, 0, -12);
+    for (int i = 0; i < 2; i++) {
+        lv_obj_t *d = lv_obj_create(dots);
+        lv_obj_remove_style_all(d);
+        lv_obj_set_size(d, 8, 8);
+        lv_obj_set_style_radius(d, 4, 0);
+        lv_obj_set_style_bg_opa(d, LV_OPA_COVER, 0);
+        lv_obj_set_style_bg_color(d, lv_color_hex(KIT_COLOR_LINE), 0);
+        s_catalog_dots[i] = d;
+    }
+    catalog_sync_dots();
 }
 
 static void catalog_poll_cb(lv_timer_t *t)
@@ -2792,14 +3161,24 @@ static void catalog_poll_cb(lv_timer_t *t)
         if (!s_catalog_busy_screen) catalog_busy_show("BAIXANDO");
         break;
     case KIT_CAT_WORK_OK:
+        s_home_deck_dirty = true;   // a Home muda quando a lista de Tools muda
+        // Fila "ATUALIZAR TODAS": encadeia a próxima antes de encerrar.
+        if (s_cat_update_all &&
+            catalog_next_update(s_catalog_sel_id, sizeof(s_catalog_sel_id)) &&
+            kit_catalog_install(s_catalog_sel_id) == KIT_OK) {
+            s_catalog_last_state = -1;
+            catalog_busy_show("BAIXANDO");
+            break;
+        }
+        s_cat_update_all = false;
         catalog_busy_hide();
         kit_audio_sfx_impl(s_catalog_op_was_install ? KIT_SFX_CATALOG_DONE : KIT_SFX_CONFIRM);
         show_toast("PRONTO");
         catalog_list_rebuild();
         if (s_catalog_detail_screen) catalog_detail_rebuild();
-        s_home_deck_dirty = true;   // a Home muda quando a lista de Tools muda
         break;
     case KIT_CAT_WORK_ERR:
+        s_cat_update_all = false;
         catalog_busy_hide();
         kit_audio_beep_impl(400, 60);
         show_toast(kit_catalog_last_error());
@@ -2827,6 +3206,10 @@ static void open_catalog_cb(lv_event_t *e)
     kit_audio_sfx_impl(KIT_SFX_CLICK);
     if (s_catalog_screen) return;
 
+    // O usuário está vendo o catálogo: o aviso já cumpriu o papel. Limpa o ponto
+    // do card (o deck reconstrói ao voltar pra Home).
+    if (s_tool_upd_badge) { s_tool_upd_badge = false; s_home_deck_dirty = true; }
+
     s_catalog_screen = make_overlay(KIT_COLOR_BG);
     s_catalog_last_state = -1;
     catalog_list_rebuild();
@@ -2848,6 +3231,8 @@ static void close_catalog_cb(lv_event_t *e)
     if (s_catalog_confirm_screen) { lv_obj_delete(s_catalog_confirm_screen); s_catalog_confirm_screen = NULL; }
     if (s_catalog_detail_screen)  { lv_obj_delete(s_catalog_detail_screen);  s_catalog_detail_screen = NULL; }
     if (s_catalog_screen)         { lv_obj_delete(s_catalog_screen);         s_catalog_screen = NULL; }
+    s_catalog_tv = s_catalog_tiles[0] = s_catalog_tiles[1] = NULL;
+    s_catalog_dots[0] = s_catalog_dots[1] = NULL;
 
     // Instalou/removeu Tool com o Catálogo aberto? O deck da Home ficou pendente
     // (ver launcher_catalog_changed_impl) — reconstrói agora que a grade "VER
@@ -2965,9 +3350,58 @@ static void catalog_action_cb(lv_event_t *e)
 {
     (void)e;
     kit_audio_sfx_impl(KIT_SFX_CLICK);
+
+    // Instalação NOVA (não é atualização de uma já instalada) com o cartão
+    // lotado: manda pra página que explica o limite em vez de falhar calado.
+    kit_catalog_entry_t ent;
+    bool is_new_install = catalog_find(s_catalog_sel_id, &ent) &&
+                          ent.install == KIT_CAT_NOT_INSTALLED;
+    if (is_new_install &&
+        kit_tool_manager_get_count() >= kit_tool_manager_catalog_capacity()) {
+        kit_audio_beep_impl(400, 60);
+        show_toast("CAT\xC3\x81LOGO CHEIO");
+        if (s_catalog_detail_screen) { lv_obj_delete(s_catalog_detail_screen); s_catalog_detail_screen = NULL; }
+        catalog_list_rebuild();
+        if (s_catalog_tv) lv_tileview_set_tile_by_index(s_catalog_tv, 1, 0, LV_ANIM_ON);
+        catalog_sync_dots();
+        return;
+    }
+
     s_catalog_last_state = -1;
     s_catalog_op_was_install = true;
     if (kit_catalog_install(s_catalog_sel_id) != KIT_OK) {
+        show_toast("OCUPADO");
+        return;
+    }
+    catalog_busy_show("BAIXANDO");
+}
+
+// Id da próxima Tool instalada com versão nova no catálogo. false = não há mais.
+static bool catalog_next_update(char *out, size_t n)
+{
+    uint32_t cnt = kit_catalog_get_count();
+    for (uint32_t i = 0; i < cnt; i++) {
+        kit_catalog_entry_t e;
+        if (kit_catalog_get_entry(i, &e) == KIT_OK && e.install == KIT_CAT_UPDATE) {
+            strlcpy(out, e.id, n);
+            return true;
+        }
+    }
+    return false;
+}
+
+// "ATUALIZAR TODAS": baixa a 1ª Tool com update; o catalog_poll_cb encadeia as
+// demais ao ver cada KIT_CAT_WORK_OK.
+static void cat_update_all_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (!catalog_next_update(s_catalog_sel_id, sizeof(s_catalog_sel_id))) return;
+    s_cat_update_all = true;
+    s_catalog_last_state = -1;
+    s_catalog_op_was_install = true;
+    if (kit_catalog_install(s_catalog_sel_id) != KIT_OK) {
+        s_cat_update_all = false;
         show_toast("OCUPADO");
         return;
     }
@@ -3020,7 +3454,249 @@ static void catalog_confirm_do_cb(lv_event_t *e)
     s_catalog_last_state = -1;
     s_catalog_op_was_install = false;
     if (kit_catalog_uninstall(s_catalog_sel_id) != KIT_OK) { show_toast("OCUPADO"); return; }
+    tool_forget_flags(s_catalog_sel_id);
     catalog_busy_show("REMOVENDO");
+}
+
+// ---------------------------------------------------------------------------
+// Toque longo numa Tool do catálogo → folha de ações (atualizar / desinstalar)
+// ---------------------------------------------------------------------------
+// Reusa a máquina de estado do kit_catalog (install cobre "atualizar"; uninstall
+// roda numa task própria e não precisa de Wi-Fi) e os overlays de progresso do
+// Catálogo. Aberta segurando o card/slide na Home; só pra Tools is_external.
+
+static char s_toolmgr_id[40] = {0};
+static int  s_toolmgr_idx = -1;               // índice em s_home_tools da Tool da folha
+static int  s_toolmgr_last_state = -1;
+static bool s_toolmgr_want_install = false;   // esperando o catálogo ficar READY
+
+static void toolmgr_close(void)
+{
+    if (s_toolmgr_poll) { lv_timer_delete(s_toolmgr_poll); s_toolmgr_poll = NULL; }
+    catalog_busy_hide();
+    if (s_toolmgr_confirm_screen) { lv_obj_delete(s_toolmgr_confirm_screen); s_toolmgr_confirm_screen = NULL; }
+    if (s_toolmgr_screen)         { lv_obj_delete(s_toolmgr_screen);         s_toolmgr_screen = NULL; }
+    s_toolmgr_want_install = false;
+
+    // A lista de Tools mudou (removeu/atualizou) enquanto a folha cobria a Home:
+    // reconstrói o deck agora que a Home reaparece (ver launcher_catalog_changed_impl).
+    if (s_home_deck_dirty && !home_is_covered()) {
+        s_home_deck_dirty = false;
+        home_clear_deck();
+        home_build_deck();
+    }
+}
+
+static void toolmgr_close_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    toolmgr_close();
+}
+
+static void toolmgr_poll_cb(lv_timer_t *t)
+{
+    (void)t;
+    kit_catalog_state_t st = kit_catalog_get_state();
+    catalog_busy_update();
+
+    if (s_toolmgr_want_install &&
+        (st == KIT_CAT_READY || st == KIT_CAT_WORK_OK || st == KIT_CAT_WORK_ERR)) {
+        s_toolmgr_want_install = false;
+        s_toolmgr_last_state = -1;
+        if (kit_catalog_install(s_toolmgr_id) == KIT_OK) catalog_busy_show("BAIXANDO");
+        else { show_toast("OCUPADO"); toolmgr_close(); }
+        return;
+    }
+    if (s_toolmgr_want_install &&
+        (st == KIT_CAT_FETCH_ERR || st == KIT_CAT_OFFLINE)) {
+        s_toolmgr_want_install = false;
+        show_toast("SEM CAT\xC3\x81LOGO");
+        toolmgr_close();
+        return;
+    }
+
+    if ((int)st == s_toolmgr_last_state) return;
+    s_toolmgr_last_state = (int)st;
+
+    switch (st) {
+    case KIT_CAT_WORK_OK:
+        kit_audio_sfx_impl(KIT_SFX_CONFIRM);
+        show_toast("PRONTO");
+        s_home_deck_dirty = true;
+        toolmgr_close();
+        break;
+    case KIT_CAT_WORK_ERR:
+        kit_audio_beep_impl(400, 60);
+        show_toast(kit_catalog_last_error());
+        toolmgr_close();
+        break;
+    default:
+        break;
+    }
+}
+
+static void toolmgr_start_poll(void)
+{
+    s_toolmgr_last_state = -1;
+    if (!s_toolmgr_poll) s_toolmgr_poll = lv_timer_create(toolmgr_poll_cb, 400, NULL);
+}
+
+static void toolmgr_update_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (!kit_network_is_connected()) { show_toast("PRECISA DE WI-FI"); return; }
+
+    kit_catalog_state_t st = kit_catalog_get_state();
+    if (st == KIT_CAT_READY || st == KIT_CAT_WORK_OK || st == KIT_CAT_WORK_ERR) {
+        s_toolmgr_last_state = -1;
+        if (kit_catalog_install(s_toolmgr_id) == KIT_OK) catalog_busy_show("BAIXANDO");
+        else { show_toast("OCUPADO"); return; }
+    } else {
+        s_toolmgr_want_install = true;
+        kit_catalog_refresh();
+        catalog_busy_show("BUSCANDO");
+    }
+    toolmgr_start_poll();
+}
+
+static void toolmgr_confirm_close_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_toolmgr_confirm_screen) { lv_obj_delete(s_toolmgr_confirm_screen); s_toolmgr_confirm_screen = NULL; }
+}
+
+static void toolmgr_confirm_do_cb(lv_event_t *e)
+{
+    (void)e;
+    if (s_toolmgr_confirm_screen) { lv_obj_delete(s_toolmgr_confirm_screen); s_toolmgr_confirm_screen = NULL; }
+    if (kit_catalog_uninstall(s_toolmgr_id) != KIT_OK) { show_toast("OCUPADO"); return; }
+    tool_forget_flags(s_toolmgr_id);
+    s_toolmgr_last_state = -1;
+    catalog_busy_show("REMOVENDO");
+    toolmgr_start_poll();
+}
+
+static void toolmgr_remove_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_toolmgr_confirm_screen) return;
+
+    s_toolmgr_confirm_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_toolmgr_confirm_screen, "DESINSTALAR", toolmgr_confirm_close_cb);
+
+    lv_obj_t *body = make_scroll_body(s_toolmgr_confirm_screen, 2 * KIT_BTN_H + 40);
+    lv_obj_t *q = add_label(body,
+        "Tirar esta Tool do KIT? Os dados dela no cart\xC3\xA3o s\xC3\xA3o apagados. "
+        "D\xC3\xA1 pra baixar de novo depois.",
+        KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(q, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(q, KIT_CONTENT);
+
+    lv_obj_t *ok = make_button(s_toolmgr_confirm_screen, "DESINSTALAR", toolmgr_confirm_do_cb, true);
+    lv_obj_set_style_bg_color(ok, lv_color_hex(KIT_COLOR_RED), 0);
+    lv_obj_t *okl = lv_obj_get_child(ok, 0);
+    if (okl) lv_obj_set_style_text_color(okl, lv_color_hex(KIT_COLOR_ON_COLOR), 0);
+    lv_obj_align(ok, LV_ALIGN_BOTTOM_MID, 0, -(14 + KIT_BTN_H + 12));
+
+    lv_obj_t *no = make_button(s_toolmgr_confirm_screen, "CANCELAR", toolmgr_confirm_close_cb, false);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_MID, 0, -14);
+}
+
+// Fixar / desafixar a Tool da folha. Grava no NVS, atualiza a cópia em RAM e
+// marca o deck pra reconstruir quando a Home reaparecer (toolmgr_close).
+static void toolmgr_pin_cb(lv_event_t *e)
+{
+    (void)e;
+    if (s_toolmgr_idx < 0 || s_toolmgr_idx >= s_home_tools_n) { toolmgr_close(); return; }
+    bool now_on = !s_home_tools[s_toolmgr_idx].is_pinned;
+    tool_set_pinned(s_toolmgr_id, now_on);
+    s_home_tools[s_toolmgr_idx].is_pinned = now_on;
+    kit_audio_sfx_impl(now_on ? KIT_SFX_CONFIRM : KIT_SFX_CLICK);
+    s_home_deck_dirty = true;
+    toolmgr_close();
+}
+
+// Descrição da Tool a partir do manifest (Tool Manager). "" se não achar.
+static void tool_desc_lookup(const char *id, char *out, size_t n)
+{
+    out[0] = '\0';
+    uint32_t cnt = kit_tool_manager_get_count();
+    for (uint32_t k = 0; k < cnt; k++) {
+        kit_tool_entry_t e;
+        if (kit_tool_manager_get_entry(k, &e) == KIT_OK && strcmp(e.id, id) == 0) {
+            strlcpy(out, e.description, n);
+            return;
+        }
+    }
+}
+
+// Folha de ações de uma Tool (segurar o card/slide na Home). O corpo rola na
+// vertical: descrição da Tool em fonte de leitura + botões logo abaixo. Qualquer
+// Tool pode ser fixada na Home; ATUALIZAR/REINSTALAR e DESINSTALAR só valem pras
+// Tools do catálogo.
+static void home_tool_longpress_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    if (i < 0 || i >= s_home_tools_n) return;
+    const home_tool_t *tool = &s_home_tools[i];
+    if (s_toolmgr_screen) return;
+
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    strlcpy(s_toolmgr_id, tool->id, sizeof(s_toolmgr_id));
+    s_toolmgr_idx = i;
+
+    s_toolmgr_screen = make_overlay(KIT_COLOR_BG);
+    char title[40];
+    snprintf(title, sizeof(title), "%s", tool->label);
+    for (char *p = title; *p; p++) if (*p >= 'a' && *p <= 'z') *p -= 32;
+    make_titlebar(s_toolmgr_screen, title, toolmgr_close_cb);
+
+    lv_obj_t *body = make_scroll_body(s_toolmgr_screen, 0);
+    lv_obj_set_flex_align(body, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(body, 16, 0);
+
+    // Descrição da Tool — mesma fonte de leitura da página COMO JOGA.
+    char desc[64];
+    if (tool->is_external) tool_desc_lookup(tool->id, desc, sizeof desc);
+    else desc[0] = '\0';
+    if (desc[0]) {
+        lv_obj_t *d = add_label(body, desc, KIT_COLOR_TEXT, &kit_sans_28, 0);
+        lv_label_set_long_mode(d, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(d, KIT_CONTENT);
+    }
+
+    lv_obj_t *m = add_label(body,
+        tool->is_external ? "Fixe na Home, atualize ou tire do KIT."
+                          : "Fixe na Home pra ela ficar sempre no in\xC3\xAD" "cio.",
+        KIT_COLOR_TEXT_MUTED, &kit_sans_22, 0);
+    lv_label_set_long_mode(m, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(m, KIT_CONTENT);
+
+    make_button(body, tool->is_pinned ? "DESAFIXAR DA HOME" : "FIXAR NA HOME",
+                toolmgr_pin_cb, true);
+
+    if (tool->is_external) {
+        // "ATUALIZAR" só quando o catálogo (se carregado) confirma versão nova;
+        // senão é uma reinstalação.
+        const char *up = "REINSTALAR";
+        kit_catalog_entry_t ce;
+        if ((kit_catalog_get_state() == KIT_CAT_READY ||
+             kit_catalog_get_state() == KIT_CAT_WORK_OK) &&
+            catalog_find(tool->id, &ce) && ce.install == KIT_CAT_UPDATE) {
+            up = "ATUALIZAR";
+        }
+        make_button(body, up, toolmgr_update_cb, false);
+
+        lv_obj_t *rm = make_button(body, "DESINSTALAR", toolmgr_remove_cb, false);
+        lv_obj_set_style_border_color(rm, lv_color_hex(KIT_COLOR_RED), 0);
+        lv_obj_t *rml = lv_obj_get_child(rm, 0);
+        if (rml) lv_obj_set_style_text_color(rml, lv_color_hex(KIT_COLOR_RED), 0);
+    }
+    // Sem botão CANCELAR: a titlebar ← fecha a folha.
 }
 
 // ---------------------------------------------------------------------------
@@ -3286,6 +3962,17 @@ void kit_launcher_notify_update_available(const char *version)
     s_fw_update_toast_pending = true;
 }
 
+// Chamada pela task do kit_catalog (ver kit_runtime) quando um refresh em
+// background acha Tools instaladas com versão nova. Só marca flags. Ignora se o
+// usuário já está no Catálogo (esse refresh pode ter sido o manual da tela).
+void kit_launcher_notify_tool_updates(uint32_t count)
+{
+    if (count == 0 || s_catalog_screen) return;
+    s_tool_upd_count = count;
+    s_tool_upd_badge = true;
+    s_tool_upd_toast_pending = true;
+}
+
 // ---------------------------------------------------------------------------
 // Ações
 // ---------------------------------------------------------------------------
@@ -3322,6 +4009,10 @@ static void home_tile_cb(lv_event_t *e)
     if (i < 0 || i >= s_home_tools_n) return;
     const home_tool_t *tool = &s_home_tools[i];
 
+    // O LV_EVENT_CLICKED ainda chega ao card depois de um LV_EVENT_LONG_PRESSED
+    // que abriu a folha de ações — sem isto a Tool abriria atrás dela.
+    if (s_toolmgr_screen || s_toolmgr_confirm_screen) return;
+
     if (!tool->available) {
         kit_audio_beep_impl(500, 30);
         show_toast("EM BREVE");
@@ -3331,6 +4022,11 @@ static void home_tile_cb(lv_event_t *e)
     kit_audio_sfx_impl(KIT_SFX_TOOL_OPEN);
     ESP_LOGI(TAG, "Abrindo Tool '%s'...", tool->id);
     if (s_toast) { lv_obj_delete(s_toast); s_toast = NULL; }
+    if (s_home_tools[i].is_new) {   // saiu de "Novos" — grava e reorganiza a grade
+        tool_mark_seen(tool->id);
+        s_home_tools[i].is_new = false;
+        s_home_deck_dirty = true;
+    }
     home_mru_touch(i);   // sobe pro topo da recência (deck reconstrói ao voltar)
     snprintf(s_pending_tool_id, sizeof s_pending_tool_id, "%s", tool->id);
     lv_async_call(launch_pending_tool_cb, NULL);
@@ -3382,6 +4078,11 @@ void kit_launcher_go_home(void)
     if (s_catalog_confirm_screen) { lv_obj_delete(s_catalog_confirm_screen); s_catalog_confirm_screen = NULL; }
     if (s_catalog_detail_screen)  { lv_obj_delete(s_catalog_detail_screen);  s_catalog_detail_screen = NULL; }
     if (s_catalog_screen)         { lv_obj_delete(s_catalog_screen);         s_catalog_screen = NULL; }
+    s_catalog_tv = s_catalog_tiles[0] = s_catalog_tiles[1] = NULL;
+    s_catalog_dots[0] = s_catalog_dots[1] = NULL;
+    if (s_toolmgr_poll)  { lv_timer_delete(s_toolmgr_poll); s_toolmgr_poll = NULL; }
+    if (s_toolmgr_confirm_screen) { lv_obj_delete(s_toolmgr_confirm_screen); s_toolmgr_confirm_screen = NULL; }
+    if (s_toolmgr_screen)         { lv_obj_delete(s_toolmgr_screen);         s_toolmgr_screen = NULL; }
     if (s_fwupdate_poll)  { lv_timer_delete(s_fwupdate_poll); s_fwupdate_poll = NULL; }
     if (s_fwupdate_busy)  { lv_obj_delete(s_fwupdate_busy);   s_fwupdate_busy = NULL;
                             kit_power_keep_awake_impl(false); }
@@ -3389,6 +4090,7 @@ void kit_launcher_go_home(void)
     if (s_usbmsc_screen)     { lv_obj_delete(s_usbmsc_screen);     s_usbmsc_screen = NULL; }
     if (s_about_screen)      { lv_obj_delete(s_about_screen);      s_about_screen = NULL; }
     if (s_sd_format_screen)  { lv_obj_delete(s_sd_format_screen);  s_sd_format_screen = NULL; }
+    if (s_factory_reset_screen) { lv_obj_delete(s_factory_reset_screen); s_factory_reset_screen = NULL; }
     if (s_storage_screen)    { lv_obj_delete(s_storage_screen);    s_storage_screen = NULL; }
     if (s_sleep_screen)      { lv_obj_delete(s_sleep_screen);      s_sleep_screen = NULL; }
     if (s_poweroff_screen)   { lv_obj_delete(s_poweroff_screen);   s_poweroff_screen = NULL; }
@@ -3404,6 +4106,7 @@ void kit_launcher_go_home(void)
                                kit_config_set_u8("onboarded", 1); }  // saiu pelo BOTÃO físico: não repete no próximo boot
     if (s_splash_screen)     { lv_obj_delete(s_splash_screen);     s_splash_screen = NULL; }
     if (s_toast)             { lv_obj_delete(s_toast);             s_toast = NULL; }
+    if (s_banner)            { lv_obj_delete(s_banner);            s_banner = NULL; }
 
     // Usou uma Tool? A ordem de recência mudou — reconstrói o slideshow.
     // Senão, só volta o slideshow para a Tool mais recente (slide 1; slide 0 é
@@ -3436,15 +4139,24 @@ static void batt_tick_cb(lv_timer_t *t)
     }
     s_was_charging = charging;
 
-    // Aviso de bateria baixa: dispara uma vez quando cai a <= 20% descarregando.
-    // Rearma só depois de carregar ou voltar acima de 25% (histerese).
+    // Aviso de bateria baixa, em dois níveis (20% e 10%). Cada um dispara uma vez
+    // por descarga e rearma só depois de carregar ou voltar acima de 25% (aviso
+    // de 20%) / 15% (crítico). O banner vai na top layer, então aparece também
+    // por cima de uma Tool em andamento (a Home fica oculta durante a Tool).
     uint8_t p = kit_power_get_battery_percentage();
-    if (charging || p > 25) {
-        s_low_batt_warned = false;
-    } else if (!s_low_batt_warned && p <= 20) {
+    if (charging || p > 25) s_low_batt_warned = false;
+    if (charging || p > 15) s_crit_batt_warned = false;
+
+    if (!charging && !s_crit_batt_warned && p <= 10) {
+        s_crit_batt_warned = s_low_batt_warned = true;
+        kit_audio_beep_impl(440, 120);
+        show_banner(KIT_COLOR_RED, KIT_COLOR_ON_COLOR, "BATERIA FRACA");
+    } else if (!charging && !s_low_batt_warned && p <= 20) {
         s_low_batt_warned = true;
         kit_audio_beep_impl(500, 90);
-        show_feedback(KIT_COLOR_YELLOW, KIT_ICON_TRIANGLE, "BATERIA BAIXA");
+        char msg[24];
+        snprintf(msg, sizeof(msg), "BATERIA %u%%", (unsigned)p);
+        show_banner(KIT_COLOR_YELLOW, KIT_COLOR_ON_YELLOW, msg);
     }
 
     // Atualização de firmware achada em background: um toast quando a Home
@@ -3454,6 +4166,18 @@ static void batt_tick_cb(lv_timer_t *t)
         char msg[52];
         snprintf(msg, sizeof(msg),
                  "Atualiza\xC3\xA7\xC3\xA3o dispon\xC3\xADvel: v%s", s_fw_update_ver);
+        show_toast(msg);
+    }
+
+    // Tool(s) do catálogo com versão nova, achadas por uma checagem em background
+    // (ver kit_launcher_notify_tool_updates).
+    if (s_tool_upd_toast_pending && !home_is_covered()) {
+        s_tool_upd_toast_pending = false;
+        uint32_t n = s_tool_upd_count;
+        char msg[48];
+        snprintf(msg, sizeof(msg), n == 1 ? "%u Tool com atualiza\xC3\xA7\xC3\xA3o"
+                                          : "%u Tools com atualiza\xC3\xA7\xC3\xA3o",
+                 (unsigned)n);
         show_toast(msg);
     }
 }

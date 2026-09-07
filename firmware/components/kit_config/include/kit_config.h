@@ -44,6 +44,14 @@ void kit_config_set_sound_enabled(bool enabled);
 uint8_t kit_config_get_volume(void);
 void    kit_config_set_volume(uint8_t percent);
 
+/**
+ * Restaura o padrão de fábrica: apaga a partição NVS inteira (ajustes do
+ * sistema, redes Wi-Fi salvas, estado do OTA, recência/fixados da Home e
+ * recordes dos jogos built-in) e REINICIA o dispositivo. Não retorna.
+ * As Tools instaladas no cartão SD são arquivos e permanecem.
+ */
+void kit_config_factory_reset(void);
+
 // -- Acesso genérico a NVS (namespace "kit_sys"), sem passar pelo cache. --
 kit_err_t kit_config_get_u8(const char *key, uint8_t *out_val, uint8_t default_val);
 kit_err_t kit_config_set_u8(const char *key, uint8_t val);

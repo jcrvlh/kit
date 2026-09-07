@@ -7,6 +7,71 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ---
 
+## [Não lançado]
+
+## [0.5.0] — 2026-09-07
+
+### Adicionado
+- **Fixar Tool na Home.** Toque longo num card abre uma folha de ações;
+  **FIXAR NA HOME** move a Tool pra uma seção **FIXADOS** no topo da grade
+  "VER TODOS". Desafixar devolve pra categoria de origem.
+- **Seção "Novos".** Uma Tool do catálogo recém-instalada fica em **NOVOS** no
+  topo da grade "VER TODOS" até você abrir ela pela primeira vez.
+- **Aviso de atualização de Tool.** Com Wi-Fi, o KIT confere o catálogo em
+  background (no máx. 1×/dia) e, se alguma Tool instalada tem versão nova, acende
+  um ponto no card **Catálogo** e mostra um aviso na Home. Dentro do Catálogo,
+  o botão **ATUALIZAR TODAS** baixa uma por uma.
+- **Aviso de bateria baixa por cima da Tool.** Uma tarja curta no topo da tela
+  (amarela em 20 %, vermelha em 10 %) que aparece mesmo com um jogo ou ferramenta
+  em uso, uma vez em cada nível.
+- **Ajustes → Restaurar padrão de fábrica.** Apaga todos os ajustes, as redes
+  Wi-Fi salvas e os recordes dos jogos e reinicia o KIT (com uma tela de
+  confirmação). As Tools instaladas no cartão continuam.
+- **Catálogo: o limite de espaço ficou visível.** A lista mostra uma barra
+  `TOOLS X/16` e uma página **SOBRE O LIMITE** que explica o teto; tentar
+  instalar com o cartão cheio leva pra essa explicação em vez de falhar calado.
+- **Timer — Modo Ampulheta.** Ligado nos ajustes do Timer: vire o KIT de cabeça
+  pra baixo pra correr o timer (a tela gira junto pra ficar legível); qualquer
+  outra posição pausa e guarda onde parou.
+
+### Alterado
+- **Timer — seletor de tempo.** As rodinhas de MM:SS viraram **roletas de
+  arraste** (arrasta pra cima/baixo pra girar o número, toca pra somar 1), no
+  mesmo gesto da sigla do Placar.
+- **Placar — seletor de sigla.** As 3 caixas de letra agora giram como roleta ao
+  arrastar (além do toque, que continua avançando a letra); a escolha do jogador
+  virou um seletor `◄ JOGADOR N ►`.
+- **Folha de ações de Tool do catálogo.** O toque longo abre uma folha rolável
+  com a descrição da Tool e os botões **FIXAR NA HOME**, **ATUALIZAR** (ou
+  **REINSTALAR**, quando já está na última versão) e **DESINSTALAR**.
+
+### Corrigido
+- **Reinstalar uma Tool não a trazia de volta pra "Novos".** Ao desinstalar, o
+  KIT agora esquece as marcas da Tool (já vista / fixada), então reinstalar entra
+  em **NOVOS** de novo.
+
+## [0.4.0] — 2026-09-05
+
+### Alterado
+- **Giroscópio disponível pras Tools do catálogo.** O Runtime das Tools passa a
+  expor a leitura do giroscópio (`gyro_start`/`rezero`/`poll`/`stop`). A Tool
+  **Vira Certo** saiu do Core pro catálogo e é a primeira a usá-lo.
+
+## [0.3.5] — 2026-09-05
+
+### Alterado
+- **Telefonema e Estouro** saíram do Core built-in e viraram Tools do catálogo.
+
+### Corrigido
+- **O catálogo do cartão ignorava em silêncio qualquer Tool depois da 8ª**
+  ("baixa mas não instala"). O teto subiu de 8 pra 16.
+
+## [0.3.4] — 2026-09-05
+
+### Corrigido
+- **Portal de Wi-Fi dava "Header fields are too long" no Android** — os buffers
+  de cabeçalho HTTP do portal cativo eram pequenos demais.
+
 ## [0.3.3] — 2026-09-04
 
 ### Alterado

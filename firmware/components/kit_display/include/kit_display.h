@@ -46,6 +46,15 @@ uint8_t   kit_display_get_brightness_impl(void);
 kit_err_t kit_display_set_on_impl(bool on);
 bool      kit_display_is_on_impl(void);
 
+/**
+ * Rotação da imagem no painel: 0 ou 180 (o CO5300 desta placa não faz 90°).
+ * A 180° o LVGL segue desenhando em pé — só o flush inverte os pixels e a
+ * janela. Usado pelo Timer no "Modo Ampulheta" (KIT de cabeça pra baixo).
+ * kit_input espelha o toque conforme kit_display_rotation().
+ */
+void kit_display_set_rotation_impl(int deg);
+int  kit_display_rotation(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -555,6 +555,11 @@ uint32_t kit_tool_manager_get_count(void)
     return s_catalog_n;
 }
 
+uint32_t kit_tool_manager_catalog_capacity(void)
+{
+    return KIT_TOOL_CATALOG_MAX;
+}
+
 kit_err_t kit_tool_manager_get_entry(uint32_t index, kit_tool_entry_t *entry)
 {
     if (index >= s_catalog_n || !entry) return KIT_ERR_NOT_FOUND;
