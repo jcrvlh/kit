@@ -44,6 +44,11 @@ void kit_config_set_sound_enabled(bool enabled);
 uint8_t kit_config_get_volume(void);
 void    kit_config_set_volume(uint8_t percent);
 
+// -- Modo canhoto: gira toda a tela 180°. Padrão desligado. Reaplicado no
+//    boot pelo Runtime (kit_display_set_base_rotation_impl). --
+bool kit_config_get_left_handed(void);
+void kit_config_set_left_handed(bool enabled);
+
 /**
  * Restaura o padrão de fábrica: apaga a partição NVS inteira (ajustes do
  * sistema, redes Wi-Fi salvas, estado do OTA, recência/fixados da Home e

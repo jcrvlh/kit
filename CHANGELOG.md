@@ -9,6 +9,12 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.6.0] — 2026-09-07
+
+### Adicionado
+- **Modo canhoto.** Em **Ajustes › Tela**, uma opção que gira toda a tela 180°.
+  Fica salva e volta assim no próximo boot. O toque acompanha a rotação.
+
 ## [0.5.0] — 2026-09-07
 
 ### Adicionado

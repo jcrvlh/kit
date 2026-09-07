@@ -13,6 +13,7 @@ static const char *NVS_NAMESPACE = "kit_sys";
 #define KEY_PWR_OFF      "pwr_off_s"
 #define KEY_SOUND        "sound_en"
 #define KEY_VOLUME       "volume"
+#define KEY_LEFT_HANDED  "left_handed"
 
 // Padrões
 #define DEF_BRIGHTNESS   80
@@ -20,6 +21,7 @@ static const char *NVS_NAMESPACE = "kit_sys";
 #define DEF_PWR_OFF      0       // nunca
 #define DEF_SOUND        1       // ligado
 #define DEF_VOLUME       80
+#define DEF_LEFT_HANDED  0       // desligado
 
 static struct {
     uint8_t  brightness;
@@ -27,12 +29,14 @@ static struct {
     uint32_t auto_poweroff_s;
     uint8_t  sound_enabled;
     uint8_t  volume;
+    uint8_t  left_handed;
 } s_cache = {
     .brightness      = DEF_BRIGHTNESS,
     .screen_sleep_s  = DEF_SCR_SLEEP,
     .auto_poweroff_s = DEF_PWR_OFF,
     .sound_enabled   = DEF_SOUND,
     .volume          = DEF_VOLUME,
+    .left_handed     = DEF_LEFT_HANDED,
 };
 
 kit_err_t kit_config_get_u8(const char *key, uint8_t *out_val, uint8_t default_val)
@@ -116,12 +120,15 @@ kit_err_t kit_config_init(void)
     kit_config_get_u8(KEY_VOLUME, &vol, DEF_VOLUME);
     s_cache.volume = vol > 100 ? 100 : vol;
 
-    ESP_LOGI(TAG, "Config: brilho=%d%%, repouso=%lus, desliga=%lus, som=%s, volume=%d%%",
+    kit_config_get_u8(KEY_LEFT_HANDED, &s_cache.left_handed, DEF_LEFT_HANDED);
+
+    ESP_LOGI(TAG, "Config: brilho=%d%%, repouso=%lus, desliga=%lus, som=%s, volume=%d%%, canhoto=%s",
              s_cache.brightness,
              (unsigned long)s_cache.screen_sleep_s,
              (unsigned long)s_cache.auto_poweroff_s,
              s_cache.sound_enabled ? "on" : "off",
-             s_cache.volume);
+             s_cache.volume,
+             s_cache.left_handed ? "on" : "off");
     return KIT_OK;
 }
 
@@ -172,4 +179,14 @@ void kit_config_set_volume(uint8_t percent)
     if (percent == s_cache.volume) return;
     s_cache.volume = percent;
     kit_config_set_u8(KEY_VOLUME, percent);
+}
+
+bool kit_config_get_left_handed(void) { return s_cache.left_handed != 0; }
+
+void kit_config_set_left_handed(bool enabled)
+{
+    uint8_t v = enabled ? 1 : 0;
+    if (v == s_cache.left_handed) return;
+    s_cache.left_handed = v;
+    kit_config_set_u8(KEY_LEFT_HANDED, v);
 }

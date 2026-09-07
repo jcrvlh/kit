@@ -49,11 +49,18 @@ bool      kit_display_is_on_impl(void);
 /**
  * Rotação da imagem no painel: 0 ou 180 (o CO5300 desta placa não faz 90°).
  * A 180° o LVGL segue desenhando em pé — só o flush inverte os pixels e a
- * janela. Usado pelo Timer no "Modo Ampulheta" (KIT de cabeça pra baixo).
- * kit_input espelha o toque conforme kit_display_rotation().
+ * janela. kit_input espelha o toque conforme kit_display_rotation().
+ *
+ * - set_base_rotation: orientação-base persistente ("Modo canhoto"), aplicada
+ *   no boot pelo Runtime a partir de kit_config_get_left_handed().
+ * - set_rotation: override temporário (Timer "Modo Ampulheta", KIT de cabeça
+ *   pra baixo); restore_rotation volta para a base.
  */
+void kit_display_set_base_rotation_impl(int deg);
+void kit_display_restore_rotation_impl(void);
 void kit_display_set_rotation_impl(int deg);
 int  kit_display_rotation(void);
+int  kit_display_base_rotation(void);
 
 #ifdef __cplusplus
 }

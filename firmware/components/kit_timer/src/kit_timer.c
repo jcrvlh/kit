@@ -574,11 +574,13 @@ static void orient_tick_cb(lv_timer_t *t)
         if (s_tv) lv_tileview_set_tile_by_index(s_tv, 1, 0, LV_ANIM_OFF);
     }
 
-    // Virar de cabeça pra baixo gira a tela 180° — e ela FICA assim mesmo depois
-    // de pausar (só volta a 0° ao desligar o modo ou sair da Tool). Assim a
-    // pessoa lê o valor pausado do mesmo lado de onde estava olhando.
-    if (pos && kit_display_rotation() != 180) {
-        kit_display_set_rotation_impl(180);
+    // Virar de cabeça pra baixo gira a tela 180° em relação à orientação-base —
+    // e ela FICA assim mesmo depois de pausar (só volta ao desligar o modo ou
+    // sair da Tool). Assim a pessoa lê o valor pausado do mesmo lado de onde
+    // estava olhando. (No Modo canhoto a base já é 180°, então aqui vira 0°.)
+    int flip_target = (kit_display_base_rotation() == 180) ? 0 : 180;
+    if (pos && kit_display_rotation() != flip_target) {
+        kit_display_set_rotation_impl(flip_target);
         lv_obj_invalidate(s_screen);
     }
 
@@ -854,8 +856,8 @@ static void flip_pill_cb(lv_event_t *e)
         stop_counting();
         s_run = RUN_IDLE;
         s_cur_secs = (s_mode == MODE_UP) ? 0 : s_set_secs;
-        if (kit_display_rotation() != 0) {
-            kit_display_set_rotation_impl(0);
+        if (kit_display_rotation() != kit_display_base_rotation()) {
+            kit_display_restore_rotation_impl();
             lv_obj_invalidate(s_screen);
         }
     } else {
@@ -1274,7 +1276,7 @@ kit_err_t kit_timer_start(uint32_t accent)
     load_prefs();
     s_cur_secs  = (s_mode == MODE_UP) ? 0 : s_set_secs;
     s_flip_rem  = s_flip_set;
-    kit_display_set_rotation_impl(0);
+    kit_display_restore_rotation_impl();
 
     const kit_api_table_t *t = api();
     s_bright_normal = (t && t->display) ? t->display->get_brightness() : 80;
@@ -1319,7 +1321,7 @@ void kit_timer_destroy(void)
     const kit_api_table_t *t = api();
     if (t && t->power)   t->power->keep_awake(false);
     if (t && t->display && s_dimmed) t->display->set_brightness(s_bright_normal);
-    kit_display_set_rotation_impl(0);
+    kit_display_restore_rotation_impl();
     s_dimmed = false;
     s_run    = RUN_IDLE;
     s_flip_pos = false;

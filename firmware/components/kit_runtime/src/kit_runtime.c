@@ -344,6 +344,8 @@ kit_err_t kit_runtime_init(void)
     }
     // Reaplica o brilho salvo (o init do painel liga no máximo).
     kit_display_set_brightness_impl(kit_config_get_brightness());
+    // Modo canhoto: gira toda a tela 180° se a pessoa ativou em Ajustes > Tela.
+    kit_display_set_base_rotation_impl(kit_config_get_left_handed() ? 180 : 0);
 
     // 7. Inicializa Touch CST820
     err = kit_input_init();
