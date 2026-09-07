@@ -40,6 +40,7 @@ Para manter sua Tool fluida no hardware limitado do ESP32-S3:
 1. **Estado Global Local**: Mantenha o estado da sua Tool em variáveis globais estáticas (`static`). Ex: `static lv_obj_t *tela;` ou `static meu_estado_t estado;`.
 2. **Callbacks Limpos**: As funções registradas como callback (ex: `on_input` da Input API ou `on_shake` da IMU) rodam no contexto da main task do Runtime. **Nunca bloqueie essas funções** (não use laços infinitos ou delays longos). Processe rapidamente e use a UI (LVGL) para reagir assincronamente.
 3. **Persistência Assertiva**: Salve seus dados usando a Storage API no momento exato em que algo importante mudar. Não dependa exclusivamente de salvar no `tool_destroy`, pois se o KIT for forçado a reiniciar (botão), a Tool pode não ter tempo de finalizar.
+4. **Não reinvente a tela**: `#include "kit_ui.h"` traz os componentes prontos no padrão Bauhaus — titlebar + tileview, grade de chips do AJUSTE, página COMO JOGA, botão de ação e o seletor de sigla. É header-only (não muda o build). Ver [`docs/ui_gallery.md`](ui_gallery.md).
 
 ## 4. Testes e Compilação Desktop (Stubs)
 
