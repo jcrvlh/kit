@@ -27,7 +27,7 @@ Corpo rolável na vertical:
 | Campo | Opções | Efeito |
 |---|---|---|
 | **JOGADORES** | `2` · `3` · `4` | Quantas colunas o placar mostra. Trocar não apaga a pontuação de quem sai de vista. |
-| **INICIAIS** (opcional) | seletor `JOGADOR N` + 3 caixas de letra + `APAGAR` | Padrão da Tool [Fora](https://github.com/jcrvlh/kit-tools): escolhe o jogador, toca cada caixa para **girar a letra** (`vazio → A → … → Z → vazio`). Sem inicial, a coluna mostra `#1`..`#4` na cor do jogador. |
+| **INICIAIS** (opcional) | stepper `◄ JOGADOR N ►` + 3 caixas de letra + `APAGAR` | Padrão da Tool [Fora](https://github.com/jcrvlh/kit-tools): escolhe o jogador; em cada caixa, **toque** avança a letra (`vazio → A → … → Z → vazio`) e **arraste pra cima/baixo** gira como roleta. Sem inicial, a coluna mostra `#1`..`#4` na cor do jogador. |
 | **META** | `SEM` · `3` · `5` · `10` · `21` · `50` (pílulas em **2 linhas** de 3, altura 68 — botão grande) | Meta **desligada por padrão**. Com meta, cada coluna ganha uma barra de progresso e, ao bater, aparece o overlay `VENCEU`. |
 
 Tudo persiste no Storage (`pl_players` / `pl_meta` / `pl_names`) e volta ao

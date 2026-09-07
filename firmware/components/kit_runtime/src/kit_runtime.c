@@ -276,6 +276,18 @@ static void ota_bg_cb(kit_ota_state_t st, void *user)
     kit_launcher_notify_update_available(rel.version);
 }
 
+// Callback do kit_catalog: roda na task do catálogo. Só toca em NVS (kit_config)
+// e marca uma flag no launcher — nada de LVGL aqui.
+static void catalog_bg_cb(kit_catalog_state_t st, void *user)
+{
+    (void)user;
+    if (st != KIT_CAT_READY) return;   // só reage ao fim de um refresh bem-sucedido
+
+    kit_config_set_u32("cat_last_chk", (uint32_t)time(NULL));
+    uint32_t n = kit_catalog_update_count();
+    if (n > 0) kit_launcher_notify_tool_updates(n);
+}
+
 kit_err_t kit_runtime_init(void)
 {
     ESP_LOGI(TAG, "Iniciando subsistemas do KIT Runtime...");
@@ -361,9 +373,12 @@ kit_err_t kit_runtime_init(void)
     }
 
     // 8d. Catálogo de Tools no dispositivo (só cria a task de rede, ociosa até
-    //     a UI pedir um refresh).
+    //     a UI pedir um refresh). A checagem em background por Tools com versão
+    //     nova é disparada em kit_runtime_run após o boot.
     if (kit_catalog_init() != KIT_OK) {
         ESP_LOGW(TAG, "Catálogo de Tools indisponível");
+    } else {
+        kit_catalog_set_cb(catalog_bg_cb, NULL);
     }
 
     // 8e. Atualização de firmware pela internet (só cria a task, ociosa). A
@@ -403,6 +418,7 @@ void kit_runtime_run(void)
     int64_t last_wake_us = 0;
     bool    wifi_autostart_done = false;
     bool    ota_check_done = false;
+    bool    cat_check_done = false;
     while (1) {
         // Incrementa o tempo do LVGL e processa tarefas gráficas
         uint32_t delay_ms = kit_display_process();
@@ -433,6 +449,19 @@ void kit_runtime_run(void)
             if (ota_auto && (last == 0 || (uint32_t)time(NULL) - last > 86400)) {
                 ESP_LOGI(TAG, "OTA: verificando atualização em background");
                 kit_ota_check();
+            }
+        }
+
+        // Checagem do catálogo em background — mesma lógica do OTA, ~40 s depois
+        // do boot (defasada pra não subir os dois downloads juntos), no máximo
+        // 1x/dia. Só acende o aviso; a instalação é sempre manual (Catálogo).
+        if (!cat_check_done && now >= 40000000 && kit_network_is_connected()) {
+            cat_check_done = true;
+            uint32_t last = 0;
+            kit_config_get_u32("cat_last_chk", &last, 0);
+            if (last == 0 || (uint32_t)time(NULL) - last > 86400) {
+                ESP_LOGI(TAG, "Catálogo: verificando atualizações de Tools em background");
+                kit_catalog_refresh();
             }
         }
 

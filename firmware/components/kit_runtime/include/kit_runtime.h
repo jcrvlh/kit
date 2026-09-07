@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 4
+#define KIT_VERSION_MINOR 5
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -30,7 +30,10 @@ extern "C" {
 //        + lv_obj_set_style_border_side no runtime LVGL das Tools; Vira Certo
 //        sai do Core pro catálogo e é a primeira Tool a usar o giroscópio.
 //        Superfície nova pras Tools -> bump obrigatório.
-#define KIT_VERSION_STRING "0.4.0"
+// 0.5.0: alinha com firmware/version.txt (fixar Tool na Home, aviso de update
+//        de Tool, banner de bateria, restaurar padrão de fábrica, Timer com
+//        roleta de tempo e Modo Ampulheta — nenhuma superfície nova pras Tools)
+#define KIT_VERSION_STRING "0.5.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

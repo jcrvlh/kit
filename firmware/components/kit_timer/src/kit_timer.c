@@ -3,7 +3,9 @@
 #include "kit_display.h"
 #include "kit_fonts.h"
 #include "kit_theme.h"
+#include "kit_imu.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "lvgl.h"
 #include <stdio.h>
 #include <string.h>
@@ -11,11 +13,15 @@
 // Timer Tool — linguagem "Brutalist Bauhaus" (ver docs/design/design-language.md).
 // Titlebar fixa + tileview de 2 páginas (arrasta na horizontal):
 //   0 AJUSTE   — modo (CRONÔMETRO ↑ / REGRESSIVO ↓); no regressivo, tempos
-//                fixos + roda MM:SS (a mesma lv_roller da Coin Tool).
+//                fixos + roleta de arraste MM:SS (time_wheel_t) + Modo Ampulheta.
 //   1 RELÓGIO  — só o mostrador MM:SS e os botões PARAR / COMEÇAR (a página
 //                inicial). O botão COMEÇAR alterna COMEÇAR → PAUSAR → CONTINUAR.
 // PWR físico (e chacoalhar) fazem a mesma coisa que o botão COMEÇAR
 // (kit_timer_toggle -> Runtime). A saída é feita pela API (system->exit).
+//
+// Modo Ampulheta (opcional, no AJUSTE): com o KIT de cabeça pra baixo o timer
+// corre e a tela gira 180°; qualquer outra posição pausa e guarda o restante.
+// A orientação vem do acelerômetro (kit_imu_poll_orientation).
 //
 // Enquanto conta, a Tool segura o repouso/desligamento (kit_power keep-awake) e
 // só escurece o painel após ~15 s sem toque — sem apagar. Ao zerar a contagem
@@ -46,6 +52,16 @@ static const char *TAG = "KIT_TIMER";
 #define RUN_RUNNING  1
 #define RUN_PAUSED   2
 
+// Roleta de arraste do tempo (mesmo gesto da sigla do Placar/Fora): arrasta ↕
+// pra girar o número, toca pra +1.
+#define WHEEL_DRAG_PX  24    // px de arraste por passo
+#define WHEEL_SLOP     12    // até aqui ainda conta como toque, não arraste
+#define WHEEL_JUMP     64    // salto de coordenada acima disto = lixo, ignora
+
+// Modo Ampulheta — KIT de cabeça pra baixo corre um timer; qualquer outra
+// posição pausa (guarda o restante). Como uma ampulheta.
+#define FLIP_GUARD_US 800000LL   // ignora "chacoalhar" logo após uma virada
+
 // Brilho reduzido
 #define DIM_AFTER_MS 15000
 #define DIM_BRIGHT   5
@@ -72,9 +88,16 @@ static bool     s_colon_vis = true;
 static lv_timer_t *s_count_timer = NULL;   // 1 s — conta
 static lv_timer_t *s_anim_timer  = NULL;   // 200 ms — pisca o "dois pontos" + brilho
 static lv_timer_t *s_fin_timer   = NULL;   // ~420 ms — pisca o fundo da tela de fim
+static lv_timer_t *s_orient_timer = NULL;  // 200 ms — lê a orientação (só no Modo Ampulheta)
 
-static char s_min_opts[420];
-static char s_sec_opts[240];
+// Modo Ampulheta
+static bool    s_flip_on   = false;      // persistido ("timer_flip")
+static int     s_flip_set  = 300;        // tempo cheio (persist "timer_flip_s")
+static int     s_flip_rem  = 300;        // restante (runtime)
+static bool    s_flip_spent = false;     // zerou; só re-arma ao sair da posição
+static bool    s_flip_pos   = false;     // KIT está de cabeça pra baixo agora?
+static bool    s_flip_touched = false;   // já correu ao menos uma vez (mostra valor pausado)
+static int64_t s_flip_last_change_us = 0;
 
 // ---------------------------------------------------------------------------
 // Objetos LVGL
@@ -84,15 +107,37 @@ static lv_obj_t *s_tv     = NULL;
 static lv_obj_t *s_tiles[PAGES];
 static lv_obj_t *s_dots[PAGES];
 
+// Roleta de arraste: um mostrador de número (00..mod-1, com wrap).
+typedef struct {
+    lv_obj_t *box, *lbl;
+    int  val, mod;
+    int  accum, gross;
+    bool moved;
+    void (*on_change)(void);
+} time_wheel_t;
+
+// 2 do tempo regressivo + 2x2 do Modo Ampulheta. Instâncias estáticas: sem
+// lv_malloc (o pool do LVGL já é apertado nesta board).
+static time_wheel_t s_wheels[6];
+static int          s_wheel_n = 0;
+static bool         s_wheel_locked = false;
+static lv_dir_t     s_pg_sdir = LV_DIR_VER;
+static lv_dir_t     s_tv_sdir = LV_DIR_HOR;
+
 // Página 0 — Ajuste
+static lv_obj_t *s_adjust_page = NULL;   // container rolável do tile 0 (roleta congela o scroll)
 static lv_obj_t *s_mode_pills[2];
 static lv_obj_t *s_mode_pill_lbls[2];
 static lv_obj_t *s_down_cnt   = NULL;
 static lv_obj_t *s_preset_pills[PRESET_COUNT];
 static lv_obj_t *s_preset_pill_lbls[PRESET_COUNT];
-static lv_obj_t *s_roller_min = NULL;
-static lv_obj_t *s_roller_sec = NULL;
+static time_wheel_t *s_wheel_mm = NULL;
+static time_wheel_t *s_wheel_ss = NULL;
 static lv_obj_t *s_hint_lbl   = NULL;
+static lv_obj_t *s_flip_pills[2];
+static lv_obj_t *s_flip_pill_lbls[2];
+static lv_obj_t *s_flip_cfg   = NULL;    // container da roleta (oculto quando desligado)
+static time_wheel_t *s_wheel_flip[2] = { NULL, NULL };   // MM, SS
 
 // Página 1 — Relógio
 static lv_obj_t *s_modetag_lbl = NULL;
@@ -160,13 +205,6 @@ static lv_obj_t *field_label(lv_obj_t *parent, const char *txt)
     return add_label(parent, txt, KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
 }
 
-static void fill_num_opts(char *buf, size_t n, int count)
-{
-    char *p = buf;
-    for (int i = 0; i < count; i++)
-        p += snprintf(p, n - (size_t)(p - buf), "%s%02d", i ? "\n" : "", i);
-}
-
 // ---------------------------------------------------------------------------
 // Persistência (Storage API)
 // ---------------------------------------------------------------------------
@@ -180,6 +218,10 @@ static void load_prefs(void)
         s_mode = (int)v;
     if (t->storage->get_i32("timer_secs", &v) == KIT_OK && v >= SECS_MIN && v <= SECS_MAX)
         s_set_secs = (int)v;
+    if (t->storage->get_i32("timer_flip", &v) == KIT_OK)
+        s_flip_on = (v != 0);
+    if (t->storage->get_i32("timer_flip_s", &v) == KIT_OK && v >= SECS_MIN && v <= SECS_MAX)
+        s_flip_set = (int)v;
 }
 
 static void save_prefs(void)
@@ -188,6 +230,8 @@ static void save_prefs(void)
     if (!t || !t->storage) return;
     t->storage->set_i32("timer_mode", s_mode);
     t->storage->set_i32("timer_secs", s_set_secs);
+    t->storage->set_i32("timer_flip", s_flip_on ? 1 : 0);
+    t->storage->set_i32("timer_flip_s", s_flip_set);
 }
 
 // ---------------------------------------------------------------------------
@@ -212,7 +256,9 @@ static void sync_keep_awake(void)
     const kit_api_table_t *t = api();
     if (!t || !t->power) return;
     bool finishing = (s_finish && !lv_obj_has_flag(s_finish, LV_OBJ_FLAG_HIDDEN));
-    t->power->keep_awake(s_run != RUN_IDLE || finishing);
+    // Modo Ampulheta segura a tela acesa: com ela apagada o acelerômetro
+    // desliga (kit_imu) e não dá pra detectar a virada.
+    t->power->keep_awake(s_run != RUN_IDLE || finishing || s_flip_on);
 }
 
 // ---------------------------------------------------------------------------
@@ -258,10 +304,36 @@ static void sync_presets(void)
     }
 }
 
-static void sync_rollers(void)
+static void wheel_paint(time_wheel_t *w)
 {
-    if (s_roller_min) lv_roller_set_selected(s_roller_min, s_set_secs / 60, LV_ANIM_OFF);
-    if (s_roller_sec) lv_roller_set_selected(s_roller_sec, s_set_secs % 60, LV_ANIM_OFF);
+    if (!w || !w->lbl) return;
+    char b[4];
+    snprintf(b, sizeof b, "%02d", w->val);
+    lv_label_set_text(w->lbl, b);
+}
+
+static void sync_wheels(void)
+{
+    if (s_wheel_mm) { s_wheel_mm->val = s_set_secs / 60; wheel_paint(s_wheel_mm); }
+    if (s_wheel_ss) { s_wheel_ss->val = s_set_secs % 60; wheel_paint(s_wheel_ss); }
+    if (s_wheel_flip[0]) { s_wheel_flip[0]->val = s_flip_set / 60; wheel_paint(s_wheel_flip[0]); }
+    if (s_wheel_flip[1]) { s_wheel_flip[1]->val = s_flip_set % 60; wheel_paint(s_wheel_flip[1]); }
+}
+
+static void sync_flip_pills(void)
+{
+    uint32_t sel_txt = on_accent();
+    for (int i = 0; i < 2; i++) {
+        bool sel = (i == 0) == s_flip_on;   // pílula 0 = LIGADO
+        lv_obj_set_style_bg_color(s_flip_pills[i],
+            lv_color_hex(sel ? s_accent : KIT_COLOR_SURFACE), 0);
+        lv_obj_set_style_text_color(s_flip_pill_lbls[i],
+            lv_color_hex(sel ? sel_txt : KIT_COLOR_TEXT), 0);
+    }
+    if (s_flip_cfg) {
+        if (s_flip_on) lv_obj_clear_flag(s_flip_cfg, LV_OBJ_FLAG_HIDDEN);
+        else           lv_obj_add_flag(s_flip_cfg, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 static void sync_hint(void)
@@ -278,13 +350,27 @@ static void sync_hint(void)
 static void sync_clock(void)
 {
     if (!s_mm_lbl) return;
-    int t = s_cur_secs;
+
+    int t;
+    const char *tag;
+    if (s_flip_on && s_flip_pos) {
+        t = s_flip_rem;                              // correndo — só o número
+        tag = "";
+    } else if (s_flip_on && s_flip_touched) {
+        t = s_flip_rem;                              // pausado — mostra onde parou
+        tag = "PAUSADO";
+    } else if (s_flip_on) {
+        t = s_flip_set;                              // ainda não virou
+        tag = "PRONTO";
+    } else {
+        t = s_cur_secs;
+        tag = (s_mode == MODE_UP) ? "CRON\xC3\x94METRO" : "REGRESSIVO";
+    }
     if (t < 0) t = 0;
     if (t > SECS_MAX) t = SECS_MAX;
     lv_label_set_text_fmt(s_mm_lbl, "%02d", t / 60);
     lv_label_set_text_fmt(s_ss_lbl, "%02d", t % 60);
-    if (s_modetag_lbl)
-        lv_label_set_text(s_modetag_lbl, s_mode == MODE_UP ? "CRON\xC3\x94METRO" : "REGRESSIVO");
+    if (s_modetag_lbl) lv_label_set_text(s_modetag_lbl, tag);
 }
 
 static void show_colon(bool on)
@@ -301,6 +387,22 @@ static void show_colon(bool on)
 static void sync_buttons(void)
 {
     if (!s_go_lbl) return;
+
+    // Modo Ampulheta: a orientação é o controle. Some com o COMEÇAR, mostra a
+    // dica, e deixa o PARAR só pra zerar o que já rodou.
+    if (s_flip_on) {
+        lv_obj_add_flag(s_go_btn, LV_OBJ_FLAG_HIDDEN);
+        bool stop_on = !s_flip_pos && (s_flip_touched || s_flip_rem != s_flip_set);
+        lv_opa_t o = stop_on ? LV_OPA_COVER : LV_OPA_40;
+        lv_obj_set_style_border_opa(s_stop_btn, o, 0);
+        lv_obj_set_style_text_opa(s_stop_btn, o, 0);
+        if (stop_on) { lv_obj_clear_flag(s_stop_btn, LV_OBJ_FLAG_HIDDEN); lv_obj_add_flag(s_stop_btn, LV_OBJ_FLAG_CLICKABLE); }
+        else         lv_obj_add_flag(s_stop_btn, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    lv_obj_clear_flag(s_go_btn, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(s_stop_btn, LV_OBJ_FLAG_HIDDEN);
+
     const char *go = (s_run == RUN_IDLE)   ? "COME\xC3\x87""AR"
                    : (s_run == RUN_PAUSED) ? "CONTINUAR"
                                            : "PAUSAR";
@@ -341,6 +443,26 @@ static void stop_counting(void)
 static void count_tick_cb(lv_timer_t *t)
 {
     (void)t;
+
+    // Modo Ampulheta: conta o restante enquanto o KIT está de cabeça pra baixo.
+    if (s_flip_on && s_flip_pos) {
+        if (s_flip_rem > 0) s_flip_rem--;
+        if (s_flip_rem <= 0) {
+            s_flip_rem = 0;
+            s_flip_spent = true;
+            sync_clock();
+            stop_counting();
+            trigger_finish();
+            return;
+        }
+        if (s_flip_rem <= 5) {
+            const kit_api_table_t *at = api();
+            if (at && at->audio) at->audio->sfx(KIT_SFX_TIMER_TICK);
+        }
+        sync_clock();
+        return;
+    }
+
     if (s_mode == MODE_UP) {
         if (s_cur_secs < SECS_MAX) s_cur_secs++;
     } else {
@@ -368,6 +490,10 @@ static void toggle(void)
 {
     if (!s_screen) return;
     if (s_finish && !lv_obj_has_flag(s_finish, LV_OBJ_FLAG_HIDDEN)) return;
+
+    // Modo Ampulheta: só a orientação controla — PWR e chacoalhar não fazem nada
+    // (evita o falso disparo do tranco da virada).
+    if (s_flip_on) return;
 
     wake_display();
 
@@ -399,9 +525,16 @@ static void stop_reset(void)
 {
     wake_display();
     stop_counting();
-    s_run = RUN_IDLE;
-    s_cur_secs = (s_mode == MODE_UP) ? 0 : s_set_secs;
+    if (s_flip_on) {
+        s_flip_rem = s_flip_set;
+        s_flip_spent = false;
+        s_flip_touched = false;
+    } else {
+        s_run = RUN_IDLE;
+        s_cur_secs = (s_mode == MODE_UP) ? 0 : s_set_secs;
+    }
     show_colon(true);
+    sync_wheels();
     sync_clock();
     sync_buttons();
     sync_keep_awake();
@@ -413,6 +546,60 @@ void kit_timer_toggle(void)
 }
 
 // ---------------------------------------------------------------------------
+// Modo Ampulheta — KIT de cabeça pra baixo corre; qualquer outra posição pausa
+// ---------------------------------------------------------------------------
+
+static void orient_tick_cb(lv_timer_t *t)
+{
+    (void)t;
+    if (!s_flip_on || !s_screen) return;
+    if (s_finish && !lv_obj_has_flag(s_finish, LV_OBJ_FLAG_HIDDEN)) return;
+
+    bool pos = (kit_imu_poll_orientation() == KIT_ORIENT_INVERTED);
+    if (pos == s_flip_pos) return;
+
+    s_flip_last_change_us = esp_timer_get_time();
+    s_flip_pos = pos;
+    stop_counting();
+
+    if (!pos) {
+        s_flip_spent = false;   // saiu da posição -> re-arma pro próximo giro
+    } else {
+        s_flip_touched = true;
+        wake_display();
+        if (!s_flip_spent) {
+            if (s_flip_rem <= 0) s_flip_rem = s_flip_set;
+            start_counting();
+        }
+        if (s_tv) lv_tileview_set_tile_by_index(s_tv, 1, 0, LV_ANIM_OFF);
+    }
+
+    // Virar de cabeça pra baixo gira a tela 180° — e ela FICA assim mesmo depois
+    // de pausar (só volta a 0° ao desligar o modo ou sair da Tool). Assim a
+    // pessoa lê o valor pausado do mesmo lado de onde estava olhando.
+    if (pos && kit_display_rotation() != 180) {
+        kit_display_set_rotation_impl(180);
+        lv_obj_invalidate(s_screen);
+    }
+
+    show_colon(true);
+    sync_clock();
+    sync_buttons();
+    sync_keep_awake();
+}
+
+static void sync_orient_timer(void)
+{
+    bool want = s_flip_on && s_screen;
+    if (want && !s_orient_timer)
+        s_orient_timer = lv_timer_create(orient_tick_cb, 200, NULL);
+    else if (!want && s_orient_timer) {
+        lv_timer_delete(s_orient_timer);
+        s_orient_timer = NULL;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Animação de 200 ms — pisca o "dois pontos" + gerencia o brilho reduzido
 // ---------------------------------------------------------------------------
 
@@ -420,9 +607,10 @@ static void anim_tick_cb(lv_timer_t *t)
 {
     (void)t;
 
-    // "dois pontos" pisca só enquanto conta
+    // "dois pontos" pisca só enquanto conta (manual OU posição do Modo Ampulheta)
+    bool counting = (s_count_timer != NULL);
     static int blink_acc = 0;
-    if (s_run == RUN_RUNNING) {
+    if (counting) {
         if (++blink_acc >= 3) { blink_acc = 0; show_colon(!s_colon_vis); }
     } else if (!s_colon_vis) {
         blink_acc = 0;
@@ -431,7 +619,7 @@ static void anim_tick_cb(lv_timer_t *t)
 
     // brilho reduzido depois de ~15 s sem toque, apenas contando
     uint32_t idle = lv_display_get_inactive_time(NULL);
-    bool want_dim = (s_run == RUN_RUNNING) && (idle >= DIM_AFTER_MS);
+    bool want_dim = counting && (idle >= DIM_AFTER_MS);
     if (want_dim && !s_dimmed) {
         s_dimmed = true;
         set_brightness(DIM_BRIGHT);
@@ -507,8 +695,12 @@ static void finish_dismiss(void)
 {
     if (s_fin_timer) { lv_timer_delete(s_fin_timer); s_fin_timer = NULL; }
     if (s_finish) lv_obj_add_flag(s_finish, LV_OBJ_FLAG_HIDDEN);
-    s_cur_secs = (s_mode == MODE_UP) ? 0 : s_set_secs;
-    s_run = RUN_IDLE;
+    // No Modo Ampulheta o timer que zerou fica "gasto" (rem = 0) — só re-conta
+    // depois de sair da posição e voltar; não mexe no timer manual.
+    if (!s_flip_on) {
+        s_cur_secs = (s_mode == MODE_UP) ? 0 : s_set_secs;
+        s_run = RUN_IDLE;
+    }
     show_colon(true);
     sync_clock();
     sync_buttons();
@@ -555,25 +747,128 @@ static void preset_pill_cb(lv_event_t *e)
     s_set_secs = PRESET_MIN[i] * 60;
     if (s_mode == MODE_DOWN) s_cur_secs = s_set_secs;
     sync_presets();
-    sync_rollers();
+    sync_wheels();
     sync_clock();
     sync_buttons();
     sync_hint();
     save_prefs();
 }
 
-static void roller_cb(lv_event_t *e)
+// on_change da roleta do tempo regressivo.
+static void cd_wheel_changed(void)
 {
-    if (s_run != RUN_IDLE) return;
-    int secs = (int)lv_roller_get_selected(s_roller_min) * 60 +
-               (int)lv_roller_get_selected(s_roller_sec);
+    if (s_run != RUN_IDLE || !s_wheel_mm || !s_wheel_ss) return;
+    int secs = s_wheel_mm->val * 60 + s_wheel_ss->val;
     if (secs < SECS_MIN) secs = SECS_MIN;
+    if (secs > SECS_MAX) secs = SECS_MAX;
     s_set_secs = secs;
     if (s_mode == MODE_DOWN) s_cur_secs = s_set_secs;
     sync_presets();
     sync_clock();
     sync_buttons();
     sync_hint();
+    save_prefs();
+}
+
+// on_change das roletas do Modo Ampulheta (as duas posições).
+static void flip_wheel_changed(void)
+{
+    if (!s_wheel_flip[0] || !s_wheel_flip[1]) return;
+    int secs = s_wheel_flip[0]->val * 60 + s_wheel_flip[1]->val;
+    if (secs < SECS_MIN) secs = SECS_MIN;
+    if (secs > SECS_MAX) secs = SECS_MAX;
+    s_flip_set = secs;
+    if (!s_flip_pos) s_flip_rem = s_flip_set;   // não mexe no que está correndo
+    save_prefs();
+}
+
+// -- Roleta de arraste (mesmo gesto da sigla do Placar) --
+
+static void wheel_lock_scroll(bool lock)
+{
+    if (lock == s_wheel_locked) return;
+    s_wheel_locked = lock;
+    if (lock) {
+        if (s_adjust_page) { s_pg_sdir = lv_obj_get_scroll_dir(s_adjust_page);
+                             lv_obj_set_scroll_dir(s_adjust_page, LV_DIR_NONE); }
+        if (s_tv) { s_tv_sdir = lv_obj_get_scroll_dir(s_tv);
+                    lv_obj_set_scroll_dir(s_tv, LV_DIR_NONE); }
+    } else {
+        if (s_adjust_page) lv_obj_set_scroll_dir(s_adjust_page, s_pg_sdir);
+        if (s_tv)          lv_obj_set_scroll_dir(s_tv, s_tv_sdir);
+    }
+}
+
+static void wheel_press_cb(lv_event_t *e)
+{
+    time_wheel_t *w = lv_event_get_user_data(e);
+    if (!w) return;
+    w->accum = 0; w->gross = 0; w->moved = false;
+    wheel_lock_scroll(true);
+}
+
+static void wheel_pressing_cb(lv_event_t *e)
+{
+    time_wheel_t *w = lv_event_get_user_data(e);
+    if (!w) return;
+    lv_point_t v = { 0, 0 };
+    lv_indev_get_vect(lv_indev_active(), &v);
+    int dy = (int)v.y;
+    if (dy > WHEEL_JUMP || dy < -WHEEL_JUMP) return;   // salto de coordenada = lixo
+
+    w->gross += dy < 0 ? -dy : dy;
+    if (w->gross >= WHEEL_SLOP) w->moved = true;
+
+    w->accum += dy;
+    bool changed = false;
+    // arrastar pra CIMA (y diminui) aumenta o número
+    while (w->accum <= -WHEEL_DRAG_PX) { w->val = (w->val + 1) % w->mod; w->accum += WHEEL_DRAG_PX; changed = true; }
+    while (w->accum >=  WHEEL_DRAG_PX) { w->val = (w->val - 1 + w->mod) % w->mod; w->accum -= WHEEL_DRAG_PX; changed = true; }
+    if (changed) { wheel_paint(w); if (w->on_change) w->on_change(); }
+}
+
+static void wheel_release_cb(lv_event_t *e)
+{
+    (void)e;
+    wheel_lock_scroll(false);
+}
+
+static void wheel_tap_cb(lv_event_t *e)
+{
+    time_wheel_t *w = lv_event_get_user_data(e);
+    if (!w || w->moved) return;   // foi arraste, não toque
+    w->val = (w->val + 1) % w->mod;
+    wheel_paint(w);
+    if (w->on_change) w->on_change();
+}
+
+static void flip_pill_cb(lv_event_t *e)
+{
+    int i = (int)(intptr_t)lv_event_get_user_data(e);
+    bool on = (i == 0);   // pílula 0 = LIGADO
+    if (on == s_flip_on) return;
+    s_flip_on = on;
+    if (!on) {   // desligou: volta pro timer manual
+        s_flip_pos = false;
+        s_flip_touched = false;
+        stop_counting();
+        s_run = RUN_IDLE;
+        s_cur_secs = (s_mode == MODE_UP) ? 0 : s_set_secs;
+        if (kit_display_rotation() != 0) {
+            kit_display_set_rotation_impl(0);
+            lv_obj_invalidate(s_screen);
+        }
+    } else {
+        s_flip_rem = s_flip_set;
+        s_flip_spent = false;
+        s_flip_touched = false;
+    }
+    sync_flip_pills();
+    sync_orient_timer();
+    sync_keep_awake();
+    show_colon(true);
+    sync_clock();
+    sync_buttons();
     save_prefs();
 }
 
@@ -657,27 +952,82 @@ static lv_obj_t *make_pill(lv_obj_t *parent, const char *txt, int h,
     return c;
 }
 
-static lv_obj_t *make_roller(lv_obj_t *parent, const char *opts, int code)
+static time_wheel_t *make_wheel(lv_obj_t *parent, int mod, void (*on_change)(void))
 {
-    lv_obj_t *r = lv_roller_create(parent);
-    lv_roller_set_options(r, opts, LV_ROLLER_MODE_NORMAL);
-    lv_roller_set_visible_row_count(r, 3);
-    lv_obj_set_width(r, 92);
-    lv_obj_set_style_bg_color(r, lv_color_hex(KIT_COLOR_SURFACE), 0);
-    lv_obj_set_style_bg_color(r, lv_color_hex(s_accent), LV_PART_SELECTED);
-    lv_obj_set_style_text_color(r, lv_color_hex(KIT_COLOR_TEXT), 0);
-    lv_obj_set_style_text_color(r, lv_color_hex(on_accent()), LV_PART_SELECTED);
-    lv_obj_set_style_text_font(r, &kit_mono_26, 0);
-    lv_obj_set_style_border_width(r, 0, 0);
-    lv_obj_set_style_pad_all(r, 0, 0);
-    lv_obj_add_event_cb(r, roller_cb, LV_EVENT_VALUE_CHANGED, (void *)(intptr_t)code);
-    return r;
+    if (s_wheel_n >= (int)(sizeof(s_wheels) / sizeof(s_wheels[0]))) return NULL;
+    time_wheel_t *w = &s_wheels[s_wheel_n++];
+    w->val = 0; w->mod = mod; w->accum = 0; w->gross = 0; w->moved = false;
+    w->on_change = on_change;
+
+    lv_obj_t *box = lv_obj_create(parent);
+    lv_obj_set_size(box, 96, 104);
+    lv_obj_set_style_bg_color(box, lv_color_hex(KIT_COLOR_SURFACE), 0);
+    lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(box, 0, 0);
+    lv_obj_set_style_radius(box, 16, 0);
+    lv_obj_set_style_pad_all(box, 0, 0);
+    lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(box, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(box, 6);
+    lv_obj_add_event_cb(box, wheel_tap_cb,      LV_EVENT_CLICKED,    w);
+    lv_obj_add_event_cb(box, wheel_press_cb,    LV_EVENT_PRESSED,    w);
+    lv_obj_add_event_cb(box, wheel_pressing_cb, LV_EVENT_PRESSING,   w);
+    lv_obj_add_event_cb(box, wheel_release_cb,  LV_EVENT_RELEASED,   w);
+    lv_obj_add_event_cb(box, wheel_release_cb,  LV_EVENT_PRESS_LOST, w);
+
+    w->box = box;
+    w->lbl = add_label(box, "00", KIT_COLOR_TEXT, &kit_display_72, 0);
+    lv_obj_center(w->lbl);
+    return w;
+}
+
+// Coluna [roleta] + [rótulo], pra as 3 colunas do par MM:SS ficarem alinhadas.
+static lv_obj_t *wheel_col(lv_obj_t *parent)
+{
+    lv_obj_t *c = plain_box(parent);
+    lv_obj_set_size(c, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(c, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(c, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(c, 5, 0);
+    return c;
+}
+
+// Par MM : SS de roletas de arraste, com o ":" desenhado (dois quadrados).
+static void make_wheel_pair(lv_obj_t *parent, time_wheel_t **mm, time_wheel_t **ss,
+                            void (*on_change)(void))
+{
+    lv_obj_t *row = plain_box(parent);
+    lv_obj_set_size(row, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(row, 8, 0);
+
+    lv_obj_t *cm = wheel_col(row);
+    *mm = make_wheel(cm, 100, on_change);
+    add_label(cm, "MIN", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
+
+    lv_obj_t *cc = wheel_col(row);
+    lv_obj_t *colon = plain_box(cc);
+    lv_obj_set_size(colon, 12, 104);
+    lv_obj_set_flex_flow(colon, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(colon, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(colon, 16, 0);
+    for (int i = 0; i < 2; i++) {
+        lv_obj_t *sq = shape(colon, 10, 10, 2, 0);
+        lv_obj_set_style_bg_color(sq, lv_color_hex(KIT_COLOR_TEXT), 0);
+    }
+    add_label(cc, "", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 0);   // espaçador (altura do rótulo)
+
+    lv_obj_t *cs = wheel_col(row);
+    *ss = make_wheel(cs, 60, on_change);
+    add_label(cs, "SEG", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
 }
 
 // Página 0 — AJUSTE
 static void build_page_adjust(lv_obj_t *tile)
 {
     lv_obj_t *p = page_scroll(tile);
+    s_adjust_page = p;   // a roleta de arraste congela o scroll deste container
 
     // -------- MODO --------
     lv_obj_t *sec_mode = plain_box(p);
@@ -714,34 +1064,47 @@ static void build_page_adjust(lv_obj_t *tile)
                                       &s_preset_pill_lbls[i]);
     }
 
-    field_label(s_down_cnt, "OU DEFINA");
-    lv_obj_t *wheels = plain_box(s_down_cnt);
-    lv_obj_set_size(wheels, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(wheels, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(wheels, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(wheels, 10, 0);
-
-    lv_obj_t *col_m = plain_box(wheels);
-    lv_obj_set_size(col_m, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(col_m, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(col_m, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(col_m, 6, 0);
-    s_roller_min = make_roller(col_m, s_min_opts, 0);
-    add_label(col_m, "MIN", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
-
-    lv_obj_t *col_s = plain_box(wheels);
-    lv_obj_set_size(col_s, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(col_s, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_flex_align(col_s, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_row(col_s, 6, 0);
-    s_roller_sec = make_roller(col_s, s_sec_opts, 1);
-    add_label(col_s, "SEG", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
+    field_label(s_down_cnt, "OU DEFINA \xC2\xB7 ARRASTA / TOCA");
+    make_wheel_pair(s_down_cnt, &s_wheel_mm, &s_wheel_ss, cd_wheel_changed);
 
     s_hint_lbl = add_label(s_down_cnt, "", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
     lv_label_set_long_mode(s_hint_lbl, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(s_hint_lbl, lv_pct(100));
     lv_obj_set_style_text_align(s_hint_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_pad_top(s_hint_lbl, 4, 0);
+
+    // -------- MODO AMPULHETA --------
+    lv_obj_t *sec_flip = plain_box(p);
+    lv_obj_set_size(sec_flip, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(sec_flip, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(sec_flip, 9, 0);
+    lv_obj_set_style_pad_top(sec_flip, 8, 0);
+    field_label(sec_flip, "MODO AMPULHETA");
+
+    lv_obj_t *flip_row = plain_box(sec_flip);
+    lv_obj_set_size(flip_row, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(flip_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(flip_row, 8, 0);
+    static const char *FLIP_LABELS[] = { "LIGADO", "DESLIGADO" };
+    for (int i = 0; i < 2; i++)
+        s_flip_pills[i] = make_pill(flip_row, FLIP_LABELS[i], 54, flip_pill_cb, i,
+                                    &s_flip_pill_lbls[i]);
+
+    s_flip_cfg = plain_box(p);
+    lv_obj_set_size(s_flip_cfg, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(s_flip_cfg, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(s_flip_cfg, 9, 0);
+
+    lv_obj_t *fx = add_label(s_flip_cfg,
+        "Vire o KIT de cabe\xC3\xA7""a pra baixo pra correr o timer; a tela gira "
+        "junto. Qualquer outra posi\xC3\xA7\xC3\xA3o pausa e guarda onde parou. A "
+        "tela fica acesa neste modo.",
+        KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_label_set_long_mode(fx, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(fx, lv_pct(100));
+
+    field_label(s_flip_cfg, "TEMPO");
+    make_wheel_pair(s_flip_cfg, &s_wheel_flip[0], &s_wheel_flip[1], flip_wheel_changed);
 }
 
 // Página 1 — RELÓGIO
@@ -900,14 +1263,21 @@ kit_err_t kit_timer_start(uint32_t accent)
     s_dimmed    = false;
     s_colon_vis = true;
     s_fin_on    = false;
+    s_flip_on   = false;
+    s_flip_set  = 300;
+    s_flip_pos  = false;
+    s_flip_spent = false;
+    s_flip_touched = false;
+    s_flip_last_change_us = 0;
+    s_wheel_n = 0;
+    s_wheel_locked = false;
     load_prefs();
     s_cur_secs  = (s_mode == MODE_UP) ? 0 : s_set_secs;
+    s_flip_rem  = s_flip_set;
+    kit_display_set_rotation_impl(0);
 
     const kit_api_table_t *t = api();
     s_bright_normal = (t && t->display) ? t->display->get_brightness() : 80;
-
-    fill_num_opts(s_min_opts, sizeof(s_min_opts), 100);
-    fill_num_opts(s_sec_opts, sizeof(s_sec_opts), 60);
 
     s_screen = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_screen, lv_color_hex(KIT_COLOR_BG), 0);
@@ -922,11 +1292,14 @@ kit_err_t kit_timer_start(uint32_t accent)
 
     sync_mode_pills();
     sync_presets();
-    sync_rollers();
+    sync_wheels();
+    sync_flip_pills();
     sync_hint();
     sync_clock();
     sync_buttons();
     sync_dots();
+    sync_orient_timer();
+    sync_keep_awake();
 
     s_anim_timer = lv_timer_create(anim_tick_cb, 200, NULL);
 
@@ -938,21 +1311,26 @@ void kit_timer_destroy(void)
 {
     ESP_LOGI(TAG, "Encerrando Timer Tool.");
 
-    if (s_count_timer) { lv_timer_delete(s_count_timer); s_count_timer = NULL; }
-    if (s_anim_timer)  { lv_timer_delete(s_anim_timer);  s_anim_timer  = NULL; }
-    if (s_fin_timer)   { lv_timer_delete(s_fin_timer);   s_fin_timer   = NULL; }
+    if (s_count_timer)  { lv_timer_delete(s_count_timer);  s_count_timer  = NULL; }
+    if (s_anim_timer)   { lv_timer_delete(s_anim_timer);   s_anim_timer   = NULL; }
+    if (s_fin_timer)    { lv_timer_delete(s_fin_timer);    s_fin_timer    = NULL; }
+    if (s_orient_timer) { lv_timer_delete(s_orient_timer); s_orient_timer = NULL; }
 
     const kit_api_table_t *t = api();
     if (t && t->power)   t->power->keep_awake(false);
     if (t && t->display && s_dimmed) t->display->set_brightness(s_bright_normal);
+    kit_display_set_rotation_impl(0);
     s_dimmed = false;
     s_run    = RUN_IDLE;
+    s_flip_pos = false;
 
     if (s_screen) { lv_obj_delete(s_screen); s_screen = NULL; }
 
-    s_tv = NULL;
+    s_tv = s_adjust_page = NULL;
     s_down_cnt = s_hint_lbl = NULL;
-    s_roller_min = s_roller_sec = NULL;
+    s_wheel_mm = s_wheel_ss = NULL;
+    s_wheel_flip[0] = s_wheel_flip[1] = NULL;
+    s_flip_cfg = NULL;
     s_modetag_lbl = s_mm_lbl = s_ss_lbl = s_colon = NULL;
     s_colon_sq[0] = s_colon_sq[1] = NULL;
     s_go_btn = s_go_lbl = s_stop_btn = NULL;

@@ -61,6 +61,30 @@ void kit_imu_dispatch_tilt(kit_tilt_t dir);
 void kit_imu_clear_tilt_callback(void);
 
 /**
+ * Orientação física do aparelho pela direção da gravidade (Timer "Modo
+ * Ampulheta"). Ao contrário do gesto de inclinar, é um estado contínuo, não um
+ * disparo.
+ */
+typedef enum {
+    KIT_ORIENT_UNKNOWN = 0,
+    KIT_ORIENT_FLAT_UP,    // deitado na mesa, tela para cima
+    KIT_ORIENT_FLAT_DOWN,  // deitado na mesa, tela para baixo
+    KIT_ORIENT_UPRIGHT,    // em pé (borda de baixo apoiada)
+    KIT_ORIENT_INVERTED,   // de cabeça para baixo
+    KIT_ORIENT_LEFT,       // tombado para a esquerda
+    KIT_ORIENT_RIGHT,      // tombado para a direita
+} kit_orient_t;
+
+/**
+ * Lê o acelerômetro e classifica a orientação atual, com histerese: só troca de
+ * estado depois de algumas leituras estáveis seguidas na nova posição, e ignora
+ * quando o aparelho está em movimento (|a| longe de 1 g). Devolve a última
+ * orientação estável — KIT_ORIENT_UNKNOWN só até a primeira. Barato enquanto o
+ * acelerômetro está ligado (tela acesa); não precisa de callback.
+ */
+kit_orient_t kit_imu_poll_orientation(void);
+
+/**
  * Implementação do register_tilt_callback da API table (kit_api.h).
  * Não chamar diretamente — é exportado via kit_api_table_t.imu.
  */

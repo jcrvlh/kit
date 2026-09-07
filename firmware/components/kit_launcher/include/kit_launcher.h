@@ -29,6 +29,14 @@ void      kit_launcher_release_home_deck(void);
  */
 void      kit_launcher_notify_update_available(const char *version);
 
+/**
+ * Avisa o launcher que uma checagem do catálogo em background achou `count`
+ * Tool(s) instaladas com versão nova disponível. Só marca estado (chamável de
+ * qualquer task); o aviso visual (toast + ponto no card Catálogo) sobe no
+ * próximo tick da UI.
+ */
+void      kit_launcher_notify_tool_updates(uint32_t count);
+
 #ifdef __cplusplus
 }
 #endif
