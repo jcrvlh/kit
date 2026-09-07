@@ -12,18 +12,20 @@ O sistema vive em código:
 | [`firmware/components/kit_launcher/src/kit_launcher.c`](../../firmware/components/kit_launcher/src/kit_launcher.c) | Telas e componentes montados em LVGL v9 |
 
 > Escopo atual: Introdução (onboarding do 1º boot), Home (slideshow de Tools),
-> Ajustes (+ Brilho, Repouso da tela, Desligar sozinho, Repetir introdução),
-> Sobre, a **Test Tool** (`kit_tool_manager`) e as Tools built-in
-> **Dados** (`kit_dice`), **Garrafa** (`kit_bottle`), **Decisor** (`kit_decisor`),
-> **Timer** (`kit_timer`), **Quem Vai Primeiro** (`kit_primeiro`),
-> **Sortear Times** (`kit_times`), **Globo de Bingo** (`kit_bingo`) e
-> **Placar** (`kit_placar`).
-> As Tools do catálogo (**Adedonha**, **Veto**, **Pavio**, **Quebra-Gelo**,
+> Ajustes (Tela → Brilho / Repouso da tela · Som · Wi-Fi · Armazenamento ·
+> Modo pen drive · Atualizar firmware · Bateria → nível / Desligar sozinho ·
+> Repetir introdução · Sobre · Restaurar padrão de fábrica), a linha **Testes**
+> (diagnóstico, dentro de Sobre) e
+> as Tools built-in **Dados** (`kit_dice`), **Garrafa** (`kit_bottle`),
+> **Moeda** (`kit_decisor`, id `com.kit.coin`), **Timer** (`kit_timer`),
+> **Quem Vai Primeiro** (`kit_primeiro`), **Sortear Times** (`kit_times`),
+> **Bingo** (`kit_bingo`) e **Placar** (`kit_placar`).
+> As Tools do catálogo (**Quebra-Gelo**, **Pavio**, **Adedonha**, **Veto**,
 > **Mímica** `io.github.jcrvlh.mimica`, **Testa** `io.github.jcrvlh.testa`,
 > **Telefonema** `io.github.jcrvlh.telefonema`, **Estouro**
-> `io.github.jcrvlh.estouro` …) seguem a mesma linguagem — as duas últimas
-> são a referência atual do padrão descrito em
-> [🎮 Padrão de Tool](#-padrão-de-tool-ajuste--jogo--como-joga), abaixo.
+> `io.github.jcrvlh.estouro`, **Vira Certo**, **Tarot**, **Fora** …) seguem a
+> mesma linguagem — Telefonema e Estouro são a referência atual do padrão descrito
+> em [🎮 Padrão de Tool](#-padrão-de-tool-ajuste--jogo--como-joga), abaixo.
 
 ---
 
@@ -103,8 +105,8 @@ Latin + Latin-1 (acentuação PT: ç ã õ é ê í ó ú ü …) mais um conjun
 | `kit_sans_22` | Archivo **Bold** | 22 px | Rótulos das linhas de Ajustes (caixa normal) |
 | `kit_sans_28` | Archivo **Bold** | 28 px | Frases da Introdução (caixa normal) |
 | `kit_display_44` | Archivo **Black** | 44 px | Wordmark `KIT`, número grande do Brilho, formas/ícones grandes |
-| `kit_display_72` | Archivo **Black** | 72 px | Só ` - 0-9 A-Z Ã Ç Õ` — rótulo do resultado da Decisor Tool |
-| `kit_display_120` | Archivo **Black** | ~85 px | Só `0-9 - +` — número do resultado da Dice Tool |
+| `kit_display_72` | Archivo **Black** | 72 px | Só ` - 0-9 A-Z Ã Ç Õ` — rótulo do resultado da Moeda (CARA/COROA/…) e número da pessoa em Sortear Times |
+| `kit_display_120` | Archivo **Black** | ~85 px | Só `0-9 - +` — número protagonista (Dados, Bingo, contador do Estouro) |
 
 > As fontes Montserrat+FA antigas (`kit_font_12/14/18/20/24`), usadas só pela
 > Test Tool no visual pré-Bauhaus, foram removidas. Do Montserrat embutido do
@@ -215,6 +217,29 @@ Contêiner flex-coluna abaixo da titlebar, rolagem vertical (`LV_DIR_VER`,
 scrollbar `AUTO`), `pad` lateral `KIT_PAD` (16), `pad_row` 12. Recebe um
 `bottom_reserve` quando há botão fixo no rodapé. Usado em **Ajustes** e **Sobre**.
 
+### Roleta de arraste — número / letra que gira
+Uma caixa `SURFACE` com o valor grande no meio (`kit_display_72`); **arrastar ↕
+gira** (pra cima aumenta, 24 px por passo, com wrap), **tocar = +1**. Um
+micro-arraste (< 12 px) ainda conta como toque. Durante o arraste o container que
+rola e o `lv_tileview` têm o `scroll_dir` congelado pra a roleta não virar
+rolagem/troca de página. Handlers `PRESSED/PRESSING/RELEASED/PRESS_LOST/CLICKED`,
+`lv_indev_get_vect()` pro delta. Usos: sigla do **Placar/Fora** (`kit_ui_sigla`,
+3 letras) e o tempo MM:SS do **Timer** (`time_wheel_t` + `make_wheel_pair`).
+
+### Modo Ampulheta — Timer
+Ligado no AJUSTE (padrão desligado, persistido). É uma ampulheta: com o KIT **de
+cabeça pra baixo** o timer corre e a tela gira 180°
+(`kit_display_set_rotation_impl` — o `lvgl_flush_cb` inverte pixels + janela,
+`kit_input` espelha o toque); **qualquer outra posição pausa** e guarda o
+restante (tag `PAUSADO`; `PRONTO` antes do 1º giro). A tela **fica** a 180°
+depois de pausar (só volta a 0° ao desligar o modo ou sair da Tool) — pra ler o
+valor pausado do mesmo lado. A posição vem do
+**acelerômetro** (`kit_imu_poll_orientation`, direção da gravidade — não o
+giroscópio, que só mede rotação e deriva). Quando o modo está ligado não há
+timer manual (COMEÇAR/PWR/chacoalhar ficam inertes) e a tela fica acesa (senão o
+acelerômetro desliga). 90° (KIT de lado) não gira nessa tela — o CO5300 não faz
+swap_xy.
+
 ---
 
 ## 👆 Área de toque
@@ -242,7 +267,7 @@ Tratados em [`kit_runtime`](../architecture/runtime.md) (`poll_system_buttons`,
 
 | Botão | Ligação | Toque curto |
 |---|---|---|
-| **PWR** | tecla PWRON do AXP2101 (IRQ `INTSTS2` bit 3) | **Na Home:** liga/desliga o painel AMOLED (`kit_display_set_on_impl`) e o touch do LVGL — com a tela apagada, ela volta com o PWR ou com um toque na tela (leitura crua do CST820 em `poll_wake_touch`, ~a cada 80 ms; o toque que acorda é consumido e não chega à UI). **Dentro de uma Tool:** dispara a _ação principal_ da Tool (`kit_runtime_set_tool_primary_action`) — na Dice Tool, rola os dados. Toque longo = desliga o sistema (hardware). |
+| **PWR** | tecla PWRON do AXP2101 (IRQ `INTSTS2` bit 3) | **Na Home:** liga/desliga o painel AMOLED (`kit_display_set_on_impl`) e o touch do LVGL — com a tela apagada, ela volta com o PWR ou com um toque na tela (leitura crua do CST820 em `poll_wake_touch`, ~a cada 80 ms; o toque que acorda é consumido e não chega à UI). **Dentro de uma Tool:** dispara a _ação principal_ da Tool (`kit_runtime_set_tool_primary_action`) — nos Dados, rola. Toque longo = desliga o sistema (hardware). |
 | **Chacoalhar** | acelerômetro QMI8658 (`kit_imu`) | Dentro de uma Tool, agitar o aparelho (`|a| > 2,2 g`) dispara a mesma _ação principal_ que o PWR. Polling a ~60 ms, só enquanto há Tool ativa. |
 | **BOOT** | GPIO0, ativo-baixo | Volta para a Home fechando qualquer sub-tela (`kit_launcher_go_home`), ou sai da Tool ativa (`kit_system_exit_impl`). |
 
@@ -347,23 +372,33 @@ distância da mesa, é sempre o protagonista, não a legenda.
 
 | Tela | Função | Layout | Navegação |
 |---|---|---|---|
-| **Splash** | "INICIANDO" ao ligar | Fixo | Some sozinha (~1,4 s) → Introdução (1º boot) ou Home |
+| **Splash** | "INICIANDO" ao ligar | Fixo | Some sozinha (~1,5 s) → Introdução (1º boot) ou Home |
 | **Introdução** | 4 telas no 1º boot: marca → o que é → o que tem dentro → pronto | Overlay preto: coluna central + botão-pílula fixo no rodapé | Abre com o SFX `WELCOME` · `COMEÇAR`/`VEM VER`/`CONTINUAR` avança · `COMEÇAR` verde no fim toca `ONBOARD_DONE`, grava a flag `onboarded` e vai pra Home · BOOT sai e grava a flag |
 | **Duas dicas** (coach-mark) | Ensina os 2 gestos sem botão da Home | Overlay preto sobre a Home: título + 2 linhas (rastro de setas + frase) + `ENTENDI` no rodapé | Só aparece 1× logo após o `COMEÇAR` da Introdução · `ENTENDI` ou BOOT fecha |
-| **Home** | Launcher / slideshow de Tools | Barra de status + `lv_tileview` horizontal ("VER TODOS" + 3 recentes) + pontos | Abre na Tool mais recente · arrasta na horizontal (→ direita cai na visão geral) · slide/card → Tool · deslizar pra cima → Ajustes (ou o card na grade "VER TODOS") |
-| **Ajustes** | Lista de configurações | Titlebar + corpo rolável | Linhas → Brilho / Repouso da tela / Desligar sozinho / Test Tool / Testar som / Repetir introdução / Sobre |
-| **Brilho** | Controle de brilho do AMOLED | Fixo | Titlebar ← ou `VOLTAR` |
-| **Repouso da tela** | Tempo sem toque até apagar a tela | Titlebar + lista de opção | Toque numa opção grava e volta |
-| **Desligar sozinho** | Tempo sem uso até o aparelho desligar | Titlebar + lista de opção | Toque numa opção grava e volta |
-| **Test Tool** | Diagnóstico de subsistemas | Cabeçalho + linhas de status + `SAIR` | `SAIR` (vermelho) ou BOOT → Home |
-| **Sobre** | Especificações do dispositivo | Titlebar + corpo rolável + `VOLTAR` fixo | Titlebar ← ou `VOLTAR` |
+| **Home** | Launcher / slideshow de Tools | Barra de status (wordmark + ícone de Wi-Fi + bateria) + `lv_tileview` horizontal ("VER TODOS" + até 3 recentes) + pontos | Abre na Tool mais recente · arrasta na horizontal (→ direita cai na visão geral) · slide/card → Tool · deslizar pra cima → Ajustes (ou o card na seção SISTEMA de "VER TODOS") |
+| **Ajustes** | Lista de configurações | Titlebar + corpo rolável | Linhas → Tela / Som / Wi-Fi / Armazenamento / Modo pen drive / Atualizar firmware / Bateria / Repetir introdução / Sobre o KIT / Restaurar padrão de fábrica |
+| **Restaurar** | Confirmação de restaurar padrão de fábrica | Titlebar `RESTAURAR` + aviso rolável + botões | `RESTAURAR AGORA` (vermelho) apaga a NVS inteira (ajustes + redes Wi-Fi + recordes) e reinicia · `CANCELAR` · Tools do cartão continuam |
+| **Tela** | Sub-lista | Titlebar + corpo rolável | Linhas → Brilho / Repouso da tela |
+| **Brilho** | Controle de brilho do AMOLED | Fixo | Slider 10–100 % · Titlebar ← ou `VOLTAR` |
+| **Repouso da tela** | Tempo sem toque até apagar a tela | Titlebar + lista de opção | 15 s / 30 s / 1 min / 2 min / 5 min / Nunca — toque grava e volta |
+| **Som** | Liga/desliga SFX + volume | Titlebar + linha de switch + slider (`MIN`/`MAX`) | Ao soltar o slider, toca uma nota no volume escolhido |
+| **Wi-Fi** | Rádio, rede conectada, redes salvas | Titlebar + linha de switch + specs (rede / IP) + lista de redes + `CONFIGURAR REDE` | Sub-telas: **Configurar** (portal, titlebar `CONFIGURAR`) e **Esquecer** (confirmação) |
+| **Armazenamento** | Espaço da memória interna e do cartão | Titlebar + specs + botões | `FORMATAR CARTÃO` (→ sub-tela `FORMATAR`) / `PROCURAR CARTÃO` / `RECARREGAR TOOLS` |
+| **Modo pen drive** | Expõe o microSD ao PC via USB MSC | Titlebar `PEN DRIVE` + coluna central + `ATIVAR` / `SAIR` | `SAIR` reinicia o KIT (confirmação de "ejetou?" antes) |
+| **Atualizar firmware** | Verifica e aplica OTA | Titlebar `FIRMWARE` + specs (versão atual / disponível) + botão | Tela de progresso durante download/aplicação |
+| **Bateria** | Nível, estado e desligamento automático | Titlebar + specs (`NÍVEL` / `ESTADO`) + linha `Desligar sozinho` | — |
+| **Desligar sozinho** | Tempo sem uso até o aparelho desligar | Titlebar `DESLIGAR` + lista de opção | 2 min / 5 min / 10 min / 30 min / Nunca — não vale na tomada |
+| **Sobre** | Ficha do dispositivo + diagnóstico | Titlebar `SOBRE` + logo + specs + linha `Testes` + `VOLTAR` fixo | `Testes` abre o diagnóstico de subsistemas · Titlebar ← ou `VOLTAR` |
+| **Testes** | Diagnóstico de subsistemas (dentro de Sobre) | Cabeçalho + linhas de status (verde OK / vermelho falha) + `SAIR` | `SAIR` (vermelho) ou BOOT → Home |
+| **Catálogo** | Instala/remove Tools por Wi-Fi (Home → VER TODOS → SISTEMA) | Titlebar `CATÁLOGO` + `lv_tileview` de 2 páginas: lista de Tools (barra `TOOLS X/16` + botão `ATUALIZAR TODAS (N)` quando há updates + selo `INSTALAR`/`ATUALIZAR`/`INSTALADA`) e **SOBRE O LIMITE** (explica o teto de 16 Tools do catálogo); ou aviso `IR PARA WI-FI` | Toque numa Tool → detalhe · arrasta pro lado → limite · Titlebar ← → Home |
 | **Dados** (`kit_dice`) | Rolagem de dados | Titlebar + `lv_tileview` de 3 páginas + `ROLAR` fixo | Arrasta na horizontal · Titlebar ← ou BOOT → Home |
+| **Timer** (`kit_timer`) | Cronômetro ↑ / regressivo ↓ | Titlebar + `lv_tileview` de 2 páginas (Ajuste / Relógio) + `COMEÇAR`/`PARAR` fixos. Ajuste: atalhos 3/5/10/15/30 min + par de **roletas de arraste** MM:SS + **Modo Ampulheta**. Relógio: MM:SS em `kit_display_120` | PWR/chacoalhar = COMEÇAR/PAUSAR · Titlebar ← ou BOOT → Home |
 | **Quem Vai Primeiro** (`kit_primeiro`) | Sorteia uma característica pra decidir quem começa | Titlebar + palco tocável + `SORTEAR` fixo | Titlebar ← ou BOOT → Home |
 | **Sortear Times** (`kit_times`) | Divide a mesa em times equilibrados | Titlebar + `lv_tileview` de 2 páginas (Ajuste / Sorteio) + `SORTEAR` fixo; overlay de revelação um a um | Arrasta na horizontal · Titlebar ← ou BOOT → Home |
-| **Globo de Bingo** (`kit_bingo`) | Globo de bingo digital 1–75 / 1–90 com painel de chamadas | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Globo / Chamadas) + `SORTEAR` fixo | Arrasta na horizontal · Titlebar ← ou BOOT → Home |
-| **Quebra-Gelo** (`kit_quebragelo`) | Sorteia uma pergunta quebra-gelo pra roda responder | Titlebar + palco tocável + `SORTEAR` fixo | Titlebar ← ou BOOT → Home |
+| **Bingo** (`kit_bingo`) | Globo de bingo digital 1–75 / 1–90 com painel de chamadas | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Globo / Chamadas) + `SORTEAR` fixo | Arrasta na horizontal · Titlebar ← ou BOOT → Home |
+| **Quebra-Gelo** (`io.github.jcrvlh.*`, catálogo) | Sorteia uma pergunta quebra-gelo pra roda responder | Titlebar + palco tocável + `SORTEAR` fixo (formato enxuto) | Titlebar ← ou BOOT → Home |
 | **Pavio** (`kit_pavio`) | Mini-jogo: fale uma palavra com a sílaba e passe o KIT antes de explodir | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Jogo / Como joga) + botão `ACENDER PAVIO`/`PASSEI` fixo; overlay vermelho `BUM` | Arrasta na horizontal (travado em rodada) · Titlebar ← ou BOOT → Home |
-| **Placar** (`kit_placar`) | Placar de mesa: 2–4 colunas, toque = +1 e segurar = −1, meta opcional | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Placar / Como usa) + `ZERAR` (dois toques) fixo; overlay na cor do jogador `VENCEU` | Arrasta na horizontal (travado só no `VENCEU`) · Titlebar ← ou BOOT → Home |
+| **Placar** (`kit_placar`) | Placar de mesa: 2–4 colunas, toque = +1 e segurar = −1, meta opcional | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Placar / Como usa) + `ZERAR` (dois toques) fixo; overlay na cor do jogador `VENCEU`. Sigla: stepper `◄ JOGADOR N ►` + 3 caixas — toque avança a letra, arraste gira como roleta (padrão do Fora) | Arrasta na horizontal (travado só no `VENCEU`) · Titlebar ← ou BOOT → Home |
 | **Veto** (`io.github.jcrvlh.veto`) | Mini-jogo: descreva a palavra-alvo sem dizer as 3 proibidas; o KIT cronometra e toca a cigarra, a mesa confere | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Jogo / Como joga) + barra de tempo amarela + botões `DISLIKE (👎)`/`PULAR`/`JOINHA (👍)` na mesma linha; overlay amarelo `TEMPO` com o placar da vez | Arrasta na horizontal (travado em vez) · Titlebar ← ou BOOT → Home |
 | **Mímica** (`io.github.jcrvlh.mimica`, catálogo) | Mini-jogo: atue a palavra por gestos, sem falar; o KIT cronometra, a mesa confere | Titlebar + `lv_tileview` de 3 páginas (Ajuste / Jogo / Como joga) + barra de tempo azul + linha de ações `PULAR` (contornado) + `ACERTOU` (cheio) no rodapé; preparo de 3 s; overlay azul `TEMPO` com o placar da vez | Arrasta na horizontal (travado em vez) · Titlebar ← ou BOOT → Home |
 | **Feedback** | Confirmação transitória (ex: carga iniciada) | Overlay colorido | Some sozinha (~1,7 s) |
@@ -374,8 +409,8 @@ filhos do `s_launcher_screen` sob demanda e destruídos no retorno.
 **Splash** — fundo preto, a logo (trio + wordmark `KIT`) e `INICIANDO` em mono
 caixa alta. Sem botão.
 
-**Home** — barra de status fixa (`KIT` + indicador de bateria) sobre
-um **slideshow** de Tools: um `lv_tileview` horizontal (`build_home` →
+**Home** — barra de status fixa (wordmark `KIT` + **ícone de Wi-Fi** + indicador
+de bateria) sobre um **slideshow** de Tools: um `lv_tileview` horizontal (`build_home` →
 `home_build_deck`) com o slide **"VER TODOS"** primeiro (índice 0) seguido de um
 slide por Tool recente. A Home **abre na Tool mais recente** (índice 1): deslizar
 da esquerda para a direita cai direto na visão geral sem passar pelas outras
@@ -391,15 +426,31 @@ abre os **Ajustes** (`home_gesture_cb` no `s_launcher_screen`, `LV_EVENT_GESTURE
   (`KIT_CONTENT` de largura), raio 30: badge `52 × 52` com o ícone geométrico no
   topo esquerdo, número da posição na recência (`01`…`03`) em `kit_display_72` a
   30 % no topo direito, rótulo em `kit_sans_22` e a dica `TOQUE PARA ABRIR`
-  (`kit_mono_16`) no rodapé. Tocar abre a Tool; indisponível = carta a `LV_OPA_40`
-  + dica "EM BREVE".
-* **Slide "VER TODOS"** — cabeçalho `TODAS AS TOOLS` (`kit_mono_16` apagado) e a
-  **grade completa** de cards de Tool, 2 colunas, `162 × 118`, raio 20 (número da
-  posição em `kit_mono_26` a 40 %, badge `42 × 42`, rótulo `kit_sans_22`), rolando
-  na vertical. Card disponível abre a Tool; indisponível emite um _toast_
-  "EM BREVE".
+  (`kit_mono_16`) no rodapé. Tocar abre a Tool; indisponível = carta a
+  `LV_OPA_40` + dica "EM BREVE". O slideshow é **só recência** — fixar uma Tool
+  **não** a coloca aqui (as fixadas vivem na seção FIXADOS da grade).
+* **Slide "VER TODOS"** — a **grade completa** de cards de Tool, 2 colunas,
+  `162 × 118`, raio 20 (número da posição em `kit_mono_26` a 40 %, badge `42 × 42`,
+  rótulo `kit_sans_22`), rolando na vertical. A grade é dividida em seções por
+  cabeçalhos que ocupam a linha inteira do flex-wrap (`make_grid_header`,
+  `kit_mono_16` apagado). Cada Tool entra em **uma** seção só, nesta precedência:
+  **FIXADOS** (lista curada — flag por-id em NVS `pin<hash>`, toque longo → FIXAR)
+  > **NOVOS** (Tools do catálogo instaladas e ainda não abertas — flag
+  `nu_<hash>`, migram pra sua categoria no 1º uso) > **FERRAMENTAS**
+  (`is_game == false`) / **MINI-JOGOS** (`is_game == true`); e **SISTEMA** no fim
+  (os cards **Ajustes** e **Catálogo**, sempre em cinza). O card **Catálogo**
+  ganha um ponto âmbar (`tile_corner_dot`, igual ao de firmware novo no
+  **Ajustes**) quando uma checagem em background acha Tool instalada com versão
+  nova. Card disponível abre a Tool; indisponível emite um _toast_ "EM BREVE".
+  **Toque longo** num card abre uma folha de ações (`s_toolmgr_screen`), corpo
+  rolável: descrição da Tool (`kit_sans_28`, como a página COMO JOGA) + botões em
+  fluxo — **FIXAR NA HOME** / **DESAFIXAR** pra qualquer Tool;
+  **ATUALIZAR** (só quando o catálogo confirma versão nova; senão **REINSTALAR**)
+  e **DESINSTALAR** (vermelho) só pras Tools do catálogo. Sem CANCELAR — a
+  titlebar ← fecha. Desinstalar esquece as flags `nu_`/`pin` da Tool (reinstalar
+  volta pra NOVOS).
 
-O Test Tool continua em Ajustes.
+O diagnóstico (antiga Test Tool) agora é a linha **Testes** dentro de **Sobre**.
 
 **Duas dicas** (`home_hints_show`) — coach-mark que entra **uma vez**, logo depois
 do `COMEÇAR` verde da Introdução (chamado no fim de `onboarding_finish_cb`, já com
@@ -450,15 +501,16 @@ apagado. Sortear (botão, toque no palco, PWR ou chacoalhar) embaralha entre as
 em mono, nunca em `kit_display_*` (essa é só pra números e o wordmark), mesmo
 sendo o elemento protagonista da tela._ A saída é feita pela API (`system->exit`).
 
-**Quebra-Gelo** (`kit_quebragelo`) — **mesma estrutura da Quem Vai Primeiro**:
-titlebar (chip ← + `QUEBRA-GELO`) + palco tocável + botão `SORTEAR` fixo no
-rodapé (azul). Página única, sem `lv_tileview`/ajuste/histórico/persistência. No
-palco, a pergunta sorteada em `kit_mono_26` **CAIXA ALTA** centralizada
+**Quebra-Gelo** (catálogo) — nasceu built-in e **migrou pro catálogo**; continua
+sendo a referência do **formato enxuto de página única**. **Mesma estrutura da
+Quem Vai Primeiro**: titlebar (chip ← + `QUEBRA-GELO`) + palco tocável + botão
+`SORTEAR` fixo no rodapé (azul). Sem `lv_tileview`/ajuste/histórico/persistência.
+No palco, a pergunta sorteada em `kit_mono_26` **CAIXA ALTA** centralizada
 (quebrando em várias linhas, sem "wrap box"); `PERGUNTA` acima e `PASSE ADIANTE`
-abaixo (`kit_mono_16` apagado). Baralho fixo de ~95 perguntas quebra-gelo leves;
+abaixo (`kit_mono_16` apagado). Baralho de ~95 perguntas quebra-gelo leves;
 sortear (botão/toque/PWR/chacoalhar) embaralha num **único `lv_timer`** e trava
 na sorteada (azul, nunca repete a anterior) + 1 bipe. Card azul (`TOOL_ICON_ASK`
-— balão de fala com reticências).
+— balão de fala com reticências, reusável por `home_icon`).
 
 **Sortear Times** (`kit_times`) — titlebar (chip ← + `TIMES`) + `lv_tileview`
 horizontal de 2 páginas (`AJUSTE ◄──► SORTEIO`, começa no SORTEIO) + botão
@@ -475,13 +527,13 @@ API); config em Storage (`times_people` / `times_count`), sem histórico. Anima�
 
 > **`kit_display_44` distorce palavras.** Essa fonte foi gerada **com** kerning e
 > os pares do Archivo Black se sobrepõem — palavras de várias letras (`VERMELHO`,
-> `AMARELO`) saem distorcidas (o mesmo bug que a Decisor Tool teve com a
+> `AMARELO`) saem distorcidas (o mesmo bug que a Moeda teve com a
 > `kit_display_72` antiga, resolvido regerando com `--no-kerning`). Regra: palavra
 > grande vai em **`kit_display_72`** (única Archivo Black `--no-kerning`, cobre
 > `A-Z Ã Ç Õ 0-9 - espaço`) ou em **mono**; `kit_display_44` só para glifos,
 > wordmark e números soltos.
 
-**Globo de Bingo** (`kit_bingo`) — titlebar (chip ← + `BINGO`) + `lv_tileview`
+**Bingo** (`kit_bingo`) — titlebar (chip ← + `BINGO`) + `lv_tileview`
 horizontal de 3 páginas (`AJUSTE ◄──► GLOBO ◄──► CHAMADAS`, começa no GLOBO) +
 botão `SORTEAR` fixo no rodapé (verde). **AJUSTE**: `FAIXA` (`1-75` / `1-90`,
 pílulas) e `REINICIAR SORTEIO` (botão contornado vermelho, dois toques para
@@ -511,10 +563,15 @@ API; animação = um único `lv_timer` (60 ms/tick) que só troca o texto do nú
 **Cor da Tool.** Cada Tool adota como cor principal a cor do seu slide/card na
 Home — o `kit_tool_manager` passa essa cor no `*_start()` e ela vai no botão
 primário e nos acentos da Tool. **Repetição de cor entre Tools é aceita** — a
-paleta Bauhaus só tem quatro primárias: hoje **vermelho** = Dados, Quem
-Vai Primeiro, Quebra-Gelo e Pavio, **azul** = Garrafa, Sortear Times e Mímica,
-**amarelo** = Moeda e Veto (texto preto por cima), **verde** = Timer, Globo de
-Bingo e Placar.
+paleta Bauhaus só tem quatro primárias. Roster atual:
+
+| Cor | Tools |
+|---|---|
+| **Vermelho** | Dados, Quem Vai Primeiro, Quebra-Gelo, Pavio, Telefonema, Fora |
+| **Azul** | Garrafa, Sortear Times, Vira Certo, Mímica, Adedonha, Tarot |
+| **Amarelo** | Moeda, Estouro, Testa, Veto (texto preto por cima) |
+| **Verde** | Timer, Bingo, Placar |
+
 O Placar ainda usa as quatro primárias de uma vez — uma por jogador — como
 identidade de cada coluna.
 
@@ -529,10 +586,12 @@ associação de Wi-Fi (verde + sinal + `CONECTADO`) e pelo aviso de bateria baix
 (amarelo + triângulo + `BATERIA BAIXA`, dispara uma vez ao cair a ≤ 20 %
 descarregando; rearma acima de 25 % ou ao ligar na tomada).
 
-**Sobre** — a logo (trio + wordmark `KIT`), a tabela de specs (`DISPOSITIVO`
-vem de `kit_power_get_device_id()`) e a assinatura `JCRVLH EXPERIMENT` no fim.
-O triângulo da logo usa o glifo `KIT_ICON_PLAY` rotacionado 90° — mais encorpado
-que o caret, do mesmo tamanho do quadrado e do círculo. Esta é a logo oficial.
+**Sobre** — a logo (trio + wordmark `KIT`), a tabela de specs
+(`DISPOSITIVO` de `kit_power_get_device_id()`, `FIRMWARE`, `RUNTIME`, `HARDWARE`,
+`FLASH`, `LICENÇA`), a linha **`Testes`** (`make_row`, abre o diagnóstico) e a
+assinatura `JCRVLH EXPERIMENT` no fim. O triângulo da logo usa o glifo
+`KIT_ICON_PLAY` rotacionado 90° — mais encorpado que o caret, do mesmo tamanho
+do quadrado e do círculo. Esta é a logo oficial.
 
 **Brilho** — badge amarelo com o círculo, slider, valor em `kit_display_44`
 amarelo, `MIN`/`MAX`, botão `VOLTAR`. O slider aplica ao vivo via DCS 0x51 no
@@ -548,23 +607,65 @@ o painel **e o touch do LVGL** (o botão PWR ou um toque na tela acordam — ver
 passando o tempo de desligamento chama `kit_power_shutdown()` (AXP2101), exceto
 ligado na tomada.
 
-**Test Tool** (`kit_tool_manager`) — tela cheia própria (não é overlay do
-Launcher). Cabeçalho `TEST TOOL` + `DIAGNOSTICO DO SISTEMA`, um `make_scroll_body`
-com uma linha por subsistema no padrão da tabela de specs (chave `kit_mono_16`
-apagada à esquerda, valor à direita: verde = OK, vermelho = falha) e uma pílula
+**Tela / Som / Bateria** — linhas de Ajustes que abrem uma sub-lista, não uma
+tela de controle direto. **Tela** agrupa `Brilho` e `Repouso da tela`; **Bateria**
+mostra os specs `NÍVEL`/`ESTADO` e a linha `Desligar sozinho`; **Som** é a
+exceção — traz o próprio switch de liga/desliga e o slider de volume
+(`MIN`/`MAX`) na mesma tela, no padrão da linha de Wi-Fi.
+
+**Wi-Fi / Armazenamento / Modo pen drive / Atualizar firmware / Catálogo** — as
+telas de sistema mais novas, todas no mesmo molde (titlebar + `make_scroll_body`,
+`make_spec` para status, `make_button`/`make_row` para ações). O detalhe de
+comportamento (portal `KIT-XXXX`, verificação diária de OTA, SHA-256, ejeção do
+cartão) fica no **Manual do Usuário** — aqui só o esqueleto visual:
+
+* **Wi-Fi** (`WI-FI`) — linha de switch (mesma pegada da de `Som`), `make_spec`
+  com rede e IP quando conectado, lista de redes salvas (`make_row`, badge
+  círculo) e o botão `CONFIGURAR REDE`. Sub-telas **Configurar** (`CONFIGURAR`,
+  o portal) e **Esquecer** (`ESQUECER`, confirmação de dois toques). O **ícone de
+  Wi-Fi da barra de status** (`KIT_ICON_BARS`) segue `kit_network_get_state()`:
+  escondido (rádio off), apagado (ligado sem rede), amarelo (associando), azul
+  (portal aberto), verde (conectado).
+* **Armazenamento** (`ARMAZENAMENTO`) — `make_spec` com o espaço livre da flash
+  interna e do cartão + contagem de Tools no cartão; botões `FORMATAR CARTÃO`
+  (→ sub-tela `FORMATAR`, confirmação), `PROCURAR CARTÃO`, `RECARREGAR TOOLS`.
+* **Modo pen drive** (`PEN DRIVE`) — coluna central explicando o modo + botão
+  `ATIVAR`; ativo, vira aviso + `SAIR` (com confirmação "ejetou no PC?"). `SAIR`
+  reinicia o KIT — é a única saída (USB único, sem console enquanto monta).
+* **Atualizar firmware** (`FIRMWARE`) — `make_spec` com `VERSÃO ATUAL` e, quando
+  há, a disponível; botão de ação; tela de progresso (`s_fwupdate_busy`) durante
+  download e aplicação. Um _toast_ + um ponto no card `Ajustes` avisam quando a
+  verificação de fundo acha versão nova.
+* **Catálogo** (`CATÁLOGO`, em Home → VER TODOS → SISTEMA) — sem rede, mostra
+  `IR PARA WI-FI`; com rede, lista as Tools com selo `INSTALAR` / `ATUALIZAR` /
+  `INSTALADA` e um estado de "Buscando catálogo…". Toque numa Tool abre o detalhe
+  (instalar / remover). Instala direto no cartão microSD. Quando há Tools
+  instaladas com versão nova, um botão `ATUALIZAR TODAS (N)` no topo da lista
+  baixa uma a uma (o `catalog_poll_cb` encadeia). Uma checagem em background
+  (`kit_runtime`, ~40 s após o boot, 1×/dia) acende um _toast_ + ponto âmbar no
+  card `Catálogo`, como o do firmware.
+* **Aviso de bateria baixa** — `show_banner` põe uma tarja curta na **top layer**
+  do LVGL (aparece por cima da Home **e** de uma Tool em andamento), alinhada ao
+  topo. Dois níveis, cada um 1× por descarga: `≤ 20 %` amarelo `BATERIA N%`,
+  `≤ 10 %` vermelho `BATERIA FRACA`. Rearma ao carregar.
+
+**Testes** (`kit_tool_manager`, aberto pela linha `Testes` em Sobre) — tela cheia
+própria (não é overlay do Launcher). Cabeçalho + `DIAGNOSTICO DO SISTEMA`, um
+`make_scroll_body` com uma linha por subsistema no padrão da tabela de specs
+(chave `kit_mono_16` apagada à esquerda, valor à direita: verde = OK, vermelho =
+falha — tela, toque, PMIC, RTC, áudio, IMU, cartão, aleatório) e uma pílula
 vermelha `SAIR` fixa no rodapé. A linha `TOUCH` mostra X/Y/contagem a cada toque
-e a `RANDOM` sorteia um novo valor do TRNG. A saída também sai pela API
-(`system->exit`) / botão BOOT.
+e a `RANDOM` sorteia um novo valor do TRNG. Sai pela API (`system->exit`) / BOOT.
 
 ---
 
 ## 🚧 Pendências
 
-* **Telas ainda não implementadas** (existem só nos esboços): Boas-vindas,
-  Wi-Fi, Sistema / armazenamento, erro de instalação. A paleta e os componentes
-  deste documento já foram dimensionados para cobri-las. Os _alias_ de cor
-  legados (`KIT_COLOR_ACCENT` etc.) foram removidos — todo o código usa os
-  tokens da paleta nova.
+* **Telas de sistema entregues** desde a primeira redação: Wi-Fi (+ portal +
+  esquecer rede), Armazenamento (+ formatar), Modo pen drive, Atualizar firmware
+  e Catálogo. Falta ainda uma **tela dedicada de erro de instalação** de Tool
+  (hoje é _toast_). Os _alias_ de cor legados (`KIT_COLOR_ACCENT` etc.) foram
+  removidos — todo o código usa os tokens da paleta nova.
 * **Ícones das Tools** são composições de `lv_obj` (retângulos/círculos), não
   glifos — não há um glifo FA dedicado por Tool nas fontes. Exceções que usam
   glifo: o triângulo do card "Sorteio" (`KIT_ICON_TRIANGLE`) e a seta do card
@@ -578,17 +679,18 @@ e a `RANDOM` sorteia um novo valor do TRNG. A saída também sai pela API
   gesticulando (cabeça + tronco + braços erguidos). O `TOOL_ICON_ADEDONHA` (folha de cartela com
   três linhas) fica no Core mesmo a Adedonha tendo saído pro catálogo — uma Tool
   do cartão pode reusá-lo por `home_icon`.
-* **Grade de Tools** mostra só as Tools já implementadas (hoje: Dados, Garrafa,
-  Moeda, Timer, Quem Vai Primeiro, Sortear Times, Globo de Bingo, Quebra-Gelo,
-  Pavio, Placar, Veto, Mímica). Cada nova Tool da Fase 2 entra em
-  `HOME_TOOLS` quando fica pronta. O campo `available` continua existindo para o
-  caso de uma Tool em desenvolvimento (aparece esmaecida + "EM BREVE").
-* **Shake to Roll** (chacoalhar para rolar, na Dice Tool) depende de um driver
-  do IMU QMI8658, ainda não escrito.
+* **Grade de Tools** — a seção FERRAMENTAS/MINI-JOGOS lista as built-in
+  (`HOME_TOOLS_BUILTIN`: Dados, Garrafa, Moeda, Timer, Quem Vai Primeiro, Sortear
+  Times, Bingo, Placar) mais as do catálogo já instaladas; SISTEMA fecha com
+  Ajustes e Catálogo. O campo `available` (`is_game` à parte) continua existindo
+  para uma Tool em desenvolvimento aparecer esmaecida + "EM BREVE".
 
 ---
 
 ## 🔗 Referências
 
 * [Display AMOLED CO5300 & Renderização](../hardware/display.md)
+* [Runtime & botões físicos](../architecture/runtime.md) ·
+  [Rede / Wi-Fi](../architecture/networking.md) ·
+  [Atualização OTA](../architecture/ota.md)
 * Referência visual (proposta aprovada): artefato "KIT Interface Redesign"

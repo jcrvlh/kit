@@ -248,6 +248,69 @@ void kit_imu_clear_tilt_callback(void)
     s_tilt_hits = 0;
 }
 
+// --- Orientação física (Timer "Modo Ampulheta") ---------------------------
+// Calibrado no HW pelo log "Orientação: … (g = …)". Nesta placa o eixo da
+// ALTURA da tela (em pé ↔ de cabeça pra baixo) é o gx do QMI8658, e o da
+// LARGURA (esquerda ↔ direita) é o gy — trocados em relação ao gesto de
+// inclinar, que usa gz (normal à tela). gz > 0 ⇒ tela pro chão (= TILT).
+#define ORIENT_TRIGGER_G   0.62f   // componente dominante acima disto = candidato
+#define ORIENT_STEADY_G    0.30f   // |a| tem que estar a menos disto de 1 g (parado)
+#define ORIENT_CONFIRM     4       // leituras seguidas no candidato antes de commitar
+#define ORIENT_GH_UP_POS   1       // gx > 0 ⇒ em pé (gx < 0 ⇒ de cabeça pra baixo)
+#define ORIENT_GW_LEFT_POS 1       // gy > 0 ⇒ tombado pra esquerda (gy < 0 ⇒ direita)
+
+static kit_orient_t s_orient = KIT_ORIENT_UNKNOWN;
+static kit_orient_t s_orient_cand = KIT_ORIENT_UNKNOWN;
+static int          s_orient_hits = 0;
+
+static kit_orient_t classify_orient(float gx, float gy, float gz)
+{
+    float ax = fabsf(gx), ay = fabsf(gy), az = fabsf(gz);
+    // gz = normal à tela (deitado)
+    if (az >= ax && az >= ay && az > ORIENT_TRIGGER_G)
+        return (gz > 0.0f) ? KIT_ORIENT_FLAT_DOWN : KIT_ORIENT_FLAT_UP;
+    // gx = altura da tela (em pé / de cabeça pra baixo)
+    if (ax >= ay && ax > ORIENT_TRIGGER_G) {
+        bool up = (gx > 0.0f) == (ORIENT_GH_UP_POS != 0);
+        return up ? KIT_ORIENT_UPRIGHT : KIT_ORIENT_INVERTED;
+    }
+    // gy = largura da tela (esquerda / direita)
+    if (ay > ORIENT_TRIGGER_G) {
+        bool left = (gy > 0.0f) == (ORIENT_GW_LEFT_POS != 0);
+        return left ? KIT_ORIENT_LEFT : KIT_ORIENT_RIGHT;
+    }
+    return KIT_ORIENT_UNKNOWN;
+}
+
+kit_orient_t kit_imu_poll_orientation(void)
+{
+    if (!s_ready || !s_enabled) return s_orient;
+
+    float gx, gy, gz;
+    if (!read_accel_g(&gx, &gy, &gz)) return s_orient;
+
+    float mag = sqrtf(gx * gx + gy * gy + gz * gz);
+    if (fabsf(mag - 1.0f) > ORIENT_STEADY_G) {   // em movimento — não reclassifica
+        s_orient_hits = 0;
+        return s_orient;
+    }
+
+    kit_orient_t cand = classify_orient(gx, gy, gz);
+    if (cand == KIT_ORIENT_UNKNOWN) { s_orient_hits = 0; return s_orient; }
+
+    if (cand != s_orient_cand) { s_orient_cand = cand; s_orient_hits = 1; }
+    else if (s_orient_hits < ORIENT_CONFIRM) s_orient_hits++;
+
+    if (s_orient_hits >= ORIENT_CONFIRM && cand != s_orient) {
+        s_orient = cand;
+        static const char *N[] = { "?", "DEITADO", "DEITADO-BAIXO", "EM PE",
+                                   "CABECA-BAIXO", "ESQUERDA", "DIREITA" };
+        ESP_LOGI(TAG, "Orienta\xC3\xA7\xC3\xA3o: %s (g = %.2f %.2f %.2f)",
+                 N[(int)s_orient], gx, gy, gz);
+    }
+    return s_orient;
+}
+
 // Liga fisicamente o giroscópio (escreve CTRL3/CTRL7 no QMI8658) sem
 // calibrar nada. Separado de kit_imu_gyro_zero() porque religar o sensor
 // puxa uma corrente extra do PMIC na hora — chamado repetidas vezes (uma

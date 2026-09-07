@@ -65,6 +65,25 @@ tools-sdk/examples/**/build/
 /HARDWARE_STATUS.md
 /CHANGELOG.internal.md
 
+# Design system + brand brief compilados (HTML/PDF) — peças internas de marca.
+# O documento vivo público é docs/design/design-language.md.
+/docs/design/design-system.html
+/docs/design/design-system.pdf
+/docs/design/brand-brief.html
+/docs/design/brand-brief.pdf
+
+# Manual do usuário compilado (HTML/PDF) — peça interna.
+/docs/manual/manual-do-usuario.html
+/docs/manual/manual-do-usuario.pdf
+
+# Screenshots/mockups de divulgação (gerados a partir do firmware) + fontes
+# baixadas p/ o render. Peça de marca — fora do repo público.
+/docs/marketing/
+
+# Skills do Claude Code (workflows internos: nova-tool, flash-hw, bump-firmware,
+# publica-tool, design-bauhaus, marketing-assets). Ferramental local, fora do repo.
+/.claude/skills/
+
 # Binários de teste nativo dos exemplos (regeneráveis via cmake/kit-cli)
 tools-sdk/examples/*/test_*
 !tools-sdk/examples/*/test_*.c

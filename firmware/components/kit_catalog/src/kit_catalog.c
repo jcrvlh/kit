@@ -418,3 +418,18 @@ kit_err_t kit_catalog_get_entry(uint32_t i, kit_catalog_entry_t *out)
     xSemaphoreGive(s_lock);
     return r;
 }
+
+uint32_t kit_catalog_update_count(void)
+{
+    if (s_state != KIT_CAT_READY && s_state != KIT_CAT_WORK_OK &&
+        s_state != KIT_CAT_WORK_ERR) {
+        return 0;
+    }
+    uint32_t n = 0;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    for (uint32_t i = 0; i < s_n; i++) {
+        if (s_entries[i].install == KIT_CAT_UPDATE) n++;
+    }
+    xSemaphoreGive(s_lock);
+    return n;
+}

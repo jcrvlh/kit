@@ -2,6 +2,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "esp_log.h"
+#include "esp_system.h"
 
 static const char *TAG = "KIT_CONFIG";
 static const char *NVS_NAMESPACE = "kit_sys";
@@ -86,6 +87,17 @@ kit_err_t kit_config_set_u32(const char *key, uint32_t val)
     nvs_commit(h);
     nvs_close(h);
     return KIT_OK;
+}
+
+void kit_config_factory_reset(void)
+{
+    ESP_LOGW(TAG, "Restaurando padrão de fábrica: apagando a NVS e reiniciando");
+    nvs_flash_deinit();
+    esp_err_t err = nvs_flash_erase();
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "nvs_flash_erase falhou: %s", esp_err_to_name(err));
+    }
+    esp_restart();
 }
 
 kit_err_t kit_config_init(void)

@@ -24,6 +24,11 @@ typedef void (*kit_tool_catalog_changed_cb_t)(void);
 
 kit_err_t kit_tool_manager_init(void);
 uint32_t  kit_tool_manager_get_count(void);
+
+// Quantas Tools do catálogo cabem no cartão ao mesmo tempo (limite fixo de
+// RAM do catálogo em memória). O Launcher mostra "instaladas / capacidade" e
+// barra a instalação de uma Tool nova quando get_count() já bateu esse teto.
+uint32_t  kit_tool_manager_catalog_capacity(void);
 kit_err_t kit_tool_manager_get_entry(uint32_t index, kit_tool_entry_t *entry);
 kit_err_t kit_tool_manager_start(const char *tool_id);
 kit_err_t kit_tool_manager_start_last(void);   // KIT_ERR_NOT_FOUND se não houver última Tool

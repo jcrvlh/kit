@@ -27,6 +27,19 @@ static esp_lcd_panel_io_handle_t s_io_handle = NULL;
 static uint8_t s_brightness = 80;
 static bool s_display_on = true;
 
+// Rotação da imagem enviada ao painel (Timer "Modo Ampulheta"). Só 0 e 180 —
+// o CO5300 não faz swap_xy/mirror_y, e 90° exigiria buffer/layout landscape.
+// A 180° a resolução não muda (368×448), então é só inverter os pixels e a
+// janela de endereçamento no flush; o LVGL segue desenhando em pé.
+static int s_rot = 0;
+
+int kit_display_rotation(void) { return s_rot; }
+
+void kit_display_set_rotation_impl(int deg)
+{
+    s_rot = (deg == 180) ? 180 : 0;
+}
+
 // Tamanho do buffer de desenho: 368 x 40 linhas em RGB565 (2 bytes por pixel)
 #define BUFFER_LINES 40
 #define BUFFER_SIZE (KIT_DISPLAY_WIDTH * BUFFER_LINES * sizeof(lv_color16_t))
@@ -71,6 +84,8 @@ static void lvgl_round_area_cb(lv_event_t *e)
     area->y1 &= ~1;
     area->x2 |= 1;
     area->y2 |= 1;
+    // A 180° a janela vira x1'=W-1-x2 (W=368 par): x2 ímpar → x1' par, x1 par →
+    // x2' ímpar — a paridade se mantém, nada a fazer aqui.
 }
 
 static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)
@@ -78,8 +93,20 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
     if (s_panel_handle) {
         uint32_t len = (area->x2 - area->x1 + 1) * (area->y2 - area->y1 + 1);
         lv_draw_sw_rgb565_swap(px_map, len);
-        esp_err_t e = esp_lcd_panel_draw_bitmap(s_panel_handle, area->x1, area->y1,
-                                                area->x2 + 1, area->y2 + 1, px_map);
+
+        int x1 = area->x1, y1 = area->y1, x2 = area->x2, y2 = area->y2;
+        if (s_rot == 180) {
+            uint16_t *p = (uint16_t *)px_map;   // inverte a ordem dos pixels
+            for (uint32_t i = 0, j = len - 1; i < j; i++, j--) {
+                uint16_t t = p[i]; p[i] = p[j]; p[j] = t;
+            }
+            int nx1 = KIT_DISPLAY_WIDTH  - 1 - x2, nx2 = KIT_DISPLAY_WIDTH  - 1 - x1;
+            int ny1 = KIT_DISPLAY_HEIGHT - 1 - y2, ny2 = KIT_DISPLAY_HEIGHT - 1 - y1;
+            x1 = nx1; x2 = nx2; y1 = ny1; y2 = ny2;
+        }
+
+        esp_err_t e = esp_lcd_panel_draw_bitmap(s_panel_handle, x1, y1,
+                                                x2 + 1, y2 + 1, px_map);
         // Se a transferência nem chegou a ser enfileirada (fila cheia / disputa
         // de barramento sob carga de Wi-Fi), o callback de "done" NUNCA vai vir e
         // o LVGL ficaria preso pra sempre em wait_for_flushing. Libera na mão.

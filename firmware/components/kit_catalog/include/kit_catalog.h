@@ -67,6 +67,9 @@ kit_err_t kit_catalog_refresh(void);
 uint32_t  kit_catalog_get_count(void);
 kit_err_t kit_catalog_get_entry(uint32_t i, kit_catalog_entry_t *out);
 
+/** Quantas Tools instaladas têm version_code maior no catálogo. 0 se não READY. */
+uint32_t  kit_catalog_update_count(void);
+
 /** Baixa o .kit e instala/atualiza a Tool `id`. Assíncrono. */
 kit_err_t kit_catalog_install(const char *id);
 
