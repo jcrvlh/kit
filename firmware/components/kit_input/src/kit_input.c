@@ -37,7 +37,8 @@ static void lvgl_touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data)
 
             // Mapeia coordenadas para o display (368 x 448)
             if (x < KIT_DISPLAY_WIDTH && y < KIT_DISPLAY_HEIGHT) {
-                // Espelha o toque quando o painel está a 180° (Modo Ampulheta).
+                // Espelha o toque quando o painel está a 180° — seja pelo Modo
+                // canhoto (Ajustes > Tela) ou pelo Modo Ampulheta do Timer.
                 if (kit_display_rotation() == 180) {
                     x = KIT_DISPLAY_WIDTH  - 1 - x;
                     y = KIT_DISPLAY_HEIGHT - 1 - y;

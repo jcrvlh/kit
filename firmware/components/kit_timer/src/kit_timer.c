@@ -95,7 +95,7 @@ static bool    s_flip_on   = false;      // persistido ("timer_flip")
 static int     s_flip_set  = 300;        // tempo cheio (persist "timer_flip_s")
 static int     s_flip_rem  = 300;        // restante (runtime)
 static bool    s_flip_spent = false;     // zerou; só re-arma ao sair da posição
-static bool    s_flip_pos   = false;     // KIT está de cabeça pra baixo agora?
+static bool    s_flip_pos   = false;     // KIT está na posição de correr agora? (ver flip_run_orient)
 static bool    s_flip_touched = false;   // já correu ao menos uma vez (mostra valor pausado)
 static int64_t s_flip_last_change_us = 0;
 
@@ -549,13 +549,27 @@ void kit_timer_toggle(void)
 // Modo Ampulheta — KIT de cabeça pra baixo corre; qualquer outra posição pausa
 // ---------------------------------------------------------------------------
 
+// A posição em que o timer corre é sempre a OPOSTA à de leitura — e a de leitura
+// depende do Modo canhoto (Ajustes > Tela). Normal: lê de pé, corre de cabeça
+// pra baixo. Canhoto (base 180°): lê de cabeça pra baixo, corre de pé. A tela
+// gira pra continuar legível enquanto corre.
+static kit_orient_t flip_run_orient(void)
+{
+    return (kit_display_base_rotation() == 180) ? KIT_ORIENT_UPRIGHT
+                                                : KIT_ORIENT_INVERTED;
+}
+static int flip_run_rotation(void)
+{
+    return (kit_display_base_rotation() == 180) ? 0 : 180;
+}
+
 static void orient_tick_cb(lv_timer_t *t)
 {
     (void)t;
     if (!s_flip_on || !s_screen) return;
     if (s_finish && !lv_obj_has_flag(s_finish, LV_OBJ_FLAG_HIDDEN)) return;
 
-    bool pos = (kit_imu_poll_orientation() == KIT_ORIENT_INVERTED);
+    bool pos = (kit_imu_poll_orientation() == flip_run_orient());
     if (pos == s_flip_pos) return;
 
     s_flip_last_change_us = esp_timer_get_time();
@@ -574,13 +588,11 @@ static void orient_tick_cb(lv_timer_t *t)
         if (s_tv) lv_tileview_set_tile_by_index(s_tv, 1, 0, LV_ANIM_OFF);
     }
 
-    // Virar de cabeça pra baixo gira a tela 180° em relação à orientação-base —
-    // e ela FICA assim mesmo depois de pausar (só volta ao desligar o modo ou
-    // sair da Tool). Assim a pessoa lê o valor pausado do mesmo lado de onde
-    // estava olhando. (No Modo canhoto a base já é 180°, então aqui vira 0°.)
-    int flip_target = (kit_display_base_rotation() == 180) ? 0 : 180;
-    if (pos && kit_display_rotation() != flip_target) {
-        kit_display_set_rotation_impl(flip_target);
+    // Entrar na posição de correr gira a tela — e ela FICA assim mesmo depois de
+    // pausar (só volta ao desligar o modo ou sair da Tool). Assim a pessoa lê o
+    // valor pausado do mesmo lado de onde estava olhando.
+    if (pos && kit_display_rotation() != flip_run_rotation()) {
+        kit_display_set_rotation_impl(flip_run_rotation());
         lv_obj_invalidate(s_screen);
     }
 
@@ -1097,10 +1109,15 @@ static void build_page_adjust(lv_obj_t *tile)
     lv_obj_set_flex_flow(s_flip_cfg, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(s_flip_cfg, 9, 0);
 
-    lv_obj_t *fx = add_label(s_flip_cfg,
-        "Vire o KIT de cabe\xC3\xA7""a pra baixo pra correr o timer; a tela gira "
-        "junto. Qualquer outra posi\xC3\xA7\xC3\xA3o pausa e guarda onde parou. A "
-        "tela fica acesa neste modo.",
+    // No Modo canhoto a posição de correr é "de pé" (a base já é 180°).
+    const char *fx_txt = (kit_display_base_rotation() == 180)
+        ? "Ponha o KIT de p\xC3\xA9 pra correr o timer; a tela gira junto. "
+          "Qualquer outra posi\xC3\xA7\xC3\xA3o pausa e guarda onde parou. A "
+          "tela fica acesa neste modo."
+        : "Vire o KIT de cabe\xC3\xA7""a pra baixo pra correr o timer; a tela gira "
+          "junto. Qualquer outra posi\xC3\xA7\xC3\xA3o pausa e guarda onde parou. A "
+          "tela fica acesa neste modo.";
+    lv_obj_t *fx = add_label(s_flip_cfg, fx_txt,
         KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
     lv_label_set_long_mode(fx, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(fx, lv_pct(100));
