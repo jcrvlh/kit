@@ -18,8 +18,8 @@
 #include <string.h>
 
 // Launcher do KIT — linguagem "Brutalist Bauhaus" (ver docs/design/design-language.md).
-// Telas: splash "INICIANDO", Home (sem tools), Ajustes (Tela > brilho/repouso,
-// Som > volume/liga-desliga, Armazenamento, Modo pen drive), Sobre, e um
+// Telas: splash "INICIANDO", Home (sem tools), Ajustes (Tela > brilho/repouso/
+// Modo canhoto, Som > volume/liga-desliga, Armazenamento, Modo pen drive), Sobre, e um
 // overlay de feedback reutilizável (ex: carga iniciada).
 //
 // Os botões físicos (PWR liga/desliga a tela, BOOT volta para a Home) são
@@ -71,6 +71,7 @@ extern const lv_image_dsc_t kit_icon_triangle_a8;
 static lv_obj_t *s_brightness_val_lbl = NULL;
 static lv_obj_t *s_volume_val_lbl = NULL;
 static lv_obj_t *s_sound_val_lbl = NULL;
+static lv_obj_t *s_flip_val_lbl = NULL;
 static lv_obj_t *s_batt_lbl = NULL;
 static lv_obj_t *s_batt_fill = NULL;
 static lv_obj_t *s_wifi_icon = NULL;
@@ -377,6 +378,7 @@ static void brightness_released_cb(lv_event_t *e);
 static void volume_slider_cb(lv_event_t *e);
 static void volume_released_cb(lv_event_t *e);
 static void sound_toggle_cb(lv_event_t *e);
+static void flip_toggle_cb(lv_event_t *e);
 static void run_test_tool_cb(lv_event_t *e);
 static void home_tile_cb(lv_event_t *e);
 static void home_tool_longpress_cb(lv_event_t *e);
@@ -1687,8 +1689,53 @@ static void close_settings_cb(lv_event_t *e)
 }
 
 // ---------------------------------------------------------------------------
-// Tela  (Ajustes > Tela: brilho + repouso da tela)
+// Tela  (Ajustes > Tela: brilho + repouso da tela + Modo canhoto)
 // ---------------------------------------------------------------------------
+
+// Linha de liga/desliga do Modo canhoto (gira a tela 180°). Mesma pegada da
+// linha "Som": rótulo à esquerda, estado à direita, toca para alternar.
+static void sync_flip_row(void)
+{
+    if (!s_flip_val_lbl) return;
+    bool on = kit_config_get_left_handed();
+    lv_label_set_text(s_flip_val_lbl, on ? "LIGADO" : "DESLIGADO");
+    lv_obj_set_style_text_color(s_flip_val_lbl,
+        lv_color_hex(on ? KIT_COLOR_GREEN : KIT_COLOR_TEXT_MUTED), 0);
+}
+
+static void make_flip_row(lv_obj_t *parent)
+{
+    lv_obj_t *row = lv_obj_create(parent);
+    lv_obj_set_size(row, KIT_CONTENT, KIT_ROW_H);
+    lv_obj_set_style_bg_color(row, lv_color_hex(KIT_COLOR_SURFACE), 0);
+    lv_obj_set_style_border_width(row, 0, 0);
+    lv_obj_set_style_radius(row, 24, 0);
+    lv_obj_set_style_pad_all(row, 0, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(row, 6);
+    lv_obj_add_event_cb(row, flip_toggle_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *l = add_label(row, "Modo canhoto", KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_obj_align(l, LV_ALIGN_LEFT_MID, 24, 0);
+
+    s_flip_val_lbl = add_label(row, "", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_obj_align(s_flip_val_lbl, LV_ALIGN_RIGHT_MID, -20, 0);
+    sync_flip_row();
+}
+
+static void flip_toggle_cb(lv_event_t *e)
+{
+    (void)e;
+    bool now_on = !kit_config_get_left_handed();
+    kit_config_set_left_handed(now_on);
+    kit_display_set_base_rotation_impl(now_on ? 180 : 0);
+    sync_flip_row();
+    // A tela inteira precisa ser redesenhada do outro lado.
+    lv_obj_invalidate(lv_screen_active());
+    lv_obj_invalidate(lv_layer_top());
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+}
 
 static void open_display_cb(lv_event_t *e)
 {
@@ -1702,6 +1749,7 @@ static void open_display_cb(lv_event_t *e)
     lv_obj_t *body = make_scroll_body(s_display_screen, 0);
     make_row(body, NULL, 0, "Brilho",          false, open_brightness_cb, NULL);
     make_row(body, NULL, 0, "Repouso da tela", false, open_sleep_cb,      NULL);
+    make_flip_row(body);
 }
 
 static void close_display_cb(lv_event_t *e)
@@ -1711,6 +1759,7 @@ static void close_display_cb(lv_event_t *e)
     if (s_display_screen) {
         lv_obj_delete(s_display_screen);
         s_display_screen = NULL;
+        s_flip_val_lbl = NULL;
     }
 }
 
@@ -4099,7 +4148,8 @@ void kit_launcher_go_home(void)
                                s_brightness_val_lbl = NULL; }
     if (s_volume_screen)     { lv_obj_delete(s_volume_screen);     s_volume_screen = NULL;
                                s_volume_val_lbl = NULL; s_sound_val_lbl = NULL; }
-    if (s_display_screen)    { lv_obj_delete(s_display_screen);    s_display_screen = NULL; }
+    if (s_display_screen)    { lv_obj_delete(s_display_screen);    s_display_screen = NULL;
+                               s_flip_val_lbl = NULL; }
     if (s_settings_screen)   { lv_obj_delete(s_settings_screen);   s_settings_screen = NULL; }
     if (s_home_hints_screen) { lv_obj_delete(s_home_hints_screen); s_home_hints_screen = NULL; }
     if (s_onboarding_screen) { lv_obj_delete(s_onboarding_screen); s_onboarding_screen = NULL;

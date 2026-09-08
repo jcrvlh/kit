@@ -27,17 +27,35 @@ static esp_lcd_panel_io_handle_t s_io_handle = NULL;
 static uint8_t s_brightness = 80;
 static bool s_display_on = true;
 
-// Rotação da imagem enviada ao painel (Timer "Modo Ampulheta"). Só 0 e 180 —
-// o CO5300 não faz swap_xy/mirror_y, e 90° exigiria buffer/layout landscape.
-// A 180° a resolução não muda (368×448), então é só inverter os pixels e a
-// janela de endereçamento no flush; o LVGL segue desenhando em pé.
+// Rotação da imagem enviada ao painel. Só 0 e 180 — o CO5300 não faz
+// swap_xy/mirror_y, e 90° exigiria buffer/layout landscape. A 180° a resolução
+// não muda (368×448), então é só inverter os pixels e a janela de endereçamento
+// no flush; o LVGL segue desenhando em pé.
+//
+// s_base_rot é a orientação-base persistente ("Modo canhoto" em Ajustes > Tela),
+// reaplicada no boot pelo Runtime. s_rot é o que está no painel agora: normal-
+// mente igual a s_base_rot, mas o Timer no "Modo Ampulheta" a força temporaria-
+// mente e depois chama kit_display_restore_rotation_impl() para voltar à base.
 static int s_rot = 0;
+static int s_base_rot = 0;
 
 int kit_display_rotation(void) { return s_rot; }
+int kit_display_base_rotation(void) { return s_base_rot; }
 
 void kit_display_set_rotation_impl(int deg)
 {
     s_rot = (deg == 180) ? 180 : 0;
+}
+
+void kit_display_set_base_rotation_impl(int deg)
+{
+    s_base_rot = (deg == 180) ? 180 : 0;
+    s_rot = s_base_rot;
+}
+
+void kit_display_restore_rotation_impl(void)
+{
+    s_rot = s_base_rot;
 }
 
 // Tamanho do buffer de desenho: 368 x 40 linhas em RGB565 (2 bytes por pixel)
