@@ -29,7 +29,7 @@ Filosofia do Bingo: **o KIT sorteia e cronometra, a mesa confere.** O placar da
 vez (acertos / pulos) fica **escondido** enquanto ela corre — só a barra de
 tempo aparece — e é revelado no overlay de TEMPO.
 
-> **Não confundir com a [Testa](testa.md) (Heads Up).** Ali quem segura o KIT
+> **Não confundir com a [Testa](testa.md).** Ali quem segura o KIT
 > **adivinha** com o aparelho na testa e inclina pra acertar/passar. Aqui quem
 > segura **atua** e vê a palavra.
 

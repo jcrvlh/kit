@@ -154,7 +154,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   `firmware.json`. Ver [ADR-0013](docs/decisions/ADR-0013-ota-firmware-update.md).
 - **Gesto de inclinar no IMU (Runtime v0.2.0):** `kit_api.imu` ganha
   `register_tilt_callback` — o QMI8658 detecta o aparelho virado pra baixo/cima
-  a partir da vertical (jogo estilo *Heads Up!*). O Runtime só faz o polling
+  a partir da vertical (usado pela Tool Testa). O Runtime só faz o polling
   enquanto há callback registrado. Limiares calibráveis em `kit_imu.c`. SDK
   0.2.0; Tools que usam declaram `min_runtime` `"0.2.0"`.
 - **KIT Core (v0.1.0):** runtime embarcado, HAL (display AMOLED CO5300, touch
@@ -169,7 +169,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   barra de tempo, preparo de 3 s, baralho FÁCIL/TUDO com categorias, overlay
   TEMPO com o placar da vez. Nasceu built-in (`kit_mimica`) e saiu do Core ao
   estabilizar. Ver `docs/tools/mimica.md`.
-- **Testa (`io.github.jcrvlh.testa`, catálogo):** mini-jogo estilo *Heads Up!* —
+- **Testa (`io.github.jcrvlh.testa`, catálogo):** mini-jogo de mesa —
   segure o KIT na testa, a roda dá dicas e você adivinha. Incline pra baixo =
   acertou, pra cima = passou (gesto de inclinar novo do IMU,
   `kit_api.imu->register_tilt_callback`, `min_runtime` 0.2.0). 6 baralhos

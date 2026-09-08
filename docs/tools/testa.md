@@ -1,6 +1,6 @@
 # Testa
 
-**Testa** é um mini-jogo de mesa estilo *Heads Up!*: uma pessoa segura o KIT
+**Testa** é um mini-jogo de mesa: uma pessoa segura o KIT
 encostado na **testa**, com a tela virada para a roda. A roda **dá dicas** —
 falando, cantando ou gesticulando, como combinarem — e a pessoa tenta
 **adivinhar** a palavra em voz alta. **Acertou:** inclina o KIT para baixo (tela

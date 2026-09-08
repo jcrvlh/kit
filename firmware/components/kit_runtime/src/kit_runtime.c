@@ -499,7 +499,7 @@ void kit_runtime_run(void)
                 if (s_tool_shake_enabled && s_tool_primary_action) s_tool_primary_action();
                 kit_imu_dispatch_shake();
             }
-            // Gesto de inclinar (Tool tipo "Heads Up!"): kit_imu_poll_tilt()
+            // Gesto de inclinar (Tool "Testa"): kit_imu_poll_tilt()
             // devolve NONE de graça se nenhuma Tool registrou o callback.
             kit_tilt_t dir = kit_imu_poll_tilt();
             if (dir != KIT_TILT_NONE) {

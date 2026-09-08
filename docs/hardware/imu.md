@@ -21,7 +21,7 @@ Especificação do sensor inercial integrado ao KIT.
   há uma Tool ativa** e, ao detectar `|a| > 2,2 g` (debounce 0,7 s), dispara a
   _ação principal_ da Tool (o mesmo hook do botão PWR). Limiar e debounce são
   `#define` em `kit_imu.c` — calibrar pelo log `Chacoalhar detectado (|a| = …)`.
-- **Gesto de Inclinar (*Heads Up!* / Tool "Testa"):** ✅ implementado (Runtime
+- **Gesto de Inclinar (Tool "Testa"):** ✅ implementado (Runtime
   ≥ 0.2.0). `kit_imu_poll_tilt()` observa o eixo normal à tela (Z do QMI8658):
   com o aparelho vertical na testa fica ~0 g; virar a tela para o chão dispara
   `KIT_TILT_DOWN` (acertou), para o teto `KIT_TILT_UP` (passou). Dispara **uma

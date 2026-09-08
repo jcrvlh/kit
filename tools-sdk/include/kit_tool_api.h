@@ -164,7 +164,7 @@ typedef struct {
 typedef void (*kit_shake_callback_t)(void *user_data);
 
 /**
- * @brief Direção de uma inclinada deliberada do aparelho (gesto "Heads Up!").
+ * @brief Direção de uma inclinada deliberada do aparelho (gesto da Tool "Testa").
  *
  * O KIT fica ~vertical na testa (eixo normal à tela ~0 g). Virar a tela para o
  * chão dispara @ref KIT_TILT_DOWN; para o teto, @ref KIT_TILT_UP. Dispara uma
@@ -172,8 +172,8 @@ typedef void (*kit_shake_callback_t)(void *user_data);
  */
 typedef enum {
     KIT_TILT_NONE = 0,
-    KIT_TILT_DOWN,   /**< tela virada para baixo (no Heads Up!: acertou). */
-    KIT_TILT_UP,     /**< tela virada para cima  (no Heads Up!: passou). */
+    KIT_TILT_DOWN,   /**< tela virada para baixo (na Testa: acertou). */
+    KIT_TILT_UP,     /**< tela virada para cima  (na Testa: passou). */
 } kit_tilt_t;
 
 /**
@@ -500,7 +500,7 @@ typedef struct {
 
     /**
      * Registra um callback para o gesto de inclinar (ver @ref kit_tilt_t).
-     * Feito para o jogo estilo "Heads Up!": inclina para baixo = acertou,
+     * Feito para a Tool "Testa": inclina para baixo = acertou,
      * para cima = passou. Um callback por Tool; nova chamada substitui o
      * anterior; NULL remove. O Runtime só faz o polling do gesto enquanto
      * houver um callback registrado. Requer `min_runtime` >= "0.2.0".
