@@ -500,7 +500,7 @@ typedef struct {
 
     /**
      * Registra um callback para o gesto de inclinar (ver @ref kit_tilt_t).
-     * Feito para a Tool Testa: inclina para baixo = acertou,
+     * Feito para a Tool "Testa": inclina para baixo = acertou,
      * para cima = passou. Um callback por Tool; nova chamada substitui o
      * anterior; NULL remove. O Runtime só faz o polling do gesto enquanto
      * houver um callback registrado. Requer `min_runtime` >= "0.2.0".

@@ -154,7 +154,7 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
   `firmware.json`. Ver [ADR-0013](docs/decisions/ADR-0013-ota-firmware-update.md).
 - **Gesto de inclinar no IMU (Runtime v0.2.0):** `kit_api.imu` ganha
   `register_tilt_callback` — o QMI8658 detecta o aparelho virado pra baixo/cima
-  a partir da vertical (a Tool Testa). O Runtime só faz o polling
+  a partir da vertical (usado pela Tool Testa). O Runtime só faz o polling
   enquanto há callback registrado. Limiares calibráveis em `kit_imu.c`. SDK
   0.2.0; Tools que usam declaram `min_runtime` `"0.2.0"`.
 - **KIT Core (v0.1.0):** runtime embarcado, HAL (display AMOLED CO5300, touch
