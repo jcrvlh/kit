@@ -105,7 +105,7 @@ typedef enum {
     TOOL_ICON_BINGO, TOOL_ICON_ORDER, TOOL_ICON_TIMER, TOOL_ICON_FIRST,
     TOOL_ICON_TEAMS, TOOL_ICON_ASK, TOOL_ICON_PAVIO, TOOL_ICON_ADEDONHA,
     TOOL_ICON_PLACAR, TOOL_ICON_VETO, TOOL_ICON_MIMICA, TOOL_ICON_TESTA,
-    TOOL_ICON_PHONE, TOOL_ICON_ESTOURO, TOOL_ICON_DIAL,
+    TOOL_ICON_PHONE, TOOL_ICON_ESTOURO, TOOL_ICON_DIAL, TOOL_ICON_SOUNDBOX,
     TOOL_ICON_EXTERNAL
 } tool_icon_t;
 
@@ -137,6 +137,7 @@ static const home_tool_t HOME_TOOLS_BUILTIN[] = {
     // ESTOURO / DIAL e seus mapas em icon_from_name ficam pra Tool do cartão
     // reusar via "home_icon" no manifest.
     { "com.kit.placar", "Placar", KIT_COLOR_GREEN, TOOL_ICON_PLACAR, true, false, false, false, false },
+    { "com.kit.soundbox", "Soundbox", KIT_COLOR_GREEN, TOOL_ICON_SOUNDBOX, true, false, false, false, false },
 };
 #define HOME_TOOLS_BUILTIN_N ((int)(sizeof(HOME_TOOLS_BUILTIN) / sizeof(HOME_TOOLS_BUILTIN[0])))
 
@@ -184,6 +185,7 @@ static tool_icon_t icon_from_name(const char *name)
         { "phone", TOOL_ICON_PHONE },
         { "estouro", TOOL_ICON_ESTOURO },
         { "dial", TOOL_ICON_DIAL },
+        { "soundbox", TOOL_ICON_SOUNDBOX },
         { "card", TOOL_ICON_EXTERNAL },
     };
     for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); i++)
@@ -949,6 +951,14 @@ static void make_tool_icon(lv_obj_t *badge, tool_icon_t kind, uint32_t color)
         lv_obj_center(ring);
         lv_obj_align(icon_shape(ic, 3, 9, color, 1, 0), LV_ALIGN_CENTER, 6, -6);
         lv_obj_align(icon_shape(ic, 6, 6, color, LV_RADIUS_CIRCLE, 0), LV_ALIGN_CENTER, 0, 0);
+        break;
+    }
+    case TOOL_ICON_SOUNDBOX: {
+        // grade 3x3 de pads
+        for (int r = -1; r <= 1; r++)
+            for (int c = -1; c <= 1; c++)
+                lv_obj_align(icon_shape(ic, 6, 6, color, 2, 0),
+                             LV_ALIGN_CENTER, c * 9, r * 9);
         break;
     }
     case TOOL_ICON_EXTERNAL: {

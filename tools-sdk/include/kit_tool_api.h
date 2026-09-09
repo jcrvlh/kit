@@ -442,6 +442,32 @@ typedef struct {
      * com valor negativo ao terminar. Respeita a flag "Som".
      */
     kit_err_t (*fuse)(int16_t tension);
+
+    /**
+     * Toca um arquivo WAV do cartão microSD.
+     *
+     * @param path Caminho absoluto sob `/sdcard/` — normalmente
+     *             `"<ctx->data_path>/assets/<nome>.wav"` (asset embutido no
+     *             `.kit`) ou `"/sdcard/soundbox/<banco>/<nome>.wav"` (pasta
+     *             do usuário).
+     *
+     * Formato: **WAV PCM 16-bit, mono, 16 kHz** (ou 8 kHz — reamostrado 2×;
+     * estéreo é rebaixado pra mono). Outros formatos/taxas são recusados com
+     * um aviso no log. Sem MP3/OGG.
+     *
+     * Assíncrono: enfileira e retorna na hora. Uma chamada nova **corta** o
+     * sample anterior com um fade curto (retrigger — sem polifonia). Respeita
+     * a flag "Som" dos Ajustes e o repouso de tela. Requer o cartão presente.
+     *
+     * @return KIT_OK; KIT_ERR_INVALID_ARG se o path não estiver sob `/sdcard/`
+     *         ou for longo demais; KIT_ERR_NOT_SUPPORTED se áudio desabilitado.
+     */
+    kit_err_t (*play_sample)(const char *path);
+
+    /**
+     * Corta o WAV em reprodução, se houver. No-op se nada estiver tocando.
+     */
+    kit_err_t (*stop_sample)(void);
 } kit_audio_api_t;
 
 /**

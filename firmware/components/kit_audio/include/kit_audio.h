@@ -42,6 +42,17 @@ kit_err_t kit_audio_sfx_impl(kit_sfx_t sfx);
 kit_err_t kit_audio_fuse_impl(int16_t tension);
 
 /**
+ * Toca um WAV PCM 16-bit mono do cartão SD (`path` absoluto sob `/sdcard/`).
+ * Aceita 16 kHz (direto) ou 8 kHz (upsample 2x); estéreo é rebaixado pra mono.
+ * Assíncrono (enfileira e volta); um novo pedido corta o anterior com um fade
+ * curto (retrigger). Respeita a flag "Som" e o repouso de tela.
+ */
+kit_err_t kit_audio_play_sample_impl(const char *path);
+
+/** Corta o WAV em reprodução, se houver. */
+kit_err_t kit_audio_stop_sample_impl(void);
+
+/**
  * Suspende (true) ou reativa (false) o áudio. Suspenso, bipes e efeitos novos
  * são descartados silenciosamente; o que já estava na fila termina e o codec/PA
  * desliga por ociosidade. O Runtime usa isso quando a tela entra em repouso.

@@ -9,6 +9,21 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.7.0] — 2026-09-08
+
+### Adicionado
+- **Soundbox.** Uma mesa de sons: grade 3×3 de pads, cada toque toca um som.
+  Os sons ficam em `soundbox/<banco>/` no cartão microSD — monte um banco no
+  conversor (jcrvlh.github.io/kit/soundbox.html), que ajusta o áudio pro
+  formato do KIT e ou grava a pasta direto no cartão (com o KIT em Modo pen
+  drive) ou entrega um `.zip`. Um `banco.json` opcional dá nome, cor e rótulo
+  de cada pad. Card verde na Home; o botão físico retoca o último som.
+- **Áudio: Tools podem tocar arquivos de som.** O Runtime ganhou
+  `play_sample` / `stop_sample` — uma Tool aponta pra um `.wav` no cartão
+  microSD (asset embutido no `.kit` ou pasta do usuário) e o som toca no
+  alto-falante. Formato: WAV PCM 16-bit mono, 16 kHz (8 kHz também). Um som
+  novo corta o anterior.
+
 ## [0.6.0] — 2026-09-07
 
 ### Adicionado
