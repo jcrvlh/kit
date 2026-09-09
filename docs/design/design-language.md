@@ -24,7 +24,8 @@ O sistema vive em código:
 > **Mímica** `io.github.jcrvlh.mimica`, **Testa** `io.github.jcrvlh.testa`,
 > **Telefonema** `io.github.jcrvlh.telefonema`, **Estouro**
 > `io.github.jcrvlh.estouro`, **Vira Certo**, **Tarot**, **Fora**,
-> **Soundbox** `io.github.jcrvlh.soundbox` …) seguem a
+> **Soundbox** `io.github.jcrvlh.soundbox`, **Repete**
+> `io.github.jcrvlh.repete` …) seguem a
 > mesma linguagem — Telefonema e Estouro são a referência atual do padrão descrito
 > em [🎮 Padrão de Tool](#-padrão-de-tool-ajuste--jogo--como-joga), abaixo.
 
@@ -571,7 +572,7 @@ paleta Bauhaus só tem quatro primárias. Roster atual:
 | **Vermelho** | Dados, Quem Vai Primeiro, Quebra-Gelo, Pavio, Telefonema, Fora |
 | **Azul** | Garrafa, Sortear Times, Vira Certo, Mímica, Adedonha, Tarot |
 | **Amarelo** | Moeda, Estouro, Testa, Veto (texto preto por cima) |
-| **Verde** | Timer, Bingo, Placar |
+| **Verde** | Timer, Bingo, Placar, Repete |
 
 O Placar ainda usa as quatro primárias de uma vez — uma por jogador — como
 identidade de cada coluna.
