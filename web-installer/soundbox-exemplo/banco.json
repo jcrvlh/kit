@@ -3,7 +3,6 @@
   "cor": "verde",
   "pads": [
     { "arquivo": "crickets-short-version.wav", "rotulo": "CRICKETS", "cor": "vermelho" },
-    { "arquivo": "efeito-sonoro-de-sininho-de-boxe.wav", "rotulo": "BOXING", "cor": "azul" },
     { "arquivo": "efeito-sonoro-meme-johnny-bacon.wav", "rotulo": "FAH!", "cor": "amarelo" },
     { "arquivo": "efeito-sonoro-meme-wowowow.wav", "rotulo": "WOW", "cor": "vermelho" },
     { "arquivo": "efeito-sonoro-moeda-rpg.wav", "rotulo": "COINS" },
