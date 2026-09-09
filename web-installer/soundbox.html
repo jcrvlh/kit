@@ -254,7 +254,8 @@ body {
 .checks .w::before { content: "!"; color: var(--yellow); font-weight: 700; }
 
 .padrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.padrow input[type=text] {
+.padrow input[type=text],
+.padrow input[type=number] {
   flex: 1 1 130px;
   font-family: var(--mono);
   font-size: 14px;
@@ -266,6 +267,55 @@ body {
   border: 1px solid var(--line);
   border-radius: 10px;
   min-width: 0;
+}
+.padrow.trim input[type=number] { flex: 1 1 64px; text-transform: none; }
+
+/* ---- Onda / corte visual ------------------------------------- */
+
+.wave {
+  position: relative;
+  height: 76px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  user-select: none;
+}
+.wave canvas { display: block; width: 100%; height: 100%; }
+.wave .mask {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.wave .mask.l { left: 0; }
+.wave .mask.r { right: 0; }
+.wave .grip {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 22px;
+  margin-left: -11px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.wave .grip::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: var(--green);
+}
+.wave .grip::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  width: 12px;
+  height: 26px;
+  margin-top: -13px;
+  background: var(--green);
+  border-radius: 3px;
 }
 
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -335,8 +385,8 @@ footer {
 
   <p class="lead">
     Prepare os áudios para os pads da <b>Soundbox</b>. Aqui validamos os sons,
-    convertemos se for necessário e montamos o arquivo de configuração com os
-    nomes e cores.
+    convertemos e cortamos o trecho que você quiser, e montamos o arquivo de
+    configuração com os nomes e cores.
     <span class="q">Roda tudo no seu navegador — nenhum arquivo sai daqui.</span>
   </p>
 
@@ -506,6 +556,47 @@ function peak(f32) {
   return p;
 }
 
+/* Envelope da onda: pico absoluto por coluna, pra desenhar no canvas. */
+function buildPeaks(samples, n) {
+  const peaks = new Float32Array(n);
+  const step = samples.length / n;
+  for (let i = 0; i < n; i++) {
+    const lo = Math.floor(i * step);
+    let hi = Math.floor((i + 1) * step);
+    if (hi <= lo) hi = lo + 1;
+    let p = 0;
+    for (let j = lo; j < hi && j < samples.length; j++) {
+      const a = Math.abs(samples[j]);
+      if (a > p) p = a;
+    }
+    peaks[i] = p;
+  }
+  return peaks;
+}
+
+function drawWave(canvas, pad) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || canvas.parentElement.clientWidth;
+  const h = canvas.clientHeight || 76;
+  if (!w) return;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  const peaks = pad.peaks;
+  const n = peaks.length;
+  const mid = h / 2;
+  const a = pad.trimStart / pad.full, b = pad.trimEnd / pad.full;
+  const bw = w / n;
+  for (let i = 0; i < n; i++) {
+    const frac = (i + 0.5) / n;
+    ctx.fillStyle = (frac >= a && frac <= b) ? "#45A05B" : "#4A4944";
+    const ph = Math.max(1, peaks[i] * mid * 0.92);
+    ctx.fillRect(i * bw, mid - ph, Math.max(1, bw - 0.5), ph * 2);
+  }
+}
+
 function encodeWav(samples, sampleRate) {
   const n = samples.length;
   const buf = new ArrayBuffer(44 + n * 2);
@@ -667,9 +758,6 @@ async function handleFile(file) {
     try { audioBuffer = await decode(ab); }
     catch (e) { throw new Error("o navegador não conseguiu ler esse áudio"); }
 
-    const dur = audioBuffer.duration;
-    const normOn = $("#norm").checked;
-
     const isWav = !!header;
     const fmtPcm16 = isWav && header.audioFormat === 1 && header.bits === 16;
     const isMono = isWav && header.channels === 1;
@@ -677,72 +765,46 @@ async function handleFile(file) {
     const is8k = isWav && header.sampleRate === 8000;
     const perfect = fmtPcm16 && isMono && is16k;
 
-    const checks = [];
+    const fmtChecks = [];
     if (!isWav) {
-      checks.push(["n", `não é WAV (${(file.name.split(".").pop() || "?").toUpperCase()}) — o KIT só toca WAV`]);
+      fmtChecks.push(["n", `não é WAV (${(file.name.split(".").pop() || "?").toUpperCase()}) — o KIT só toca WAV`]);
     } else if (!fmtPcm16) {
       const fx = header.audioFormat === 3 ? "float"
         : header.audioFormat === 0xfffe ? "extensible (0xFFFE)"
         : "código " + header.audioFormat;
-      checks.push(["n", `WAV ${fx}/${header.bits}-bit — o KIT quer PCM 16-bit`]);
+      fmtChecks.push(["n", `WAV ${fx}/${header.bits}-bit — o KIT quer PCM 16-bit`]);
     } else {
-      checks.push(["y", "WAV PCM 16-bit"]);
-      checks.push(isMono ? ["y", "mono"]
+      fmtChecks.push(["y", "WAV PCM 16-bit"]);
+      fmtChecks.push(isMono ? ["y", "mono"]
         : ["w", `${header.channels} canais — vira mono (converta e economize espaço)`]);
-      checks.push(is16k ? ["y", "16 kHz"]
+      fmtChecks.push(is16k ? ["y", "16 kHz"]
         : is8k ? ["w", "8 kHz — toca com upsample, mas 16 kHz soa melhor"]
         : ["n", `${(header.sampleRate / 1000).toFixed(1)} kHz — o KIT quer 16 kHz`]);
     }
 
-    if (dur > MAX_SECONDS) throw new Error(`áudio de ${fmtSecs(dur)} — corte pra até ${MAX_SECONDS}s`);
-    if (dur > IDEAL_SECONDS)
-      checks.push(["w", `${fmtSecs(dur)} — sons até ${IDEAL_SECONDS}s ficam prontos na memória e disparam na hora; ` +
-        `acima disso o KIT lê do cartão a cada toque e o som pode demorar um instante pra sair`]);
-    else
-      checks.push(["y", `duração ${fmtSecs(dur)} — dispara na hora`]);
-
-    const needsWork = !perfect || normOn;
-    let outArrayBuffer, outLen;
-    if (needsWork) {
-      const mono16k = await resampleMono16k(audioBuffer);
-      const s = Float32Array.from(mono16k.getChannelData(0));
-      if (normOn) {
-        const pk = peak(s);
-        if (pk > 0) {
-          const gain = Math.min(NORM_TARGET / pk, NORM_MAX_GAIN);
-          if (Math.abs(gain - 1) > 0.02) for (let i = 0; i < s.length; i++) s[i] *= gain;
-        }
-      }
-      outArrayBuffer = encodeWav(s, TARGET_RATE);
-      outLen = s.length;
-    } else {
-      outArrayBuffer = ab;
-      outLen = Math.round(dur * TARGET_RATE);
-    }
-
-    const data = new Uint8Array(outArrayBuffer);
-    const blob = new Blob([outArrayBuffer], { type: "audio/wav" });
-    const outName = uniqueOutName(slug(file.name.replace(/\.[^.]+$/, ""), "som"));
-
-    let vClass, vText;
-    if (perfect && !normOn) { vClass = "ok"; vText = "PRONTO PRO KIT"; }
-    else if (perfect) { vClass = "ok"; vText = "PRONTO · VOLUME IGUALADO"; }
-    else { vClass = "warn"; vText = "CONVERTIDO"; }
+    // Renderiza mono / 16 kHz uma vez. O corte e a normalização (processPad)
+    // trabalham em cima deste buffer, sem redecodificar o arquivo.
+    const mono16k = await resampleMono16k(audioBuffer);
+    const full = mono16k.length / TARGET_RATE;
 
     const pad = {
-      file, data, blob, outName, ok: true,
+      file, el: card, ok: true, color: "auto",
+      mono16k: Float32Array.from(mono16k.getChannelData(0)),
+      peaks: buildPeaks(mono16k.getChannelData(0), 320),
+      origAB: ab,
+      perfect,
+      fmtChecks,
+      outName: uniqueOutName(slug(file.name.replace(/\.[^.]+$/, ""), "som")),
       label: file.name.replace(/\.[^.]+$/, "").toUpperCase().slice(0, LABEL_MAX),
-      color: "auto",
-      url: URL.createObjectURL(blob),
-      el: card,
-      dur: outLen / TARGET_RATE,
-      size: blob.size,
-      checks, vClass, vText,
+      url: null,
+      full,
+      trimStart: 0,
+      trimEnd: full,
     };
     pad.refresh = () => renderPad(pad);
+    pad.reprocess = () => processPad(pad);
     pads.push(pad);
-    renderPad(pad);
-    refreshBulk();
+    await processPad(pad);
   } catch (err) {
     card.className = "item";
     card.innerHTML = `<div class="top"><span class="file"></span></div>
@@ -750,6 +812,71 @@ async function handleFile(file) {
     card.querySelector(".file").textContent = file.name;
     card.querySelector(".err-note").textContent = String(err.message || err);
   }
+}
+
+/* ---- Processa um pad: corte + normalização + encode ------- */
+
+async function processPad(pad) {
+  const rate = TARGET_RATE;
+  const src = pad.mono16k;
+  const total = src.length;
+
+  let a = Math.round((pad.trimStart || 0) * rate);
+  let b = Math.round((pad.trimEnd == null ? pad.full : pad.trimEnd) * rate);
+  a = Math.max(0, Math.min(a, total));
+  b = Math.max(a, Math.min(b, total));
+  const trimmed = a > 0 || b < total;
+  const seg = trimmed ? src.slice(a, b) : src;
+  const dur = seg.length / rate;
+  const normOn = $("#norm").checked;
+
+  const checks = pad.fmtChecks.slice();
+  const empty = dur < 0.05;
+  const tooLong = dur > MAX_SECONDS;
+  if (empty) checks.push(["n", "trecho vazio — ajuste o corte"]);
+  else if (tooLong) checks.push(["n", `trecho de ${fmtSecs(dur)} — corte pra até ${MAX_SECONDS}s`]);
+  else if (dur > IDEAL_SECONDS)
+    checks.push(["w", `${fmtSecs(dur)} — sons até ${IDEAL_SECONDS}s ficam prontos na memória e disparam na hora; ` +
+      `acima disso o KIT lê do cartão a cada toque e o som pode demorar um instante pra sair`]);
+  else checks.push(["y", `duração ${fmtSecs(dur)} — dispara na hora`]);
+  if (trimmed && !empty && !tooLong)
+    checks.push(["y", `corte ${fmtSecs(a / rate)}–${fmtSecs(b / rate)} (de ${fmtSecs(pad.full)})`]);
+
+  const bad = empty || tooLong;
+
+  let outAB;
+  if (!trimmed && pad.perfect && !normOn) {
+    outAB = pad.origAB;
+  } else {
+    let out = seg;
+    if (normOn) {
+      out = Float32Array.from(seg);
+      const pk = peak(out);
+      if (pk > 0) {
+        const gain = Math.min(NORM_TARGET / pk, NORM_MAX_GAIN);
+        if (Math.abs(gain - 1) > 0.02) for (let i = 0; i < out.length; i++) out[i] *= gain;
+      }
+    }
+    outAB = encodeWav(out, rate);
+  }
+
+  if (pad.url) URL.revokeObjectURL(pad.url);
+  pad.data = new Uint8Array(outAB);
+  pad.blob = new Blob([outAB], { type: "audio/wav" });
+  pad.url = URL.createObjectURL(pad.blob);
+  pad.dur = dur;
+  pad.size = pad.blob.size;
+  pad.checks = checks;
+  pad.trimmed = trimmed;
+  pad.ok = !bad;
+
+  if (bad) { pad.vClass = "err"; pad.vText = "AJUSTE O CORTE"; }
+  else if (pad.perfect && !trimmed && !normOn) { pad.vClass = "ok"; pad.vText = "PRONTO PRO KIT"; }
+  else if (pad.perfect && !trimmed) { pad.vClass = "ok"; pad.vText = "PRONTO · VOLUME IGUALADO"; }
+  else { pad.vClass = "warn"; pad.vText = trimmed ? "CORTADO" : "CONVERTIDO"; }
+
+  renderPad(pad);
+  refreshBulk();
 }
 
 /* ---- Render de um pad -------------------------------------- */
@@ -785,6 +912,103 @@ function renderPad(pad) {
     cl.appendChild(d);
   }
   pad.el.appendChild(cl);
+
+  // ---- Corte: onda + alças arrastáveis + campos em segundos ----
+  const full = pad.full;
+
+  const num = (val, label) => {
+    const x = document.createElement("input");
+    x.type = "number"; x.min = "0"; x.max = full.toFixed(2); x.step = "0.1";
+    x.value = (+val).toFixed(2); x.inputMode = "decimal";
+    x.setAttribute("aria-label", label); x.title = label;
+    return x;
+  };
+  const t0 = num(pad.trimStart, "corte: início em segundos");
+  const t1 = num(pad.trimEnd, "corte: fim em segundos");
+
+  const wave = document.createElement("div");
+  wave.className = "wave";
+  wave.style.touchAction = "none";
+  const canvas = document.createElement("canvas");
+  const maskL = document.createElement("i"); maskL.className = "mask l";
+  const maskR = document.createElement("i"); maskR.className = "mask r";
+  const gripA = document.createElement("b"); gripA.className = "grip";
+  const gripB = document.createElement("b"); gripB.className = "grip";
+  gripA.setAttribute("aria-label", "início do corte");
+  gripB.setAttribute("aria-label", "fim do corte");
+  wave.append(canvas, maskL, maskR, gripA, gripB);
+
+  const paint = () => {
+    const a = pad.trimStart / full, b = pad.trimEnd / full;
+    maskL.style.width = (a * 100) + "%";
+    maskR.style.width = ((1 - b) * 100) + "%";
+    // mantém as alças visíveis mesmo nos extremos
+    gripA.style.left = "calc(" + Math.min(Math.max(a * 100, 0), 98) + "% + 6px)";
+    gripB.style.left = "calc(" + Math.min(Math.max(b * 100, 2), 100) + "% - 6px)";
+    drawWave(canvas, pad);
+  };
+
+  const dragGrip = (which) => (ev) => {
+    ev.preventDefault();
+    const rect = wave.getBoundingClientRect();
+    const GAP = 0.05;
+    const move = (e) => {
+      let t = ((e.clientX - rect.left) / rect.width) * full;
+      t = Math.max(0, Math.min(t, full));
+      if (which === "a") pad.trimStart = Math.min(t, pad.trimEnd - GAP);
+      else pad.trimEnd = Math.max(t, pad.trimStart + GAP);
+      pad.trimStart = Math.max(0, pad.trimStart);
+      pad.trimEnd = Math.min(full, pad.trimEnd);
+      t0.value = pad.trimStart.toFixed(2);
+      t1.value = pad.trimEnd.toFixed(2);
+      paint();
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      processPad(pad);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
+  gripA.addEventListener("pointerdown", dragGrip("a"));
+  gripB.addEventListener("pointerdown", dragGrip("b"));
+
+  const applyTrim = () => {
+    let a = parseFloat(t0.value), b = parseFloat(t1.value);
+    if (!isFinite(a)) a = 0;
+    if (!isFinite(b)) b = full;
+    a = Math.max(0, Math.min(a, full));
+    b = Math.max(0, Math.min(b, full));
+    if (b <= a) b = full;
+    pad.trimStart = a; pad.trimEnd = b;
+    processPad(pad);
+  };
+  t0.addEventListener("change", applyTrim);
+  t1.addEventListener("change", applyTrim);
+
+  pad.el.appendChild(wave);
+  const waveHint = document.createElement("div");
+  waveHint.className = "hint";
+  waveHint.textContent = "arraste as bordas verdes pra escolher o trecho";
+  pad.el.appendChild(waveHint);
+  // desenha depois de entrar no DOM (precisa da largura pra escala)
+  requestAnimationFrame(paint);
+
+  const tr = document.createElement("div");
+  tr.className = "padrow trim";
+  const lab = document.createElement("span");
+  lab.className = "cc"; lab.style.flex = "0 0 auto"; lab.textContent = "CORTE";
+  const dash = document.createElement("span");
+  dash.className = "cc"; dash.style.flex = "0 0 auto"; dash.textContent = "–";
+  const allBtn = document.createElement("button");
+  allBtn.type = "button"; allBtn.className = "btn mini"; allBtn.textContent = "TUDO";
+  allBtn.title = "usar o áudio inteiro";
+  allBtn.addEventListener("click", () => {
+    pad.trimStart = 0; pad.trimEnd = pad.full; processPad(pad);
+  });
+  tr.append(lab, t0, dash, t1, allBtn);
+  pad.el.appendChild(tr);
 
   // rótulo + cor
   const pr = document.createElement("div");
@@ -1007,6 +1231,10 @@ toCardBtn.addEventListener("click", async () => {
 $("#dljson").addEventListener("click", () => {
   const json = JSON.stringify(buildBanco(), null, 2);
   download(new Blob([json], { type: "application/json" }), "banco.json");
+});
+
+$("#norm").addEventListener("change", () => {
+  pads.forEach((p) => p.reprocess && p.reprocess());
 });
 
 $("#clear").addEventListener("click", () => {
