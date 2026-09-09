@@ -6,7 +6,6 @@ do Pixabay — uso livre, sem atribuição obrigatória. Os créditos abaixo fic
 por cortesia.
 
   crickets-short-version.wav ............ "Crickets"    — Alex
-  efeito-sonoro-de-sininho-de-boxe.wav .. "Boxing Bell" — Universfield
   efeito-sonoro-meme-johnny-bacon.wav ... "Fah!"        — JohnnyBacon156
   efeito-sonoro-meme-wowowow.wav ........ "WOW"         — freesound_community
   efeito-sonoro-moeda-rpg.wav .......... "Coins"       — Game Studio
