@@ -9,6 +9,20 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.8.0] — 2026-09-08
+
+### Alterado
+- **Soundbox agora é uma Tool do catálogo** (`io.github.jcrvlh.soundbox`), não
+  mais built-in. Mesma mesa de sons — grade 3×3, bancos em `soundbox/<banco>/`
+  no cartão, conversor web — só que instalada pelo **Catálogo** e atualizada
+  sozinha, sem pesar no firmware. Quem já usava: reinstale pela loja; seus
+  bancos no cartão continuam valendo.
+
+### Adicionado
+- **Tools podem ler o cartão microSD.** Uma Tool do catálogo agora consegue
+  varrer pastas e abrir arquivos fora da sua caixa privada (a base da Soundbox
+  no catálogo). Requer firmware 0.8.0.
+
 ## [0.7.0] — 2026-09-08
 
 ### Adicionado

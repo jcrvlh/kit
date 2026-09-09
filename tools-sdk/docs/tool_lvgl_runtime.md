@@ -38,7 +38,9 @@ do firmware + registrar aqui.
 **Flags / estilo base:** `lv_obj_add_flag` · `lv_obj_remove_flag`
 (`lv_obj_clear_flag` é alias v8) · `lv_obj_has_flag` · `lv_obj_remove_style_all` · `lv_obj_invalidate`
 **Posição / tamanho:** `lv_obj_set_pos` · `lv_obj_set_size` · `lv_obj_set_width` ·
-`lv_obj_set_height` · `lv_obj_align` · `lv_obj_center` · `lv_obj_set_ext_click_area`
+`lv_obj_set_height` · `lv_obj_get_height` (após `lv_obj_update_layout` — Soundbox
+dimensiona a grade pela altura resolvida do tile) · `lv_obj_align` ·
+`lv_obj_center` · `lv_obj_set_ext_click_area`
 **Flex:** `lv_obj_set_flex_flow` · `lv_obj_set_flex_align` · `lv_obj_set_flex_grow`
 **Scroll:** `lv_obj_set_scroll_dir` · `lv_obj_set_scrollbar_mode`
 **Estilos locais:** `lv_obj_set_style_bg_color` · `…_bg_opa` · `…_border_width` ·
@@ -76,6 +78,16 @@ troca de página é `LV_EVENT_VALUE_CHANGED` no objeto do tileview.
 `rand`/`srand` **não** são exportados — use `ctx->api->random`. A UI de toque
 e o resto do hardware vêm pela `kit_api_table_t`
 (`ctx->api->input->register_callback`, etc.), não pelo LVGL direto.
+
+**Sistema de arquivos do cartão** (runtime ≥ 0.8.0 — a Soundbox varre
+`/sdcard/soundbox/<banco>/` atrás de `*.wav` + `banco.json`): `opendir` ·
+`readdir` · `closedir` · `stat` · `fopen` · `fread` · `fclose` · `strcasecmp`.
+O `kit_storage_api_t` só dá a caixa privada da Tool (`open_file`, sob
+`/tools/<id>/data/`); estes símbolos abrem o resto do cartão **só para
+leitura na prática** — combine com `ctx->api->audio->play_sample`, que já
+aceita qualquer caminho sob `/sdcard/`. O elf_loader traz `open`/`read`/`close`
+crus, mas não a camada `<stdio.h>`/`<dirent.h>`. Inclua `<dirent.h>` e
+`<sys/stat.h>` na Tool (a árvore não parseia `S_ISDIR` sem eles).
 
 ## Build
 

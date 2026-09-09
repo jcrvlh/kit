@@ -19,12 +19,12 @@ O sistema vive em código:
 > as Tools built-in **Dados** (`kit_dice`), **Garrafa** (`kit_bottle`),
 > **Moeda** (`kit_decisor`, id `com.kit.coin`), **Timer** (`kit_timer`),
 > **Quem Vai Primeiro** (`kit_primeiro`), **Sortear Times** (`kit_times`),
-> **Bingo** (`kit_bingo`), **Placar** (`kit_placar`) e
-> **Soundbox** (`kit_soundbox`).
+> **Bingo** (`kit_bingo`) e **Placar** (`kit_placar`).
 > As Tools do catálogo (**Quebra-Gelo**, **Pavio**, **Adedonha**, **Veto**,
 > **Mímica** `io.github.jcrvlh.mimica`, **Testa** `io.github.jcrvlh.testa`,
 > **Telefonema** `io.github.jcrvlh.telefonema`, **Estouro**
-> `io.github.jcrvlh.estouro`, **Vira Certo**, **Tarot**, **Fora** …) seguem a
+> `io.github.jcrvlh.estouro`, **Vira Certo**, **Tarot**, **Fora**,
+> **Soundbox** `io.github.jcrvlh.soundbox` …) seguem a
 > mesma linguagem — Telefonema e Estouro são a referência atual do padrão descrito
 > em [🎮 Padrão de Tool](#-padrão-de-tool-ajuste--jogo--como-joga), abaixo.
 

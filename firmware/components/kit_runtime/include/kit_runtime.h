@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 7
+#define KIT_VERSION_MINOR 8
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -38,7 +38,12 @@ extern "C" {
 // 0.7.0: kit_audio_api_t ganha play_sample/stop_sample — toca WAV PCM16 mono
 //        16/8 kHz do cartão SD (base da Tool Soundbox). Superfície nova pras
 //        Tools -> bump obrigatório.
-#define KIT_VERSION_STRING "0.7.0"
+// 0.8.0: runtime LVGL/libc das Tools ganha opendir/readdir/closedir/stat/fopen/
+//        fread/fclose/strcasecmp (varrer /sdcard/soundbox/<banco>/) + lv_obj_get_height.
+//        A Soundbox sai do Core pro catálogo (io.github.jcrvlh.soundbox) e é a
+//        primeira Tool a ler o cartão fora da caixa privada do kit_storage_api_t.
+//        Superfície nova pras Tools -> bump obrigatório.
+#define KIT_VERSION_STRING "0.8.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

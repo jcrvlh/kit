@@ -19,8 +19,11 @@
 #include "kit_fonts.h"
 
 #include <errno.h>
-#include <stdio.h>    /* snprintf */
+#include <stdio.h>    /* snprintf, fopen/fread/fclose */
 #include <string.h>   /* memmove */
+#include <strings.h>  /* strcasecmp */
+#include <dirent.h>   /* opendir/readdir/closedir */
+#include <sys/stat.h> /* stat */
 
 static const char *TAG = "KIT_TOOL_SYM";
 
@@ -47,6 +50,7 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
     ESP_ELFSYM_EXPORT(lv_obj_set_size),
     ESP_ELFSYM_EXPORT(lv_obj_set_width),
     ESP_ELFSYM_EXPORT(lv_obj_set_height),
+    ESP_ELFSYM_EXPORT(lv_obj_get_height),   /* Soundbox: dimensiona a grade 3x3 pela altura já resolvida do tile */
     ESP_ELFSYM_EXPORT(lv_obj_align),
     ESP_ELFSYM_EXPORT(lv_obj_center),
     ESP_ELFSYM_EXPORT(lv_obj_set_ext_click_area),
@@ -141,6 +145,22 @@ static const struct esp_elfsym s_kit_tool_symbols[] = {
     ESP_ELFSYM_EXPORT(strncpy),
     ESP_ELFSYM_EXPORT(strlcpy),
     ESP_ELFSYM_EXPORT(strcat),
+    ESP_ELFSYM_EXPORT(strcasecmp),   /* comparação sem caso: extensões, cores */
+
+    /* --- Sistema de arquivos do cartão (runtime >= 0.8.0) ----------------
+       Uma Tool que traz conteúdo do usuário no cartão (a Soundbox varre
+       /sdcard/soundbox/<banco>/ atrás de .wav) precisa enumerar diretórios e
+       ler arquivos avulsos — o kit_storage_api_t só dá a caixa privada da Tool.
+       play_sample() já aceita qualquer caminho sob /sdcard/; isto completa a
+       dupla com a parte de "descobrir". O elf_loader traz open/close/read mas
+       não a camada <stdio.h>/<dirent.h>. */
+    ESP_ELFSYM_EXPORT(opendir),
+    ESP_ELFSYM_EXPORT(readdir),
+    ESP_ELFSYM_EXPORT(closedir),
+    ESP_ELFSYM_EXPORT(stat),
+    ESP_ELFSYM_EXPORT(fopen),
+    ESP_ELFSYM_EXPORT(fread),
+    ESP_ELFSYM_EXPORT(fclose),
 
     /* --- Fontes do KIT (dados) ---------------------------------- */
     ESP_ELFSYM_EXPORT(kit_mono_16),

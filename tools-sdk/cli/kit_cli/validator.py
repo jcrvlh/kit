@@ -28,7 +28,7 @@ VALID_HOME_ICONS = {
     "card", "dice", "spin", "coin", "triangle",
     "bingo", "order", "timer", "first", "teams", "ask",
     "pavio", "adedonha", "placar", "veto", "mimica", "testa", "phone", "estouro",
-    "dial",
+    "dial", "soundbox",
 }
 
 # Tipo da Tool na listagem da Home: ferramenta ou mini-jogo.
