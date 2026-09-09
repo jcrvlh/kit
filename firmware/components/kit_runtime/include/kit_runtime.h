@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 6
+#define KIT_VERSION_MINOR 7
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -35,7 +35,10 @@ extern "C" {
 //        roleta de tempo e Modo Ampulheta — nenhuma superfície nova pras Tools)
 // 0.6.0: alinha com firmware/version.txt (Modo canhoto — gira a tela 180°,
 //        nenhuma superfície nova pras Tools)
-#define KIT_VERSION_STRING "0.6.0"
+// 0.7.0: kit_audio_api_t ganha play_sample/stop_sample — toca WAV PCM16 mono
+//        16/8 kHz do cartão SD (base da Tool Soundbox). Superfície nova pras
+//        Tools -> bump obrigatório.
+#define KIT_VERSION_STRING "0.7.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

@@ -1,0 +1,1044 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Sons da Soundbox</title>
+<link rel="icon" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600&family=Archivo+Black&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* --------------------------------------------------------------------------
+   Sons da Soundbox — conversor de áudio + montador de banco do KIT.
+   Linguagem "Brutalist Bauhaus" (docs/design/design-system.html): preto AMOLED
+   absoluto como material, tipografia mono em caixa alta na hierarquia, uma
+   superfície colorida por vez. Verde = a Tool Soundbox ("testar som").
+   Tudo roda no navegador (Web Audio API); nenhum arquivo é enviado a lugar
+   nenhum.
+   -------------------------------------------------------------------------- */
+
+:root {
+  --bg:          #000000;
+  --surface:     #171719;
+  --surface-alt: #222226;
+  --line:        #2C2C2E;
+  --paper:       #EFEADD;
+  --muted:       #6E6C66;
+
+  --red:    #C6472F;
+  --blue:   #2C3CC4;
+  --yellow: #E9B23C;
+  --green:  #45A05B;
+
+  --on-green:  #EFEADD;
+  --on-yellow: #000000;
+
+  --mono: "Space Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --disp: "Archivo Black", "Arial Black", system-ui, sans-serif;
+  --body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; }
+[hidden] { display: none !important; }
+
+html, body { background: var(--bg); }
+
+body {
+  font-family: var(--body);
+  color: var(--paper);
+  line-height: 1.5;
+  min-height: 100dvh;
+  touch-action: manipulation;
+  padding: max(18px, env(safe-area-inset-top)) 16px
+           calc(28px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.wrap { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 20px; }
+
+/* ---- Masthead -------------------------------------------------------- */
+
+.mast {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.primitives { display: flex; align-items: center; gap: 7px; }
+.primitives i { display: block; width: 13px; height: 13px; }
+.primitives .sq { background: var(--red); }
+.primitives .ci { background: var(--blue); border-radius: 50%; }
+.primitives .tr {
+  width: 0; height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 13px solid var(--yellow);
+}
+.wordmark {
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  font-size: 18px;
+  text-indent: 0.34em;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.lead { font-size: 15px; }
+.lead b { font-weight: 600; }
+.lead .q { color: var(--muted); display: block; margin-top: 4px; font-size: 13px; }
+
+/* ---- Spec chip ------------------------------------------------------- */
+
+.spec {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.spec b { color: var(--green); font-weight: 700; }
+
+/* ---- Campos --------------------------------------------------------- */
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > label {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+}
+.field input[type=text] {
+  font-family: var(--mono);
+  font-size: 16px;
+  padding: 12px 14px;
+  background: var(--surface);
+  color: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  width: 100%;
+}
+.field .path { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.field .path b { color: var(--paper); font-weight: 700; }
+
+/* contador de caracteres (nome do banco / rótulo do pad) */
+.cc {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+.cc.over { color: var(--yellow); }
+
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ---- Seletor de cor ---------------------------------------------- */
+
+.swatches { display: flex; gap: 8px; }
+.swatches button {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--paper);
+}
+.swatches button[aria-pressed="true"] { border-color: var(--paper); }
+.sw-red    { background: var(--red); }
+.sw-blue   { background: var(--blue); }
+.sw-yellow { background: var(--yellow); color: #000; }
+.sw-green  { background: var(--green); }
+.sw-auto   { background: var(--surface-alt); color: var(--muted); }
+
+/* ---- Dropzone --------------------------------------------------- */
+
+.drop {
+  border: 2px dashed var(--line);
+  border-radius: 18px;
+  padding: 34px 18px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+  background: var(--surface);
+}
+.drop:hover, .drop.over { border-color: var(--green); background: var(--surface-alt); }
+.drop .big {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.drop .sub { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+.opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.opt input { width: 18px; height: 18px; accent-color: var(--green); }
+
+/* ---- Cards de pad ---------------------------------------------- */
+
+.list { display: flex; flex-direction: column; gap: 12px; }
+
+.item {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.item[data-color=red]    { border-left-color: var(--red); }
+.item[data-color=blue]   { border-left-color: var(--blue); }
+.item[data-color=yellow] { border-left-color: var(--yellow); }
+.item[data-color=green]  { border-left-color: var(--green); }
+
+.item .top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.item .idx {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.item .file {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+  text-align: right;
+}
+
+.verdict {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  padding: 5px 9px;
+  border-radius: 8px;
+  width: max-content;
+}
+.verdict.ok   { background: var(--green);  color: var(--on-green); }
+.verdict.warn { background: var(--yellow); color: var(--on-yellow); }
+.verdict.err  { background: var(--red);    color: var(--paper); }
+
+.checks { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.checks div::before { margin-right: 7px; font-family: var(--mono); }
+.checks .y::before { content: "✓"; color: var(--green); }
+.checks .n::before { content: "✗"; color: var(--red); }
+.checks .w::before { content: "!"; color: var(--yellow); font-weight: 700; }
+
+.padrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.padrow input[type=text] {
+  flex: 1 1 130px;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 9px 11px;
+  background: var(--bg);
+  color: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  min-width: 0;
+}
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  background: var(--surface-alt);
+  color: var(--paper);
+}
+.btn.primary { background: var(--green); color: var(--on-green); }
+.btn.mini { padding: 9px 11px; }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn.play::before { content: "▶ "; }
+.btn.play.on::before { content: "■ "; }
+
+footer {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+
+.err-note { font-size: 13px; color: var(--red); font-family: var(--mono); }
+.hint { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+#cardstat { font-size: 12.5px; }
+#cardstat.busy { color: var(--muted); }
+#cardstat.ok   { color: var(--green); }
+#cardstat.err  { color: var(--red); }
+
+.bar {
+  height: 10px;
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.bar > i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--green);
+  transition: width .2s ease;
+}
+.bar.err > i { background: var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div class="primitives" aria-hidden="true"><i class="sq"></i><i class="ci"></i><i class="tr"></i></div>
+    <div class="wordmark">SOUNDBOX</div>
+    <span aria-hidden="true"></span>
+  </header>
+
+  <p class="lead">
+    Prepare os áudios para os pads da <b>Soundbox</b>. Aqui validamos os sons,
+    convertemos se for necessário e montamos o arquivo de configuração com os
+    nomes e cores.
+    <span class="q">Roda tudo no seu navegador — nenhum arquivo sai daqui.</span>
+  </p>
+
+  <div class="spec">
+    O KIT toca: <b>WAV</b> · PCM 16-bit · <b>mono</b> · <b>16 kHz</b> ·
+    ideal até <b>5 s</b> por som
+  </div>
+
+  <div class="two">
+    <div class="field">
+      <label for="bankname">NOME DO BANCO
+        <span class="cc" id="bankcc" title="cabe bem até 20; o KIT corta em 27"></span></label>
+      <input id="bankname" type="text" value="Meus Sons" autocomplete="off" spellcheck="false"
+             maxlength="27">
+      <span class="path">pasta: <b id="bankpath">/soundbox/meus-sons/</b></span>
+    </div>
+    <div class="field">
+      <label>COR DO BANCO</label>
+      <div class="swatches" id="bankcolor" role="group" aria-label="Cor do banco">
+        <button type="button" class="sw-red"    data-color="red"></button>
+        <button type="button" class="sw-blue"   data-color="blue"></button>
+        <button type="button" class="sw-yellow" data-color="yellow"></button>
+        <button type="button" class="sw-green"  data-color="green" aria-pressed="true"></button>
+      </div>
+      <span class="hint">a cor da Tool na Home</span>
+    </div>
+  </div>
+
+  <div class="drop" id="drop" role="button" tabindex="0" aria-label="Escolher áudios">
+    <div class="big">Arraste os áudios aqui</div>
+    <div class="sub">ou toque pra escolher — MP3, M4A, WAV, OGG…</div>
+    <input id="file" type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg,.aac,.flac,.opus"
+           multiple hidden>
+  </div>
+
+  <label class="opt">
+    <input type="checkbox" id="norm" checked>
+    Igualar o volume de todos (normalizar)
+  </label>
+
+  <div class="list" id="list"></div>
+
+  <div class="row" id="bulk" hidden>
+    <button type="button" class="btn primary" id="tocard" hidden>GRAVAR NO CARTÃO</button>
+    <button type="button" class="btn" id="dlall">BAIXAR BANCO (.ZIP)</button>
+    <button type="button" class="btn" id="dljson">SÓ O BANCO.JSON</button>
+    <button type="button" class="btn" id="clear">LIMPAR</button>
+  </div>
+
+  <p class="hint" id="ziphint" hidden></p>
+  <div class="bar" id="cardbar" hidden><i></i></div>
+  <p class="err-note" id="cardstat" hidden></p>
+
+  <footer>KIT</footer>
+</div>
+
+<audio id="player" hidden></audio>
+
+<script>
+"use strict";
+
+const TARGET_RATE = 16000;
+const IDEAL_SECONDS = 5;
+const MAX_SECONDS = 90;
+const MAX_FILE_BYTES = 60 * 1024 * 1024;
+const MAX_PADS = 9;
+/* Limites de texto. O "soft" é o que cabe bonito na tela do KIT; o "max" é onde
+   o firmware corta (SB_NAME_LEN-1 / SB_LABEL_LEN-1 no kit_soundbox) — passar
+   disso não adianta, o KIT descarta o resto. */
+const NAME_SOFT = 20, NAME_MAX = 27;
+const LABEL_SOFT = 12, LABEL_MAX = 17;
+const NORM_TARGET = 0.89;      // ~-1 dBFS
+const NORM_MAX_GAIN = 8;
+const COLORS = ["red", "blue", "yellow", "green"];
+const COLOR_PT = { red: "vermelho", blue: "azul", yellow: "amarelo", green: "verde" };
+
+const $ = (s) => document.querySelector(s);
+const listEl = $("#list");
+const player = $("#player");
+let audioCtx = null;
+let playingBtn = null;
+
+/* Cada pad: { file, outName, label, color("auto"|red..), data:Uint8Array,
+              blob, url, ok, el, refresh() } — na ordem da grade. */
+const pads = [];
+let bankColor = "green";
+
+/* ---- Slug / nomes ------------------------------------------------ */
+
+function slug(s, fallback) {
+  const out = (s || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+  return out || fallback;
+}
+
+const bankNameEl = $("#bankname");
+const bankPathEl = $("#bankpath");
+const bankCcEl = $("#bankcc");
+function bankSlug() { return slug(bankNameEl.value, "meus-sons"); }
+
+/* Atualiza um contador "N/soft" e o pinta de amarelo quando passa do soft. */
+function setCount(el, len, soft) {
+  el.textContent = `${len}/${soft}`;
+  el.classList.toggle("over", len > soft);
+}
+
+function refreshPaths() {
+  bankPathEl.textContent = `/soundbox/${bankSlug()}/`;
+  setCount(bankCcEl, bankNameEl.value.length, NAME_SOFT);
+  if (!$("#bulk").hidden) refreshBulk();
+}
+bankNameEl.addEventListener("input", refreshPaths);
+refreshPaths();
+
+/* ---- Cor do banco ---------------------------------------------- */
+
+const bankColorEl = $("#bankcolor");
+bankColorEl.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  bankColor = b.dataset.color;
+  [...bankColorEl.children].forEach((c) =>
+    c.setAttribute("aria-pressed", String(c === b)));
+  pads.forEach((p) => p.refresh());
+  if (!$("#bulk").hidden) refreshBulk();
+});
+
+/* ---- Web Audio ----------------------------------------------- */
+
+function getCtx() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    // Decodifica já na taxa do KIT: evita um resample intermediário na taxa do
+    // sistema (44,1/48 kHz) antes do resample final pra 16 kHz.
+    try { audioCtx = new AC({ sampleRate: TARGET_RATE }); }
+    catch (e) { audioCtx = new AC(); }
+  }
+  return audioCtx;
+}
+
+function decode(arrayBuffer) {
+  const ctx = getCtx();
+  return new Promise((resolve, reject) => {
+    const p = ctx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+    if (p && p.then) p.then(resolve, reject);
+  });
+}
+
+async function resampleMono16k(audioBuffer) {
+  const frames = Math.max(1, Math.ceil(audioBuffer.duration * TARGET_RATE));
+  const OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const off = new OC(1, frames, TARGET_RATE);
+  const src = off.createBufferSource();
+  src.buffer = audioBuffer;
+  src.connect(off.destination);
+  src.start();
+  return off.startRendering();
+}
+
+function peak(f32) {
+  let p = 0;
+  for (let i = 0; i < f32.length; i++) { const a = Math.abs(f32[i]); if (a > p) p = a; }
+  return p;
+}
+
+function encodeWav(samples, sampleRate) {
+  const n = samples.length;
+  const buf = new ArrayBuffer(44 + n * 2);
+  const dv = new DataView(buf);
+  const tag = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  tag(0, "RIFF"); dv.setUint32(4, 36 + n * 2, true); tag(8, "WAVE");
+  tag(12, "fmt "); dv.setUint32(16, 16, true);
+  dv.setUint16(20, 1, true);                 // PCM
+  dv.setUint16(22, 1, true);                 // mono
+  dv.setUint32(24, sampleRate, true);
+  dv.setUint32(28, sampleRate * 2, true);
+  dv.setUint16(32, 2, true);
+  dv.setUint16(34, 16, true);
+  tag(36, "data"); dv.setUint32(40, n * 2, true);
+  let o = 44;
+  for (let i = 0; i < n; i++) {
+    let s = Math.max(-1, Math.min(1, samples[i]));
+    dv.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    o += 2;
+  }
+  return buf;
+}
+
+/* ---- Header WAV (espelha o render_wav do firmware) ----------- */
+
+function parseWavHeader(ab) {
+  if (ab.byteLength < 12) return null;
+  const dv = new DataView(ab);
+  const tag = (o) => String.fromCharCode(
+    dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3));
+  if (tag(0) !== "RIFF" || tag(8) !== "WAVE") return null;
+  let o = 12, fmt = null, dataLength = null;
+  while (o + 8 <= ab.byteLength) {
+    const id = tag(o);
+    const len = dv.getUint32(o + 4, true);
+    o += 8;
+    if (id === "fmt " && o + 16 <= ab.byteLength) {
+      fmt = {
+        audioFormat: dv.getUint16(o, true),
+        channels: dv.getUint16(o + 2, true),
+        sampleRate: dv.getUint32(o + 4, true),
+        bits: dv.getUint16(o + 14, true),
+      };
+    } else if (id === "data") { dataLength = len; break; }
+    o += len + (len & 1);
+  }
+  if (!fmt) return null;
+  return Object.assign(fmt, { dataLength });
+}
+
+/* ---- ZIP (store, sem compressão) — dependência zero ---------- */
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(u8) {
+  let c = 0xffffffff;
+  for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+function buildZip(files) {
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+  for (const f of files) {
+    const nameBytes = enc.encode(f.name);
+    const crc = crc32(f.data);
+    const size = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true);
+    lh.setUint16(4, 20, true);
+    lh.setUint16(6, 0x0800, true);
+    lh.setUint16(8, 0, true);
+    lh.setUint32(14, crc, true);
+    lh.setUint32(18, size, true);
+    lh.setUint32(22, size, true);
+    lh.setUint16(26, nameBytes.length, true);
+    parts.push(new Uint8Array(lh.buffer), nameBytes, f.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true);
+    ch.setUint16(4, 20, true);
+    ch.setUint16(6, 20, true);
+    ch.setUint16(8, 0x0800, true);
+    ch.setUint32(16, crc, true);
+    ch.setUint32(20, size, true);
+    ch.setUint32(24, size, true);
+    ch.setUint16(28, nameBytes.length, true);
+    ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), nameBytes);
+    offset += 30 + nameBytes.length + size;
+  }
+  const centralSize = central.reduce((a, c) => a + c.length, 0);
+  const eocd = new DataView(new ArrayBuffer(22));
+  eocd.setUint32(0, 0x06054b50, true);
+  eocd.setUint16(8, files.length, true);
+  eocd.setUint16(10, files.length, true);
+  eocd.setUint32(12, centralSize, true);
+  eocd.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(eocd.buffer)], { type: "application/zip" });
+}
+
+function download(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/* ---- banco.json --------------------------------------------- */
+
+function buildBanco() {
+  return {
+    nome: bankNameEl.value.trim() || "Meus Sons",
+    cor: bankColor === "green" ? "verde" : COLOR_PT[bankColor],
+    pads: pads.filter((p) => p.ok).map((p) => {
+      const o = { arquivo: p.outName, rotulo: p.label.trim() || p.outName.replace(/\.wav$/, "") };
+      if (p.color !== "auto") o.cor = COLOR_PT[p.color];
+      return o;
+    }),
+  };
+}
+
+/* ---- Formatação -------------------------------------------- */
+
+function fmtSecs(s) { return s < 10 ? s.toFixed(1) + "s" : Math.round(s) + "s"; }
+function fmtKB(b) { return (b / 1024).toFixed(0) + " KB"; }
+
+function uniqueOutName(base) {
+  let name = base + ".wav", i = 2;
+  while (pads.some((p) => p.outName === name)) name = `${base}-${i++}.wav`;
+  return name;
+}
+
+/* ---- Pipeline por arquivo --------------------------------- */
+
+async function handleFile(file) {
+  const card = document.createElement("div");
+  card.className = "item";
+  card.innerHTML = `<div class="top"><span class="idx"></span><span class="file"></span></div>
+    <span class="idx" style="color:var(--muted)">lendo…</span>`;
+  card.querySelector(".file").textContent = file.name;
+  listEl.appendChild(card);
+
+  try {
+    if (pads.filter((p) => p.ok).length >= MAX_PADS)
+      throw new Error(`o banco já tem ${MAX_PADS} pads (o máximo da grade)`);
+    if (file.size > MAX_FILE_BYTES) throw new Error("arquivo grande demais (> 60 MB)");
+
+    const ab = await file.arrayBuffer();
+    const header = parseWavHeader(ab);
+    let audioBuffer;
+    try { audioBuffer = await decode(ab); }
+    catch (e) { throw new Error("o navegador não conseguiu ler esse áudio"); }
+
+    const dur = audioBuffer.duration;
+    const normOn = $("#norm").checked;
+
+    const isWav = !!header;
+    const fmtPcm16 = isWav && header.audioFormat === 1 && header.bits === 16;
+    const isMono = isWav && header.channels === 1;
+    const is16k = isWav && header.sampleRate === TARGET_RATE;
+    const is8k = isWav && header.sampleRate === 8000;
+    const perfect = fmtPcm16 && isMono && is16k;
+
+    const checks = [];
+    if (!isWav) {
+      checks.push(["n", `não é WAV (${(file.name.split(".").pop() || "?").toUpperCase()}) — o KIT só toca WAV`]);
+    } else if (!fmtPcm16) {
+      const fx = header.audioFormat === 3 ? "float"
+        : header.audioFormat === 0xfffe ? "extensible (0xFFFE)"
+        : "código " + header.audioFormat;
+      checks.push(["n", `WAV ${fx}/${header.bits}-bit — o KIT quer PCM 16-bit`]);
+    } else {
+      checks.push(["y", "WAV PCM 16-bit"]);
+      checks.push(isMono ? ["y", "mono"]
+        : ["w", `${header.channels} canais — vira mono (converta e economize espaço)`]);
+      checks.push(is16k ? ["y", "16 kHz"]
+        : is8k ? ["w", "8 kHz — toca com upsample, mas 16 kHz soa melhor"]
+        : ["n", `${(header.sampleRate / 1000).toFixed(1)} kHz — o KIT quer 16 kHz`]);
+    }
+
+    if (dur > MAX_SECONDS) throw new Error(`áudio de ${fmtSecs(dur)} — corte pra até ${MAX_SECONDS}s`);
+    if (dur > IDEAL_SECONDS)
+      checks.push(["w", `${fmtSecs(dur)} — sons até ${IDEAL_SECONDS}s ficam prontos na memória e disparam na hora; ` +
+        `acima disso o KIT lê do cartão a cada toque e o som pode demorar um instante pra sair`]);
+    else
+      checks.push(["y", `duração ${fmtSecs(dur)} — dispara na hora`]);
+
+    const needsWork = !perfect || normOn;
+    let outArrayBuffer, outLen;
+    if (needsWork) {
+      const mono16k = await resampleMono16k(audioBuffer);
+      const s = Float32Array.from(mono16k.getChannelData(0));
+      if (normOn) {
+        const pk = peak(s);
+        if (pk > 0) {
+          const gain = Math.min(NORM_TARGET / pk, NORM_MAX_GAIN);
+          if (Math.abs(gain - 1) > 0.02) for (let i = 0; i < s.length; i++) s[i] *= gain;
+        }
+      }
+      outArrayBuffer = encodeWav(s, TARGET_RATE);
+      outLen = s.length;
+    } else {
+      outArrayBuffer = ab;
+      outLen = Math.round(dur * TARGET_RATE);
+    }
+
+    const data = new Uint8Array(outArrayBuffer);
+    const blob = new Blob([outArrayBuffer], { type: "audio/wav" });
+    const outName = uniqueOutName(slug(file.name.replace(/\.[^.]+$/, ""), "som"));
+
+    let vClass, vText;
+    if (perfect && !normOn) { vClass = "ok"; vText = "PRONTO PRO KIT"; }
+    else if (perfect) { vClass = "ok"; vText = "PRONTO · VOLUME IGUALADO"; }
+    else { vClass = "warn"; vText = "CONVERTIDO"; }
+
+    const pad = {
+      file, data, blob, outName, ok: true,
+      label: file.name.replace(/\.[^.]+$/, "").toUpperCase().slice(0, LABEL_MAX),
+      color: "auto",
+      url: URL.createObjectURL(blob),
+      el: card,
+      dur: outLen / TARGET_RATE,
+      size: blob.size,
+      checks, vClass, vText,
+    };
+    pad.refresh = () => renderPad(pad);
+    pads.push(pad);
+    renderPad(pad);
+    refreshBulk();
+  } catch (err) {
+    card.className = "item";
+    card.innerHTML = `<div class="top"><span class="file"></span></div>
+      <span class="verdict err">NÃO DEU</span><div class="err-note"></div>`;
+    card.querySelector(".file").textContent = file.name;
+    card.querySelector(".err-note").textContent = String(err.message || err);
+  }
+}
+
+/* ---- Render de um pad -------------------------------------- */
+
+function renderPad(pad) {
+  const i = pads.filter((p) => p.ok).indexOf(pad);
+  const effColor = pad.color === "auto" ? bankColor : pad.color;
+  pad.el.dataset.color = effColor;
+  pad.el.className = "item";
+  pad.el.innerHTML = "";
+
+  const top = document.createElement("div");
+  top.className = "top";
+  top.innerHTML = `<span class="idx">PAD ${i + 1}</span><span class="file"></span>`;
+  top.querySelector(".file").textContent = pad.file.name;
+  pad.el.appendChild(top);
+
+  const v = document.createElement("span");
+  v.className = "verdict " + pad.vClass;
+  v.textContent = pad.vText;
+  pad.el.appendChild(v);
+
+  const meta = document.createElement("div");
+  meta.className = "hint";
+  meta.textContent = `${pad.outName} · ${fmtSecs(pad.dur)} · ${fmtKB(pad.size)}`;
+  pad.el.appendChild(meta);
+
+  const cl = document.createElement("div");
+  cl.className = "checks";
+  for (const [k, msg] of pad.checks) {
+    const d = document.createElement("div");
+    d.className = k; d.textContent = msg;
+    cl.appendChild(d);
+  }
+  pad.el.appendChild(cl);
+
+  // rótulo + cor
+  const pr = document.createElement("div");
+  pr.className = "padrow";
+  const lbl = document.createElement("input");
+  lbl.type = "text";
+  lbl.maxLength = LABEL_MAX;
+  lbl.value = pad.label;
+  lbl.setAttribute("aria-label", "Rótulo do pad");
+  const lblCc = document.createElement("span");
+  lblCc.className = "cc";
+  lblCc.title = `cabe bem até ${LABEL_SOFT}; o KIT corta em ${LABEL_MAX}`;
+  const syncLbl = () => {
+    pad.label = lbl.value;
+    setCount(lblCc, lbl.value.length, LABEL_SOFT);
+  };
+  lbl.addEventListener("input", syncLbl);
+  syncLbl();
+  pr.appendChild(lbl);
+  pr.appendChild(lblCc);
+
+  const sw = document.createElement("div");
+  sw.className = "swatches";
+  for (const c of ["auto", ...COLORS]) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "sw-" + c;
+    if (c === "auto") b.textContent = "A";
+    b.title = c === "auto" ? "cor do banco" : COLOR_PT[c];
+    b.setAttribute("aria-pressed", String(pad.color === c));
+    b.addEventListener("click", () => { pad.color = c; renderPad(pad); refreshBulk(); });
+    sw.appendChild(b);
+  }
+  pr.appendChild(sw);
+  pad.el.appendChild(pr);
+
+  // ações
+  const row = document.createElement("div");
+  row.className = "row";
+  const play = document.createElement("button");
+  play.type = "button"; play.className = "btn play mini"; play.textContent = "OUVIR";
+  play.addEventListener("click", () => togglePlay(play, pad.url));
+  const dl = document.createElement("button");
+  dl.type = "button"; dl.className = "btn mini"; dl.textContent = "BAIXAR";
+  dl.addEventListener("click", () => download(pad.blob, pad.outName));
+  const up = document.createElement("button");
+  up.type = "button"; up.className = "btn mini"; up.textContent = "↑";
+  up.disabled = i === 0;
+  up.addEventListener("click", () => movePad(pad, -1));
+  const dn = document.createElement("button");
+  dn.type = "button"; dn.className = "btn mini"; dn.textContent = "↓";
+  dn.disabled = i === pads.filter((p) => p.ok).length - 1;
+  dn.addEventListener("click", () => movePad(pad, 1));
+  const rm = document.createElement("button");
+  rm.type = "button"; rm.className = "btn mini"; rm.textContent = "✕";
+  rm.addEventListener("click", () => removePad(pad));
+  row.append(play, dl, up, dn, rm);
+  pad.el.appendChild(row);
+}
+
+function movePad(pad, dir) {
+  const idx = pads.indexOf(pad);
+  const j = idx + dir;
+  if (j < 0 || j >= pads.length) return;
+  pads.splice(idx, 1);
+  pads.splice(j, 0, pad);
+  // reordena o DOM
+  listEl.innerHTML = "";
+  pads.forEach((p) => { listEl.appendChild(p.el); renderPad(p); });
+  refreshBulk();
+}
+
+function removePad(pad) {
+  const idx = pads.indexOf(pad);
+  if (idx < 0) return;
+  URL.revokeObjectURL(pad.url);
+  pads.splice(idx, 1);
+  pad.el.remove();
+  pads.forEach((p) => renderPad(p));
+  refreshBulk();
+}
+
+/* ---- Player compartilhado -------------------------------- */
+
+function togglePlay(btn, url) {
+  if (playingBtn === btn && !player.paused) {
+    player.pause(); btn.classList.remove("on"); playingBtn = null; return;
+  }
+  if (playingBtn) playingBtn.classList.remove("on");
+  player.src = url;
+  player.play().catch(() => {});
+  btn.classList.add("on"); playingBtn = btn;
+}
+player.addEventListener("ended", () => {
+  if (playingBtn) playingBtn.classList.remove("on");
+  playingBtn = null;
+});
+
+/* ---- Bulk ---------------------------------------------- */
+
+const bulk = $("#bulk");
+const ziphint = $("#ziphint");
+const cardStat = $("#cardstat");
+const cardBar = $("#cardbar");
+const toCardBtn = $("#tocard");
+const CARD_SUPPORTED = typeof window.showDirectoryPicker === "function";
+toCardBtn.hidden = !CARD_SUPPORTED;
+
+function refreshBulk() {
+  const n = pads.filter((p) => p.ok).length;
+  bulk.hidden = n === 0;
+  ziphint.hidden = n === 0;
+  setCardStat("", "");
+  setCardProgress(null);
+  if (n) {
+    ziphint.textContent = CARD_SUPPORTED
+      ? `${n} pad(s). GRAVAR NO CARTÃO escreve soundbox/${bankSlug()}/ direto no ` +
+        `cartão — antes, ligue Ajustes › Modo pen drive no KIT e plugue o USB. ` +
+        `O .zip é a alternativa (descompacte na raiz do cartão).`
+      : `${n} pad(s). O .zip traz soundbox/${bankSlug()}/ com os .wav e o banco.json — ` +
+        `descompacte na raiz do cartão do KIT.`;
+  }
+}
+
+/* Lista de arquivos do banco, caminhos relativos à raiz do cartão. */
+function bankFileList() {
+  const bank = bankSlug();
+  const files = pads.filter((p) => p.ok)
+    .map((p) => ({ name: `soundbox/${bank}/${p.outName}`, data: p.data }));
+  const json = JSON.stringify(buildBanco(), null, 2);
+  files.push({ name: `soundbox/${bank}/banco.json`, data: new TextEncoder().encode(json) });
+  return files;
+}
+
+$("#dlall").addEventListener("click", () => {
+  if (!pads.some((p) => p.ok)) return;
+  download(buildZip(bankFileList()), `soundbox-${bankSlug()}.zip`);
+});
+
+/* ---- Gravar direto no cartão (File System Access API) ---- */
+
+function setCardStat(kind, msg) {
+  cardStat.hidden = !msg;
+  cardStat.className = kind || "";
+  cardStat.textContent = msg || "";
+}
+
+/* frac: 0..1 pra mostrar a barra, null pra esconder. */
+function setCardProgress(frac) {
+  cardBar.hidden = frac == null;
+  if (frac == null) cardBar.classList.remove("err");
+  else cardBar.firstElementChild.style.width =
+    Math.max(0, Math.min(1, frac)) * 100 + "%";
+}
+
+toCardBtn.addEventListener("click", async () => {
+  const ok = pads.filter((p) => p.ok);
+  if (!ok.length) return;
+  const bank = bankSlug();
+  setCardStat("", "");
+  setCardProgress(null);
+
+  let root;
+  try {
+    root = await window.showDirectoryPicker({ id: "kit-card", mode: "readwrite" });
+  } catch (e) {
+    if (e && e.name === "AbortError") return;       // usuário cancelou
+    setCardStat("err", "não deu pra abrir o cartão: " + (e.message || e));
+    return;
+  }
+
+  toCardBtn.disabled = true;
+  setCardStat("busy", "gravando…");
+  setCardProgress(0);
+  try {
+    if (root.requestPermission) {
+      const perm = await root.requestPermission({ mode: "readwrite" });
+      if (perm !== "granted") throw new Error("sem permissão de escrita na pasta");
+    }
+    // aceita tanto a raiz do cartão quanto a própria pasta soundbox/
+    const sbDir = root.name === "soundbox"
+      ? root
+      : await root.getDirectoryHandle("soundbox", { create: true });
+    const bankDir = await sbDir.getDirectoryHandle(bank, { create: true });
+
+    // limpa o banco: tira .wav/.json que não fazem parte deste conjunto.
+    // Coleta os nomes ANTES de apagar — mutar o diretório enquanto o itera
+    // pode pular entradas e deixar órfão (a Tool mostra como pad a mais).
+    const keep = new Set([...ok.map((p) => p.outName), "banco.json"]);
+    const stale = [];
+    for await (const entry of bankDir.values()) {
+      if (entry.kind === "file" && /\.(wav|json)$/i.test(entry.name) && !keep.has(entry.name))
+        stale.push(entry.name);
+    }
+    for (const name of stale) await bankDir.removeEntry(name);
+
+    const files = bankFileList();
+    let wrote = 0;
+    for (const f of files) {
+      const leaf = f.name.split("/").pop();
+      const fh = await bankDir.getFileHandle(leaf, { create: true });
+      const w = await fh.createWritable();
+      await w.write(f.data);
+      await w.close();
+      setCardProgress(++wrote / files.length);
+    }
+
+    setCardStat("ok",
+      `gravado: soundbox/${bank}/ (${ok.length} som + banco.json). ` +
+      `Ejete o cartão, reinicie o KIT e o banco aparece na Soundbox.`);
+  } catch (e) {
+    cardBar.classList.add("err");
+    setCardStat("err", "falhou no meio: " + (e.message || e) +
+      " — confira se escolheu a raiz do cartão.");
+  } finally {
+    toCardBtn.disabled = false;
+  }
+});
+
+$("#dljson").addEventListener("click", () => {
+  const json = JSON.stringify(buildBanco(), null, 2);
+  download(new Blob([json], { type: "application/json" }), "banco.json");
+});
+
+$("#clear").addEventListener("click", () => {
+  pads.forEach((p) => URL.revokeObjectURL(p.url));
+  pads.length = 0;
+  listEl.innerHTML = "";
+  refreshBulk();
+  if (playingBtn) { player.pause(); playingBtn = null; }
+});
+
+/* ---- Entrada de arquivos ------------------------------ */
+
+const drop = $("#drop");
+const fileInput = $("#file");
+drop.addEventListener("click", () => fileInput.click());
+drop.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }
+});
+fileInput.addEventListener("change", () => { handleFiles(fileInput.files); fileInput.value = ""; });
+["dragenter", "dragover"].forEach((ev) =>
+  drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((ev) =>
+  drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => {
+  if (e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files);
+});
+
+async function handleFiles(fileList) {
+  for (const f of [...fileList].filter((f) => f.size > 0)) {
+    await handleFile(f);          // um de cada vez: vários decodes juntos travam
+  }
+}
+</script>
+</body>
+</html>

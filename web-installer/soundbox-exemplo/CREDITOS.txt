@@ -1,0 +1,18 @@
+Banco de exemplo da Soundbox do KIT
+===================================
+
+Todos os sons são do Pixabay (https://pixabay.com), sob a Licença de Conteúdo
+do Pixabay — uso livre, sem atribuição obrigatória. Os créditos abaixo ficam
+por cortesia.
+
+  crickets-short-version.wav ............ "Crickets"    — Alex
+  efeito-sonoro-de-sininho-de-boxe.wav .. "Boxing Bell" — Universfield
+  efeito-sonoro-meme-johnny-bacon.wav ... "Fah!"        — JohnnyBacon156
+  efeito-sonoro-meme-wowowow.wav ........ "WOW"         — freesound_community
+  efeito-sonoro-moeda-rpg.wav .......... "Coins"       — Game Studio
+  efeitos-sonoros-rpg.wav .............. "Magic"       — Game Studio
+  goblin-growl-sound-effect.wav ........ "Goblin"      — freesound_community
+  wah-wah-horn-sound-effect.wav ........ "Horn"        — Universfield
+
+Os arquivos aqui já estão no formato que o KIT toca (WAV PCM 16-bit, mono,
+16 kHz), prontos pra copiar pra /soundbox/exemplo/ na raiz do cartão.

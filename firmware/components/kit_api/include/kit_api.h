@@ -144,6 +144,14 @@ typedef struct {
     // jitter dos timers da Tool. tension 0..255 acelera o tique de forma
     // contínua; tension < 0 apaga o pavio. Chame a ~10 Hz enquanto queima.
     kit_err_t (*fuse)(int16_t tension);
+    // Toca um WAV PCM 16-bit mono do cartão SD (`path` absoluto sob /sdcard/,
+    // ex.: "<ctx->data_path>/assets/x.wav" ou "/sdcard/soundbox/<banco>/x.wav").
+    // 16 kHz direto, 8 kHz com upsample 2x, estéreo rebaixado pra mono; outros
+    // formatos são recusados. Assíncrono; um novo play corta o anterior
+    // (retrigger). Respeita a flag "Som". Requer o cartão presente.
+    kit_err_t (*play_sample)(const char *path);
+    // Corta o WAV em reprodução, se houver.
+    kit_err_t (*stop_sample)(void);
 } kit_audio_api_t;
 
 typedef struct {

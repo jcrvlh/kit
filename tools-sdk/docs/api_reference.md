@@ -67,10 +67,15 @@ Armazenamento não-volátil usando LittleFS (partição `/tools/<id>/`). Útil p
 ## 5. Audio API (`ctx->api->audio`)
 **Permissão necessária:** `"audio"`
 
-Controle do Buzzer ativo embutido no KIT.
+Alto-falante embutido (codec ES8311). Todas as chamadas são não bloqueantes
+(enfileiram e voltam) e respeitam a flag **"Som"** dos Ajustes.
 
-- `kit_err_t beep(uint16_t freq_hz, uint16_t duration_ms)`: Emite um som PWM (ex: 1500 Hz por 50 ms). Chamada não bloqueante.
-- `kit_err_t set_volume(uint8_t percentage)`: Altera intensidade do sinal PWM.
+- `kit_err_t beep(uint16_t freq_hz, uint16_t duration_ms)`: Tom senoidal (ex: 1500 Hz por 50 ms).
+- `kit_err_t set_volume(uint8_t percentage)`: Volume do alto-falante (0–100).
+- `kit_err_t sfx(kit_sfx_t sfx)`: Toca um efeito sonoro pronto do KIT (ver `kit_sfx_t`).
+- `kit_err_t fuse(int16_t tension)`: "Pavio queimando" — tique metronômico gerado na task de áudio; `tension` 0–255 acelera, `< 0` apaga.
+- `kit_err_t play_sample(const char *path)`: Toca um `.wav` do cartão microSD. **Requer `min_runtime` `0.7.0`.** `path` absoluto sob `/sdcard/` — em geral `"<ctx->data_path>/assets/<nome>.wav"` (asset embutido no `.kit`) ou `"/sdcard/soundbox/<banco>/<nome>.wav"`. Formato: **WAV PCM 16-bit mono, 16 kHz** (8 kHz também; estéreo é rebaixado). Um som novo corta o anterior (retrigger, sem polifonia).
+- `kit_err_t stop_sample(void)`: Corta o sample em reprodução.
 
 ---
 

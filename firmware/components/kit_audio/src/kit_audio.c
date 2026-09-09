@@ -10,6 +10,7 @@
 #include "esp_codec_dev.h"
 #include "esp_codec_dev_defaults.h"
 #include <math.h>
+#include <string.h>
 
 static const char *TAG = "KIT_AUDIO";
 static uint8_t s_volume = 80;
@@ -45,10 +46,17 @@ static esp_codec_dev_sample_info_t s_fs;
 // codec drenar o buffer) e, chamado direto do callback do LVGL, travava a task
 // `main` (a rolagem da Dice Tool, a navegação do Launcher). kit_audio_beep_impl
 // e kit_audio_sfx_impl só enfileiram e voltam na hora; audio_task renderiza.
+// sfx:  >=0  -> kit_sfx_t (efeito pronto)
+//       -1   -> tom puro (usa freq_hz/duration_ms)
+//       -2   -> "kick": só acorda a task pro pavio
+//       -3   -> toca o WAV em `path` (soundbox)
+//       -4   -> corta o WAV em reprodução (stop_sample) — não renderiza nada,
+//               só existe pra furar o uxQueueMessagesWaiting de render_wav
 typedef struct {
-    int16_t  sfx;         // <0 = tom puro (usa freq/dur); >=0 = kit_sfx_t
+    int16_t  sfx;
     uint16_t freq_hz;
     uint16_t duration_ms;
+    char     path[112];   // usado só quando sfx == -3
 } kit_beep_req_t;
 
 static QueueHandle_t s_beep_queue = NULL;
@@ -553,6 +561,138 @@ static void render_sfx(kit_sfx_t sfx)
     }
 }
 
+// --- Sample playback (soundbox) -------------------------------------------
+// Toca um WAV PCM 16-bit mono do cartão SD. O I2S do KIT é fixo em 16 kHz
+// mono: 16 kHz passa direto, 8 kHz é duplicado (upsample 2x grosseiro),
+// estéreo é rebaixado pra mono. Roda AQUI, na task de áudio, então a leitura
+// bloqueante do FatFS não trava o LVGL. Um pedido novo na fila (outro pad da
+// soundbox) ou a suspensão da tela cortam o que estiver tocando com um fade
+// curto pra não estalar — é assim que o "retrigger" e o stop_sample funcionam.
+#pragma pack(push, 1)
+typedef struct {
+    uint16_t audio_format;      // 1 = PCM
+    uint16_t num_channels;
+    uint32_t sample_rate;
+    uint32_t byte_rate;
+    uint16_t block_align;
+    uint16_t bits_per_sample;
+} wav_fmt_t;
+#pragma pack(pop)
+
+#define WAV_READ_BYTES   2048   // 1024 amostras de 16 bits por leitura do SD
+
+static inline bool sample_should_abort(void)
+{
+    return s_suspended || uxQueueMessagesWaiting(s_beep_queue) > 0;
+}
+
+// Fade linear até zero a partir do último bloco tocado — corta sem clique.
+static void render_sample_fadeout(const int16_t *last, int n)
+{
+    if (!s_speaker || n <= 0) return;
+    static int16_t fade[128];
+    if (n > 128) n = 128;
+    for (int i = 0; i < n; i++) {
+        fade[i] = (int16_t)((int32_t)last[i] * (n - 1 - i) / n);
+    }
+    esp_codec_dev_write(s_speaker, fade, (size_t)n * sizeof(int16_t));
+}
+
+static void render_wav(const char *path)
+{
+    if (!s_speaker) return;
+
+    FILE *f = fopen(path, "rb");
+    if (!f) {
+        ESP_LOGW(TAG, "play_sample: não abriu '%s'", path);
+        return;
+    }
+
+    char riff[12];
+    if (fread(riff, 1, 12, f) != 12 ||
+        memcmp(riff, "RIFF", 4) != 0 || memcmp(riff + 8, "WAVE", 4) != 0) {
+        ESP_LOGW(TAG, "play_sample: '%s' não é RIFF/WAVE", path);
+        fclose(f);
+        return;
+    }
+
+    wav_fmt_t fmt = {0};
+    bool have_fmt = false;
+    uint32_t data_len = 0;
+
+    for (;;) {   // percorre os chunks até achar "data" (já com o "fmt " em mãos)
+        char ch[8];
+        if (fread(ch, 1, 8, f) != 8) break;
+        uint32_t clen;
+        memcpy(&clen, ch + 4, 4);
+        if (memcmp(ch, "fmt ", 4) == 0) {
+            uint32_t want = clen < sizeof(fmt) ? clen : sizeof(fmt);
+            if (fread(&fmt, 1, want, f) != want) break;
+            if (clen > want) fseek(f, (long)(clen - want), SEEK_CUR);
+            have_fmt = true;
+        } else if (memcmp(ch, "data", 4) == 0) {
+            data_len = clen;
+            break;
+        } else {
+            fseek(f, (long)clen + (long)(clen & 1u), SEEK_CUR);  // chunks têm padding par
+        }
+    }
+
+    if (!have_fmt || data_len == 0) {
+        ESP_LOGW(TAG, "play_sample: '%s' sem fmt/data válidos", path);
+        fclose(f);
+        return;
+    }
+    if (fmt.audio_format != 1 || fmt.bits_per_sample != 16 ||
+        fmt.num_channels < 1 || fmt.num_channels > 2 ||
+        (fmt.sample_rate != 16000 && fmt.sample_rate != 8000)) {
+        ESP_LOGW(TAG, "play_sample: formato não suportado "
+                      "(fmt=%u ch=%u rate=%u bits=%u) — use WAV PCM16 mono 16 kHz",
+                 fmt.audio_format, fmt.num_channels,
+                 (unsigned)fmt.sample_rate, fmt.bits_per_sample);
+        fclose(f);
+        return;
+    }
+
+    const bool stereo = (fmt.num_channels == 2);
+    const bool up2x   = (fmt.sample_rate == 8000);
+
+    static uint8_t rbuf[WAV_READ_BYTES];
+    static int16_t obuf[2048];   // pior caso: mono 8k -> 1024 amostras dobradas
+    uint32_t left = data_len;
+    int last_o = 0;
+
+    while (left > 0) {
+        // Um pad novo na fila (retrigger), o stop_sample ou o repouso de tela:
+        // desce o volume nas últimas amostras tocadas e sai sem estalar.
+        if (sample_should_abort()) {
+            render_sample_fadeout(obuf, last_o);
+            break;
+        }
+
+        size_t want = left < WAV_READ_BYTES ? left : WAV_READ_BYTES;
+        size_t got = fread(rbuf, 1, want, f);
+        if (got < 2) break;
+        left -= got;
+
+        const int16_t *src = (const int16_t *)rbuf;
+        int in_samples = (int)(got / 2);
+        int frames = stereo ? in_samples / 2 : in_samples;
+        int o = 0;
+        for (int i = 0; i < frames; i++) {
+            int16_t s = stereo
+                ? (int16_t)(((int32_t)src[2 * i] + src[2 * i + 1]) / 2)
+                : src[i];
+            obuf[o++] = s;
+            if (up2x) obuf[o++] = s;
+        }
+        esp_codec_dev_write(s_speaker, obuf, (size_t)o * sizeof(int16_t));
+        last_o = o;
+    }
+
+    fclose(f);
+}
+
 // Liga o codec/PA (abre o dispositivo e reaplica o volume salvo). Só chamada
 // pela audio_task. Um "toc" baixo pode acontecer aqui quando o PA sobe.
 static void audio_codec_wake(void)
@@ -594,6 +734,7 @@ static void audio_task(void *arg)
         TickType_t wait = burning ? 0 : pdMS_TO_TICKS(AUDIO_IDLE_MS);
         if (xQueueReceive(s_beep_queue, &req, wait) == pdTRUE) {
             if (req.sfx == -2) continue;   // "kick": só acorda a task pro pavio
+            if (req.sfx == -4) continue;   // "stop": já cortou o WAV em render_wav
             audio_codec_wake();
             if (req.sfx == -1) {
                 // Bipes muito curtos (<= 14 ms) são "ticks" de textura — saem
@@ -602,6 +743,8 @@ static void audio_task(void *arg)
                 float amp = (req.duration_ms <= 14) ? AUDIO_AMP_FULL * 0.34f
                                                     : AUDIO_AMP_FULL;
                 render_tone(req.freq_hz, req.duration_ms, amp);
+            } else if (req.sfx == -3) {
+                render_wav(req.path);
             } else {
                 render_sfx((kit_sfx_t)req.sfx);
             }
@@ -749,8 +892,9 @@ kit_err_t kit_audio_init(void)
 
     // Task + fila do bipe assíncrono.
     s_beep_queue = xQueueCreate(6, sizeof(kit_beep_req_t));
+    // 6144 B: render_wav abre e lê o cartão (FatFS f_read) nesta task.
     if (!s_beep_queue ||
-        xTaskCreate(audio_task, "kit_audio", 4096, NULL, 5, NULL) != pdPASS) {
+        xTaskCreate(audio_task, "kit_audio", 6144, NULL, 5, NULL) != pdPASS) {
         ESP_LOGE(TAG, "Falha ao criar a task de áudio");
         return KIT_FAIL;
     }
@@ -816,6 +960,34 @@ kit_err_t kit_audio_fuse_impl(int16_t tension)
         kit_beep_req_t kick = { .sfx = -2, .freq_hz = 0, .duration_ms = 0 };
         xQueueSend(s_beep_queue, &kick, 0);
     }
+    return KIT_OK;
+}
+
+kit_err_t kit_audio_play_sample_impl(const char *path)
+{
+    if (!s_speaker || !s_beep_queue) return KIT_FAIL;
+    if (s_suspended || !kit_config_get_sound_enabled()) return KIT_OK;
+    if (!path || strncmp(path, "/sdcard/", 8) != 0) {
+        ESP_LOGW(TAG, "play_sample: path deve começar com /sdcard/ ('%s')",
+                 path ? path : "(null)");
+        return KIT_ERR_INVALID_ARG;
+    }
+
+    kit_beep_req_t req = { .sfx = -3, .freq_hz = 0, .duration_ms = 0 };
+    if (strlcpy(req.path, path, sizeof(req.path)) >= sizeof(req.path)) {
+        ESP_LOGW(TAG, "play_sample: path longo demais ('%s')", path);
+        return KIT_ERR_INVALID_ARG;
+    }
+    // Não espera: se a fila estiver cheia, descarta (taps são humanos).
+    if (xQueueSend(s_beep_queue, &req, 0) != pdTRUE) return KIT_FAIL;
+    return KIT_OK;
+}
+
+kit_err_t kit_audio_stop_sample_impl(void)
+{
+    if (!s_speaker || !s_beep_queue) return KIT_FAIL;
+    kit_beep_req_t req = { .sfx = -4, .freq_hz = 0, .duration_ms = 0, .path = {0} };
+    if (xQueueSend(s_beep_queue, &req, 0) != pdTRUE) return KIT_FAIL;
     return KIT_OK;
 }
 
