@@ -131,13 +131,12 @@ static const home_tool_t HOME_TOOLS_BUILTIN[] = {
     { "com.kit.primeiro","Primeiro",KIT_COLOR_RED, TOOL_ICON_FIRST, true, false, false, false, false },
     { "com.kit.times",   "Times",   KIT_COLOR_BLUE,   TOOL_ICON_TEAMS, true, false, false, false, false },
     { "com.kit.bingo",   "Bingo",   KIT_COLOR_GREEN,  TOOL_ICON_BINGO, true, true, false, false, false },
-    // Quebra-Gelo, Pavio, Adedonha, Veto, Mímica, Testa, Telefonema, Estouro e
-    // Vira Certo saíram do Core — vivem no catálogo (io.github.jcrvlh.*).
-    // TOOL_ICON_ASK / PAVIO / ADEDONHA / VETO / MIMICA / TESTA / PHONE /
-    // ESTOURO / DIAL e seus mapas em icon_from_name ficam pra Tool do cartão
-    // reusar via "home_icon" no manifest.
+    // Quebra-Gelo, Pavio, Adedonha, Veto, Mímica, Testa, Telefonema, Estouro,
+    // Vira Certo e Soundbox saíram do Core — vivem no catálogo
+    // (io.github.jcrvlh.*). TOOL_ICON_ASK / PAVIO / ADEDONHA / VETO / MIMICA /
+    // TESTA / PHONE / ESTOURO / DIAL / SOUNDBOX e seus mapas em icon_from_name
+    // ficam pra Tool do cartão reusar via "home_icon" no manifest.
     { "com.kit.placar", "Placar", KIT_COLOR_GREEN, TOOL_ICON_PLACAR, true, false, false, false, false },
-    { "com.kit.soundbox", "Soundbox", KIT_COLOR_GREEN, TOOL_ICON_SOUNDBOX, true, false, false, false, false },
 };
 #define HOME_TOOLS_BUILTIN_N ((int)(sizeof(HOME_TOOLS_BUILTIN) / sizeof(HOME_TOOLS_BUILTIN[0])))
 
