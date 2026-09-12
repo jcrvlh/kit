@@ -9,6 +9,20 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.13.0] — 2026-09-12
+
+### Adicionado
+- **Card do Instagram na Home.** No fim da grade "VER TODOS" (seção SISTEMA),
+  um novo card abre um QR Code em tela cheia com o brilho no máximo,
+  apontando para o perfil do KIT no Instagram.
+
+### Alterado
+- **Pequenos ajustes de consumo de bateria com a tela apagada.** Os ícones de
+  bateria e Wi-Fi da Home não fazem mais leituras a cada 2 segundos enquanto a
+  tela está apagada (retomam sozinhos ao acordar), e a checagem dos botões
+  físicos passa a rodar um pouco mais devagar nesse estado — o botão de ligar
+  continua acordando o aparelho normalmente.
+
 ## [0.12.0] — 2026-09-12
 
 ### Adicionado

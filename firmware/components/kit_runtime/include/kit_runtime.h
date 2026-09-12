@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 12
+#define KIT_VERSION_MINOR 13
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -58,7 +58,10 @@ extern "C" {
 //        MODO unificado (Cronômetro/Regressivo/Ampulheta/Pomodoro) e passe de
 //        legibilidade nos textos/botões da tela AJUSTE — nenhuma superfície
 //        nova pras Tools)
-#define KIT_VERSION_STRING "0.12.0"
+// 0.13.0: alinha com firmware/version.txt (card de Instagram no fim da grade
+//        "VER TODOS" + duas otimizações de bateria com a tela apagada —
+//        nenhuma superfície nova pras Tools)
+#define KIT_VERSION_STRING "0.13.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

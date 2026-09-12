@@ -1108,6 +1108,87 @@ static void make_catalog_tile(lv_obj_t *grid)
     if (s_tool_upd_badge) tile_corner_dot(tile);
 }
 
+// -- Card de Instagram: link social do KIT, último da seção SISTEMA. Toque
+//    abre o QR em tela cheia e brilho máximo — mesma lógica das Tools que já
+//    mostram QR (Bingo/Adedonha/Soundbox).
+#define KIT_IG_URL       "https://instagram.com/souokit"
+#define KIT_IG_QR_SIZE   332
+#define KIT_IG_QR_BRIGHT 100
+
+static lv_obj_t *s_ig_qr_screen = NULL;
+static uint8_t   s_ig_qr_bright = 100;
+
+static void ig_qr_close_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    if (s_ig_qr_screen) { lv_obj_delete(s_ig_qr_screen); s_ig_qr_screen = NULL; }
+    kit_display_set_brightness_impl(s_ig_qr_bright);
+}
+
+static void ig_qr_open_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_ig_qr_screen) return;
+
+    s_ig_qr_bright = kit_display_get_brightness_impl();
+    kit_display_set_brightness_impl(KIT_IG_QR_BRIGHT);
+
+    s_ig_qr_screen = make_overlay(KIT_COLOR_BG);
+    lv_obj_add_flag(s_ig_qr_screen, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s_ig_qr_screen, ig_qr_close_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *tag = add_label(s_ig_qr_screen, "@SOUOKIT", KIT_COLOR_TEXT, &kit_mono_20, 3);
+    lv_obj_align(tag, LV_ALIGN_TOP_MID, 0, 40);
+
+    // Exceção ao preto AMOLED (igual ao QR do Bingo): fundo claro pra câmera ler.
+    lv_obj_t *q = lv_qrcode_create(s_ig_qr_screen);
+    lv_qrcode_set_size(q, KIT_IG_QR_SIZE);
+    lv_qrcode_set_dark_color(q, lv_color_hex(KIT_COLOR_BG));
+    lv_qrcode_set_light_color(q, lv_color_white());
+    lv_qrcode_set_quiet_zone(q, true);
+    lv_obj_set_style_border_width(q, 8, 0);
+    lv_obj_set_style_border_color(q, lv_color_white(), 0);
+    lv_obj_set_style_radius(q, 3, 0);
+    lv_qrcode_update(q, KIT_IG_URL, (uint32_t)strlen(KIT_IG_URL));
+    lv_obj_align(q, LV_ALIGN_CENTER, 0, -4);
+
+    lv_obj_t *hint = add_label(s_ig_qr_screen, "Toque para fechar", KIT_COLOR_TEXT_MUTED, &kit_sans_22, 0);
+    lv_obj_align(hint, LV_ALIGN_BOTTOM_MID, 0, -22);
+}
+
+// -- Card de Instagram: ao lado de Catálogo na seção SISTEMA da grade. --
+static void make_instagram_tile(lv_obj_t *grid)
+{
+    lv_obj_t *tile = lv_obj_create(grid);
+    lv_obj_set_size(tile, 162, 118);
+    lv_obj_set_style_bg_color(tile, lv_color_hex(KIT_COLOR_SURFACE), 0);
+    lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(tile, 0, 0);
+    lv_obj_set_style_radius(tile, 20, 0);
+    lv_obj_set_style_pad_all(tile, 0, 0);
+    lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(tile, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(tile, 4);
+    lv_obj_add_event_cb(tile, ig_qr_open_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *badge = lv_obj_create(tile);
+    lv_obj_set_size(badge, 42, 42);
+    lv_obj_set_style_bg_color(badge, lv_color_hex(KIT_COLOR_TEXT_MUTED), 0);
+    lv_obj_set_style_bg_opa(badge, LV_OPA_20, 0);
+    lv_obj_set_style_border_width(badge, 0, 0);
+    lv_obj_set_style_radius(badge, 12, 0);
+    lv_obj_set_style_pad_all(badge, 0, 0);
+    lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_align(badge, LV_ALIGN_TOP_LEFT, 14, 14);
+    lv_obj_t *g = add_label(badge, "@", KIT_COLOR_TEXT_MUTED, &kit_mono_26, 0);
+    lv_obj_center(g);
+
+    lv_obj_t *lbl = add_label(tile, "Instagram", KIT_COLOR_TEXT_MUTED, &kit_sans_22, 0);
+    lv_obj_align(lbl, LV_ALIGN_BOTTOM_LEFT, 14, -14);
+}
+
 // -- Slide de destaque: uma Tool por tela, ocupando tudo na cor dela. `slot` é
 //    a posição no slideshow (marca-d'água "01".."04"). --
 static void make_tool_slide(lv_obj_t *tile, int index, int slot)
@@ -1232,6 +1313,7 @@ static void make_all_slide(lv_obj_t *tile)
     make_grid_header(grid, "SISTEMA", first);
     make_settings_tile(grid);
     make_catalog_tile(grid);
+    make_instagram_tile(grid);
 }
 
 // Ponto de página ativo = traço claro; os demais = fio.
@@ -4174,6 +4256,11 @@ void kit_launcher_go_home(void)
 static void batt_tick_cb(lv_timer_t *t)
 {
     (void)t;
+    // Com a tela apagada nada disto é visível (ícone de bateria/Wi-Fi, banner,
+    // toast) — pula de vez em vez de gastar 2 leituras I2C (bateria + tensão)
+    // a cada 2s à toa. Retoma sozinho no próximo tick assim que a tela acorda.
+    if (!kit_display_is_on_impl()) return;
+
     update_battery();
     update_wifi_icon();
 
