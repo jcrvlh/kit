@@ -25,7 +25,7 @@ O sistema vive em código:
 > **Telefonema** `io.github.jcrvlh.telefonema`, **Estouro**
 > `io.github.jcrvlh.estouro`, **Vira Certo**, **Tarot**, **Fora**,
 > **Soundbox** `io.github.jcrvlh.soundbox`, **Repete**
-> `io.github.jcrvlh.repete` …) seguem a
+> `io.github.jcrvlh.repete`, **Juízo** `io.github.jcrvlh.juizo` …) seguem a
 > mesma linguagem — Telefonema e Estouro são a referência atual do padrão descrito
 > em [🎮 Padrão de Tool](#-padrão-de-tool-ajuste--jogo--como-joga), abaixo.
 
