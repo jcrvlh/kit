@@ -27,6 +27,28 @@ static esp_lcd_panel_io_handle_t s_io_handle = NULL;
 static uint8_t s_brightness = 80;
 static bool s_display_on = true;
 
+// Watchdog do flush: some flushes nem chegam a ser enfileirados no barramento
+// SPI (fila cheia / disputa com o Wi-Fi sob troca de canal do AP — visto no
+// log como "panel_io_spi_tx_color queue color failed"), mas o driver do
+// CO5300 não propaga isso como erro em esp_lcd_panel_draw_bitmap() — o
+// retorno vem ESP_OK mesmo assim. Sem o callback "done", o LVGL nunca sai de
+// wait_for_flushing() (um `while(disp->flushing);` sem yield nenhum — trava
+// o loop principal pra sempre, e a task IDLE0 nunca roda -> task_wdt).
+// Este timer força a liberação se o callback não chegar a tempo.
+static esp_timer_handle_t s_flush_wd = NULL;
+static volatile bool      s_flush_pending = false;
+#define FLUSH_WATCHDOG_US  (300 * 1000)   // folga generosa sobre o flush normal
+
+static void flush_watchdog_cb(void *arg)
+{
+    (void)arg;
+    if (s_flush_pending && s_disp) {
+        s_flush_pending = false;
+        ESP_LOGW(TAG, "flush travado (SPI sem callback de done) — liberando o LVGL na marra");
+        lv_display_flush_ready(s_disp);
+    }
+}
+
 // Rotação da imagem enviada ao painel. Só 0 e 180 — o CO5300 não faz
 // swap_xy/mirror_y, e 90° exigiria buffer/layout landscape. A 180° a resolução
 // não muda (368×448), então é só inverter os pixels e a janela de endereçamento
@@ -58,8 +80,10 @@ void kit_display_restore_rotation_impl(void)
     s_rot = s_base_rot;
 }
 
-// Tamanho do buffer de desenho: 368 x 40 linhas em RGB565 (2 bytes por pixel)
-#define BUFFER_LINES 40
+// Tamanho do buffer de desenho: 368 x 16 linhas em RGB565 (2 bytes por pixel).
+// Eram 40 linhas na PSRAM — ver a alocação em kit_display_init() para o porquê
+// da troca (bounce buffer de DMA por quadro).
+#define BUFFER_LINES 16
 #define BUFFER_SIZE (KIT_DISPLAY_WIDTH * BUFFER_LINES * sizeof(lv_color16_t))
 
 static uint8_t *s_buf1 = NULL;
@@ -79,10 +103,14 @@ static esp_err_t co5300_write_cmd(uint8_t cmd, const uint8_t *param, size_t len)
     return esp_lcd_panel_io_tx_param(s_io_handle, CO5300_QSPI_CMD(cmd), param, len);
 }
 
+// Roda em contexto de ISR (post-callback da transação SPI) — nada de
+// esp_timer_stop() aqui (não é ISR-safe). Só consome a flag; se o watchdog
+// já tiver forçado a liberação, esta chegada tardia é ignorada.
 static bool notify_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_io_event_data_t *edata, void *user_ctx)
 {
     lv_display_t *disp = (lv_display_t *)user_ctx;
-    if (disp) {
+    if (disp && s_flush_pending) {
+        s_flush_pending = false;
         lv_display_flush_ready(disp);
     }
     return false;
@@ -123,14 +151,22 @@ static void lvgl_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px
             x1 = nx1; x2 = nx2; y1 = ny1; y2 = ny2;
         }
 
+        s_flush_pending = true;
         esp_err_t e = esp_lcd_panel_draw_bitmap(s_panel_handle, x1, y1,
                                                 x2 + 1, y2 + 1, px_map);
         // Se a transferência nem chegou a ser enfileirada (fila cheia / disputa
         // de barramento sob carga de Wi-Fi), o callback de "done" NUNCA vai vir e
         // o LVGL ficaria preso pra sempre em wait_for_flushing. Libera na mão.
         if (e != ESP_OK) {
+            s_flush_pending = false;
             ESP_LOGW(TAG, "draw_bitmap falhou (%s) — liberando o flush", esp_err_to_name(e));
             lv_display_flush_ready(disp);
+        } else if (s_flush_wd) {
+            // Rede de segurança: alguns drivers (CO5300) engolem a falha do
+            // enfileiramento e devolvem ESP_OK mesmo sem agendar o callback de
+            // done — daí o timer, não só o "if (e != ESP_OK)" acima.
+            esp_timer_stop(s_flush_wd);   // no-op se já parado (ONE_SHOT expirado)
+            esp_timer_start_once(s_flush_wd, FLUSH_WATCHDOG_US);
         }
     } else {
         lv_display_flush_ready(disp);
@@ -157,20 +193,38 @@ kit_err_t kit_display_init(void)
         return KIT_FAIL;
     }
 
-    // 2. Aloca buffers de desenho em PSRAM. A RAM interna (~232 KB DIRAM) é
-    //    disputada por Wi-Fi (~45 KB), TLS e, principalmente, a relocação do
-    //    .so das Tools (o ELF loader precisa de um bloco contíguo em IRAM). Pôr
-    //    59 KB de framebuffer aqui deixava o catálogo (mbedtls_ssl_setup ->
-    //    -0x7F00 ALLOC_FAILED) e o "abrir Tool" sem bloco grande o bastante.
-    //    O DMA do QSPI lê da PSRAM sem problema; o risco de disputa com o Wi-Fi
-    //    é tratado no lvgl_flush_cb (checa o retorno e não trava o LVGL).
-    s_buf1 = heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    s_buf2 = heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!s_buf1 || !s_buf2) {
-        ESP_LOGE(TAG, "Falha ao alocar buffers de renderização em PSRAM!");
-        return KIT_ERR_NO_MEM;
+    // 2. Buffers de desenho em RAM INTERNA, capaz de DMA — e não na PSRAM.
+    //
+    //    esp_ptr_dma_capable() é falso para PSRAM. Com o framebuffer lá, o
+    //    spi_master alocava um "bounce buffer" de DMA em RAM interna a CADA
+    //    quadro (setup_priv_desc(): heap_caps_aligned_alloc(.., MALLOC_CAP_DMA))
+    //    e copiava tudo pra ele. Eram ~29 KB contíguos por flush: funcionava
+    //    parado, mas quando o Wi-Fi subia (AP do portal + DHCP + httpd + task
+    //    de DNS) a RAM interna fragmentava, o alloc falhava com ESP_ERR_NO_MEM
+    //    e o quadro era descartado em silêncio — tela "misturando" o conteúdo
+    //    velho com o novo ao abrir Configurar rede, e antes disso travamento.
+    //
+    //    Com o buffer já em RAM interna DMA-capaz não há bounce buffer nem
+    //    memcpy por quadro: o alloc grande some do caminho crítico. Por isso
+    //    também caímos de 40 para 16 linhas (2x 11,7 KB fixos < os ~29 KB
+    //    transitórios de antes — a pressão de pico sobre a RAM interna diminui,
+    //    que é o que protege o mbedtls do catálogo e a relocação do .so das
+    //    Tools). Se por algum motivo não couber, cai pra PSRAM como antes.
+    s_buf1 = heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    s_buf2 = heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    if (s_buf1 && s_buf2) {
+        ESP_LOGI(TAG, "Buffers de renderização em RAM interna (DMA): 2x %d bytes", (int)BUFFER_SIZE);
+    } else {
+        if (s_buf1) { heap_caps_free(s_buf1); s_buf1 = NULL; }
+        if (s_buf2) { heap_caps_free(s_buf2); s_buf2 = NULL; }
+        s_buf1 = heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        s_buf2 = heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!s_buf1 || !s_buf2) {
+            ESP_LOGE(TAG, "Falha ao alocar buffers de renderização!");
+            return KIT_ERR_NO_MEM;
+        }
+        ESP_LOGW(TAG, "Sem RAM interna — buffers na PSRAM (bounce buffer por quadro volta a valer)");
     }
-    ESP_LOGI(TAG, "Buffers de renderização alocados em PSRAM: 2x %d bytes", (int)BUFFER_SIZE);
 
     // 3. Inicializa LVGL v9
     lv_init();
@@ -241,6 +295,15 @@ kit_err_t kit_display_init(void)
 
     // Aplica o brilho padrão (o init do driver liga o painel no brilho máximo)
     kit_display_set_brightness_impl(s_brightness);
+
+    const esp_timer_create_args_t wd_args = {
+        .callback = flush_watchdog_cb,
+        .name = "lcd_flush_wd",
+    };
+    if (esp_timer_create(&wd_args, &s_flush_wd) != ESP_OK) {
+        ESP_LOGW(TAG, "falha ao criar o watchdog de flush — sem rede de segurança contra travamento do SPI");
+        s_flush_wd = NULL;
+    }
 
     ESP_LOGI(TAG, "Display AMOLED CO5300 inicializado e pronto para renderização.");
     return KIT_OK;

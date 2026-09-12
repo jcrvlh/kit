@@ -26,18 +26,10 @@ dependencies:
       type: service
     version: 1.6.2
   espressif/esp_lcd_co5300:
-    component_hash: 279a9c8b1cc62be11680f57ba98a477942991c4409e3e43af216eb84f8aa7070
-    dependencies:
-    - name: espressif/cmake_utilities
-      registry_url: https://components.espressif.com
-      require: private
-      version: 0.*
-    - name: idf
-      require: private
-      version: '>=5.3'
+    dependencies: []
     source:
-      registry_url: https://components.espressif.com/
-      type: service
+      path: /Users/jcrvlh/Projetos/kit/firmware/components/espressif__esp_lcd_co5300
+      type: local
     version: 1.0.2
   espressif/esp_tinyusb:
     component_hash: 6a50305bc61c7a361da8c0833642be824e92dacb0a6001719a832a4e96e471bf
@@ -99,6 +91,6 @@ direct_dependencies:
 - idf
 - joltwallet/littlefs
 - lvgl/lvgl
-manifest_hash: 6ce9b2f628f66e1ac82455ea7e6c61ba2981f4f8c6595849a01cf1eca687eae7
+manifest_hash: d4cbd84ca8f66d32924c979b08d73a64bce6f869060067bb068b4c5c8edea295
 target: esp32s3
 version: 2.0.0
