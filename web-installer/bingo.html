@@ -446,7 +446,7 @@ footer {
 
   <div class="actions">
     <button type="button" class="btn btn-primary" id="new">NOVA CARTELA</button>
-    <button type="button" class="btn btn-ghost" id="clear">LIMPAR MARCAS</button>
+    <button type="button" class="btn btn-ghost" id="clear">LIMPAR MARCAÇÕES</button>
   </div>
 
   <footer>KIT</footer>
@@ -652,7 +652,7 @@ function render() {
   document.querySelectorAll(".seg button").forEach((b) =>
     b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode)));
   howto.textContent = state.mode === "75"
-    ? "Toque nos números conforme forem cantados. O centro já vem livre."
+    ? "Toque nos números conforme forem chamados."
     : "Toque nos números conforme forem cantados. Cada celular é uma cartela.";
 }
 
