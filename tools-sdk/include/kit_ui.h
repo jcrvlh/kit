@@ -64,6 +64,11 @@
 #define KIT_UI_BTN_H       76
 #define KIT_UI_BTN_MARGIN  18
 
+#define KIT_UI_QR_SIZE     216   /* QR inline — legível de perto, ainda cabe com texto */
+#define KIT_UI_QR_BIG      332   /* QR expandido — quase a largura inteira da tela */
+#define KIT_UI_QR_BRIGHT   100   /* brilho do overlay expandido (%) */
+#define KIT_UI_QR_MAX      192   /* maior link que o componente guarda */
+
 #define KIT_UI_MAX_PAGES     6
 #define KIT_UI_MAX_CHIPS     8
 #define KIT_UI_SIGLA_DRAG_PX  24   /* px de arraste por letra — sensação de roleta */
@@ -786,6 +791,127 @@ KIT_UI_DEF void kit_ui_sigla_show(kit_ui_sigla_t *s, bool show)
                 lv_obj_remove_flag(s->reset_btn, LV_OBJ_FLAG_HIDDEN); }
     else      { lv_obj_add_flag(s->row, LV_OBJ_FLAG_HIDDEN);
                 lv_obj_add_flag(s->reset_btn, LV_OBJ_FLAG_HIDDEN); }
+}
+
+/* --- QR code tocável (padrão do KIT) ---------------------------------- */
+
+/**
+ * QR code com a legenda "Toque para expandir" embaixo. Tocar abre um overlay
+ * de tela cheia com o código no maior tamanho que a tela comporta e o brilho
+ * no máximo — numa tela de 1,8" é o que faz a câmera do celular enganchar de
+ * primeira. Fechar (toque em qualquer ponto) devolve o brilho anterior.
+ *
+ * O QR é a única exceção ao preto AMOLED: fundo branco, código em
+ * `KIT_COLOR_BG` (ver design-language.md, "Contraste").
+ *
+ *   static kit_ui_qr_t s_qr;
+ *   kit_ui_qr(&s_qr, parent, "https://exemplo/x");   // monta
+ *   kit_ui_qr_set(&s_qr, url);                        // troca o link
+ *   kit_ui_qr_close(&s_qr);                           // no tool_destroy
+ */
+typedef struct {
+    lv_obj_t *qr;          /* o lv_qrcode inline */
+    lv_obj_t *hint;        /* "Toque para expandir" */
+    lv_obj_t *overlay;     /* tela cheia enquanto expandido (NULL fechado) */
+    char      data[KIT_UI_QR_MAX];
+    uint32_t  len;         /* bytes do link (sem o terminador) */
+    uint8_t   saved_bright;
+} kit_ui_qr_t;
+
+KIT_UI_DEF void kit_ui__qr_style(lv_obj_t *q)
+{
+    lv_qrcode_set_dark_color(q, lv_color_hex(KIT_COLOR_BG));
+    lv_qrcode_set_light_color(q, lv_color_hex(0xFFFFFF));
+    lv_qrcode_set_quiet_zone(q, true);
+    lv_obj_set_style_border_width(q, 8, 0);
+    lv_obj_set_style_border_color(q, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_radius(q, 3, 0);
+}
+
+KIT_UI_DEF void kit_ui_qr_close(kit_ui_qr_t *q)
+{
+    if (!q->overlay) return;
+    lv_obj_delete(q->overlay);
+    q->overlay = NULL;
+    if (kit_ui__api && kit_ui__api->display)
+        kit_ui__api->display->set_brightness(q->saved_bright);
+}
+
+/** Esquece o QR sem deletar nada — para o `tool_destroy`, onde a screen
+ *  inteira já foi apagada (e com ela o overlay). Devolve o brilho. */
+KIT_UI_DEF void kit_ui_qr_reset(kit_ui_qr_t *q)
+{
+    if (q->overlay && kit_ui__api && kit_ui__api->display)
+        kit_ui__api->display->set_brightness(q->saved_bright);
+    q->overlay = NULL;
+    q->qr = NULL;
+    q->hint = NULL;
+    q->data[0] = '\0';
+    q->len = 0;
+}
+
+KIT_UI_DEF void kit_ui__qr_close_cb(lv_event_t *e)
+{
+    kit_ui_qr_close((kit_ui_qr_t *)lv_event_get_user_data(e));
+}
+
+KIT_UI_DEF void kit_ui__qr_open_cb(lv_event_t *e)
+{
+    kit_ui_qr_t *q = (kit_ui_qr_t *)lv_event_get_user_data(e);
+    if (q->overlay || !q->data[0]) return;
+    if (!kit_ui__api || !kit_ui__api->display) return;   /* sem display API não expande */
+    kit_ui_click();
+
+    q->saved_bright = kit_ui__api->display->get_brightness();
+    kit_ui__api->display->set_brightness(KIT_UI_QR_BRIGHT);
+
+    lv_obj_t *root = kit_ui__api->display->get_screen();
+    lv_obj_t *ov = kit_ui_rect(root, KIT_UI_SCREEN_W, KIT_UI_SCREEN_H, KIT_COLOR_BG, 0);
+    lv_obj_set_pos(ov, 0, 0);
+    lv_obj_add_flag(ov, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(ov, kit_ui__qr_close_cb, LV_EVENT_CLICKED, q);
+    q->overlay = ov;
+
+    lv_obj_t *big = lv_qrcode_create(ov);
+    lv_qrcode_set_size(big, KIT_UI_QR_BIG);
+    kit_ui__qr_style(big);
+    lv_qrcode_update(big, q->data, q->len);
+    lv_obj_align(big, LV_ALIGN_CENTER, 0, -18);
+
+    lv_obj_t *l = kit_ui_label(ov, "Toque para fechar", KIT_COLOR_TEXT_MUTED,
+                               &kit_sans_22, 0);
+    lv_obj_align(l, LV_ALIGN_BOTTOM_MID, 0, -22);
+}
+
+KIT_UI_DEF void kit_ui_qr_set(kit_ui_qr_t *q, const char *url)
+{
+    uint32_t n = 0;
+    while (url[n] && n < (uint32_t)(KIT_UI_QR_MAX - 1)) { q->data[n] = url[n]; n++; }
+    q->data[n] = '\0';
+    q->len = n;
+    lv_qrcode_update(q->qr, q->data, n);
+    if (q->overlay) { kit_ui_qr_close(q); }   /* o expandido some: link mudou */
+}
+
+KIT_UI_DEF void kit_ui_qr(kit_ui_qr_t *q, lv_obj_t *parent, const char *url)
+{
+    q->overlay = NULL;
+    q->saved_bright = KIT_UI_QR_BRIGHT;
+
+    q->qr = lv_qrcode_create(parent);
+    lv_qrcode_set_size(q->qr, KIT_UI_QR_SIZE);
+    kit_ui__qr_style(q->qr);
+    lv_obj_add_flag(q->qr, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(q->qr, 8);
+    lv_obj_add_event_cb(q->qr, kit_ui__qr_open_cb, LV_EVENT_CLICKED, q);
+
+    q->hint = kit_ui_label(parent, "Toque para expandir", KIT_COLOR_TEXT_MUTED,
+                           &kit_sans_22, 0);
+    lv_obj_add_flag(q->hint, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(q->hint, 8);
+    lv_obj_add_event_cb(q->hint, kit_ui__qr_open_cb, LV_EVENT_CLICKED, q);
+
+    kit_ui_qr_set(q, url);
 }
 
 #undef KIT_UI_DEF

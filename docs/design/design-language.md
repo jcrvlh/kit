@@ -108,7 +108,7 @@ Latin + Latin-1 (acentuação PT: ç ã õ é ê í ó ú ü …) mais um conjun
 | `kit_sans_28` | Archivo **Bold** | 28 px | Frases da Introdução (caixa normal) |
 | `kit_display_44` | Archivo **Black** | 44 px | Wordmark `KIT`, número grande do Brilho, formas/ícones grandes |
 | `kit_display_72` | Archivo **Black** | 72 px | Só ` - 0-9 A-Z Ã Ç Õ` — rótulo do resultado da Moeda (CARA/COROA/…) e número da pessoa em Sortear Times |
-| `kit_display_120` | Archivo **Black** | ~85 px | Só `0-9 - +` — número protagonista (Dados, Bingo, contador do Estouro) |
+| `kit_display_120` | Archivo **Black** | ~85 px | Só `0-9 - + B I N G O` — número protagonista (Dados, Bingo, contador do Estouro). As 5 letras existem para a chamada do Bingo sair inteira no mesmo peso (`G-51`) |
 
 > As fontes Montserrat+FA antigas (`kit_font_12/14/18/20/24`), usadas só pela
 > Test Tool no visual pré-Bauhaus, foram removidas. Do Montserrat embutido do
@@ -140,7 +140,9 @@ npx lv_font_conv@1.5.3 $C --size 28 --font Archivo-Bold.woff     -r $TEXT -o kit
 npx lv_font_conv@1.5.3 $C --size 44 --font ArchivoBlack-Regular.ttf -r 0x20-0x7F --font fa.woff -r $ICONS -o kit_display_44.c
 
 # número gigante da Dice Tool — só dígitos e sinais, sem ícones (arquivo enxuto)
-npx lv_font_conv@1.5.3 $C --size 120 --font ArchivoBlack-Regular.ttf -r 0x2B,0x2D,0x30-0x39 -o kit_display_120.c
+# (as 5 letras do B-I-N-G-O entram aqui pra chamada "G-51" do Bingo)
+npx lv_font_conv@1.5.3 $C --no-kerning --size 120 --font ArchivoBlack-Regular.ttf \
+  -r 0x2B,0x2D,0x30-0x39,0x42,0x47,0x49,0x4E,0x4F -o kit_display_120.c
 ```
 
 Depois: trocar o bloco de include gerado por `#include "lvgl.h"`, copiar os `.c`
@@ -227,6 +229,19 @@ rola e o `lv_tileview` têm o `scroll_dir` congelado pra a roleta não virar
 rolagem/troca de página. Handlers `PRESSED/PRESSING/RELEASED/PRESS_LOST/CLICKED`,
 `lv_indev_get_vect()` pro delta. Usos: sigla do **Placar/Fora** (`kit_ui_sigla`,
 3 letras) e o tempo MM:SS do **Timer** (`time_wheel_t` + `make_wheel_pair`).
+
+### QR code tocável — `kit_ui_qr` (SDK) / `qr_open_cb` (Bingo)
+Padrão único pra todo QR do KIT: **216 px** inline, legenda **"Toque para
+expandir"** (`kit_sans_22` apagado) logo abaixo, e o toque — no código ou na
+legenda — abre um **overlay de tela cheia** com o QR em **332 px** e o **brilho
+em 100 %**; toque em qualquer ponto fecha e devolve o brilho de antes. Numa tela
+de 1,8" é o que faz a câmera do celular enganchar de primeira. O QR é a exceção
+ao preto AMOLED: fundo branco, código em `KIT_COLOR_BG`, borda branca de 8 px.
+Se o link depende de um ajuste (a FAIXA do Bingo), trocá-lo fecha o expandido
+junto — senão o grande mostraria o link velho. Usos: **Bingo** (CARTELAS),
+**Adedonha** (gerador de folhas) e **Soundbox** (conversor de sons); nas Tools
+do catálogo é o componente `kit_ui_qr` de [`kit_ui.h`](../../tools-sdk/include/kit_ui.h),
+que precisa da permissão `display` no manifest.
 
 ### Modo Ampulheta — Timer
 Ligado no AJUSTE (padrão desligado, persistido). É uma ampulheta: com o KIT **de
@@ -376,8 +391,8 @@ distância da mesa, é sempre o protagonista, não a legenda.
 |---|---|---|---|
 | **Splash** | "INICIANDO" ao ligar | Fixo | Some sozinha (~1,5 s) → Introdução (1º boot) ou Home |
 | **Introdução** | 4 telas no 1º boot: marca → o que é → o que tem dentro → pronto | Overlay preto: coluna central + botão-pílula fixo no rodapé | Abre com o SFX `WELCOME` · `COMEÇAR`/`VEM VER`/`CONTINUAR` avança · `COMEÇAR` verde no fim toca `ONBOARD_DONE`, grava a flag `onboarded` e vai pra Home · BOOT sai e grava a flag |
-| **Duas dicas** (coach-mark) | Ensina os 2 gestos sem botão da Home | Overlay preto sobre a Home: título + 2 linhas (rastro de setas + frase) + `ENTENDI` no rodapé | Só aparece 1× logo após o `COMEÇAR` da Introdução · `ENTENDI` ou BOOT fecha |
-| **Home** | Launcher / slideshow de Tools | Barra de status (wordmark + ícone de Wi-Fi + bateria) + `lv_tileview` horizontal ("VER TODOS" + até 3 recentes) + pontos | Abre na Tool mais recente · arrasta na horizontal (→ direita cai na visão geral) · slide/card → Tool · deslizar pra cima → Ajustes (ou o card na seção SISTEMA de "VER TODOS") |
+| **Uma dica** (coach-mark) | Ensina o gesto sem botão da Home | Overlay preto sobre a Home: título + 1 linha (rastro de setas + frase) + `ENTENDI` no rodapé | Só aparece 1× logo após o `COMEÇAR` da Introdução · `ENTENDI` ou BOOT fecha |
+| **Home** | Launcher / slideshow de Tools | Barra de status (wordmark + ícone de Wi-Fi + bateria) + `lv_tileview` horizontal ("VER TODOS" + até 3 recentes) + pontos | Abre na Tool mais recente · arrasta na horizontal (→ direita cai na visão geral) · slide/card → Tool · Ajustes pelo card na seção SISTEMA de "VER TODOS" |
 | **Ajustes** | Lista de configurações | Titlebar + corpo rolável | Linhas → Tela / Som / Wi-Fi / Armazenamento / Modo pen drive / Atualizar firmware / Bateria / Repetir introdução / Sobre o KIT / Restaurar padrão de fábrica |
 | **Restaurar** | Confirmação de restaurar padrão de fábrica | Titlebar `RESTAURAR` + aviso rolável + botões | `RESTAURAR AGORA` (vermelho) apaga a NVS inteira (ajustes + redes Wi-Fi + recordes) e reinicia · `CANCELAR` · Tools do cartão continuam |
 | **Tela** | Sub-lista | Titlebar + corpo rolável | Linhas → Brilho / Repouso da tela |
@@ -417,9 +432,8 @@ de bateria) sobre um **slideshow** de Tools: um `lv_tileview` horizontal (`build
 slide por Tool recente. A Home **abre na Tool mais recente** (índice 1): deslizar
 da esquerda para a direita cai direto na visão geral sem passar pelas outras
 recentes; deslizar para a esquerda percorre as demais. Pontos de página no
-rodapé (traço claro = ativo). **Deslizar pra cima** em qualquer ponto da Home
-abre os **Ajustes** (`home_gesture_cb` no `s_launcher_screen`, `LV_EVENT_GESTURE`
-+ `LV_DIR_TOP`); o card "Ajustes" na grade "VER TODOS" continua valendo.
+rodapé (traço claro = ativo). Os **Ajustes** abrem pelo card "Ajustes" na grade
+"VER TODOS" — a Home não tem gesto vertical.
 
 * **Slides de Tool** (até 3) — as **3 mais usadas recentemente**, a mais recente
   primeiro. A ordem é persistida em NVS (`kit_config`, chaves `home_mru0`…`mru2`)
@@ -454,12 +468,12 @@ abre os **Ajustes** (`home_gesture_cb` no `s_launcher_screen`, `LV_EVENT_GESTURE
 
 O diagnóstico (antiga Test Tool) agora é a linha **Testes** dentro de **Sobre**.
 
-**Duas dicas** (`home_hints_show`) — coach-mark que entra **uma vez**, logo depois
+**Uma dica** (`home_hints_show`) — coach-mark que entra **uma vez**, logo depois
 do `COMEÇAR` verde da Introdução (chamado no fim de `onboarding_finish_cb`, já com
-a Home montada atrás). Overlay preto: título `DUAS DICAS` (`kit_mono_20` apagado)
-e duas linhas `hint_row` — uma calha de 64 px com um **rastro de 3 setas** (glifo
-caret repetido em `kit_mono_26` amarelo, opacidade 30→60→100 na direção do gesto:
-`»` pra direita, `⌃` empilhado pra cima) e a frase em `kit_sans_22`. Botão
+a Home montada atrás). Overlay preto: título `UMA DICA` (`kit_mono_20` apagado)
+e uma linha `hint_row` — uma calha de 64 px com um **rastro de 3 setas** (glifo
+caret `»` repetido em `kit_mono_26` amarelo, opacidade 30→60→100 pra direita) e a
+frase em `kit_sans_22`. Botão
 `ENTENDI` (amarelo) no rodapé; BOOT também fecha. Não há flag própria — só se
 alcança por `onboarding_finish_cb`, então repetir a Introdução mostra de novo.
 
@@ -536,12 +550,15 @@ API); config em Storage (`times_people` / `times_count`), sem histórico. Anima�
 > wordmark e números soltos.
 
 **Bingo** (`kit_bingo`) — titlebar (chip ← + `BINGO`) + `lv_tileview`
-horizontal de 3 páginas (`AJUSTE ◄──► GLOBO ◄──► CHAMADAS`, começa no GLOBO) +
+horizontal de 4 páginas (`AJUSTE ◄──► GLOBO ◄──► CHAMADAS ◄──► CARTELAS`,
+começa no GLOBO) +
 botão `SORTEAR` fixo no rodapé (verde). **AJUSTE**: `FAIXA` (`1-75` / `1-90`,
 pílulas) e `REINICIAR SORTEIO` (botão contornado vermelho, dois toques para
-confirmar). **GLOBO**: número sorteado grande em `kit_display_120` (só dígitos —
-`FIM` cai em `kit_display_72`), a letra da coluna `B/I/N/G/O` em `kit_mono_26`
-acima (só no 1–75), linha `ANTERIOR` + contador `N / TOTAL` — sem "wrap box".
+confirmar). **GLOBO**: a chamada inteira em `kit_display_120` — `G-51` no 1–75 (letra e
+número no **mesmo peso**, numa linha só; a fonte carrega `B I N G O` além dos
+dígitos justamente pra isso) e só o número no 1–90; `FIM` cai em
+`kit_display_72`. Abaixo, linha `ANTERIOR` + contador `N / TOTAL` — sem "wrap
+box".
 **CHAMADAS**: toggle `LISTA` / `GRADE` (persistido, padrão LISTA). **LISTA** = só
 os números já sorteados, agrupados por letra (1–75) ou dezena (1–90) em
 `kit_mono_26` — a visão de conferência pensada pra tela de 1,8"; a linha do
