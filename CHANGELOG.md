@@ -9,6 +9,19 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+- **QR Code expande ao toque.** Todo QR do KIT (Bingo, Adedonha, Soundbox)
+  ficou maior, ganhou um "Toque para expandir" embaixo e, ao tocar, abre em
+  tela cheia com o brilho no máximo - a câmera do celular engancha de primeira.
+  Toque de novo pra voltar.
+
+### Alterado
+- **Bingo:** a chamada sai inteira no mesmo tamanho - `G-51` -, em vez da letra
+  pequena acima do número. Os botões da página AJUSTE cresceram pro tamanho
+  padrão do KIT.
+- A Home não abre mais os Ajustes ao deslizar pra cima; use o cartão
+  **Ajustes** na grade "VER TODOS".
+
 ## [0.8.0] — 2026-09-08
 
 ### Alterado

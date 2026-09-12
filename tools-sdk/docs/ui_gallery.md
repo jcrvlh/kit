@@ -74,7 +74,7 @@ KIT_TOOL_EXPORT void tool_destroy(void)
 | # | Regra |
 |---|---|
 | 1 | `kit_ui_bind(api)` **antes** de qualquer helper de áudio/rng/energia/exit. |
-| 2 | As structs (`kit_ui_shell_t`, `kit_ui_chips_t`, `kit_ui_sigla_t`, `kit_ui_action_t`) são **suas** — declare `static`, zere no `tool_destroy`. |
+| 2 | As structs (`kit_ui_shell_t`, `kit_ui_chips_t`, `kit_ui_sigla_t`, `kit_ui_action_t`, `kit_ui_qr_t`) são **suas** — declare `static`, zere no `tool_destroy`. |
 | 3 | Arrays passados (`labels` da grade de chips) precisam durar tanto quanto a tela: `static const char *const[]`. |
 | 4 | O `on_select` / `on_page` roda **depois** de o visual e o `kit_ui_click()` já terem acontecido — faça ali só persistência/efeito colateral. |
 | 5 | Budget de objetos LVGL: o pool de 64 KB é dividido com o Launcher. A grade de chips gasta ~4 objetos por opção; com muitas opções, prefira um stepper (v2). |
@@ -274,6 +274,35 @@ descartados, então soltar não troca a letra sem querer.
 - **Origem:** `io.github.jcrvlh.bolaquadrado` (`build_game_result` +
   `on_touch` + `step_letter`). A versão só-toque (sem roleta) do
   `io.github.jcrvlh.fora` fica obsoleta — Fora migra pra este seletor.
+
+---
+
+## Tier 4 — QR code tocável
+
+### `kit_ui_qr_t` — QR + "Toque para expandir"
+
+```c
+typedef struct { lv_obj_t *qr, *hint, *overlay; char data[192]; uint32_t len; uint8_t saved_bright; } kit_ui_qr_t;
+
+void kit_ui_qr(kit_ui_qr_t *q, lv_obj_t *parent, const char *url);  // monta QR + legenda
+void kit_ui_qr_set(kit_ui_qr_t *q, const char *url);                // troca o link
+void kit_ui_qr_close(kit_ui_qr_t *q);                               // fecha o expandido (tela viva)
+void kit_ui_qr_reset(kit_ui_qr_t *q);                               // tool_destroy (tela já apagada)
+```
+
+O padrão do KIT para qualquer QR: **216 px** inline, a legenda "Toque para
+expandir" (`kit_sans_22` apagado) embaixo, e o toque — no código ou na legenda —
+abre um overlay de tela cheia com o QR em **332 px** e o **brilho em 100 %**.
+Tocar em qualquer ponto fecha e devolve o brilho de antes. Numa tela de 1,8" é o
+que faz a câmera do celular enganchar de primeira.
+
+Regras: o QR é a exceção ao preto AMOLED (fundo branco, código em
+`KIT_COLOR_BG`); a Tool precisa da permissão `display` no manifest (o overlay lê
+e escreve o brilho); se o link depender de um ajuste, chame `kit_ui_qr_set()` ao
+mudar — ele fecha o expandido junto, que carregaria o link velho.
+
+Origem: `kit_bingo` (página CARTELAS), adotado por `io.github.jcrvlh.adedonha`
+(gerador de folhas) e `io.github.jcrvlh.soundbox` (conversor de sons).
 
 ---
 

@@ -57,6 +57,11 @@ static const char *TAG = "KIT_BINGO";
 // Gerador de cartelas — página CARTELAS (QR). ?bolas= é preenchido com a FAIXA.
 #define CARDS_URL    "https://jcrvlh.github.io/kit/bingo.html?bolas="
 
+// QR das CARTELAS — inline, expandido (toque) e o brilho do expandido.
+#define QR_SIZE      216
+#define QR_BIG       332
+#define QR_BRIGHT    100
+
 // Suspense curto do sorteio (só troca o texto do número).
 #define SHUF_TICKS     10
 #define SHUF_TICK_MS   60
@@ -108,8 +113,7 @@ static lv_obj_t *s_reset_btn = NULL;
 static lv_obj_t *s_reset_lbl = NULL;
 
 // Página 1 — Globo
-static lv_obj_t *s_letter_lbl = NULL;
-static lv_obj_t *s_num_lbl    = NULL;
+static lv_obj_t *s_num_lbl    = NULL;   // "G-51" (1-75) ou "51" (1-90), tudo em display_120
 static lv_obj_t *s_prev_lbl   = NULL;
 static lv_obj_t *s_count_lbl  = NULL;
 static lv_obj_t *s_hint_lbl   = NULL;
@@ -130,6 +134,8 @@ static lv_obj_t *s_list_val[9];         // rótulo com os números sorteados de 
 // Página 3 — Cartelas
 static lv_obj_t *s_qr      = NULL;      // lv_qrcode com o link do gerador
 static lv_obj_t *s_qr_tag  = NULL;      // "BINGO 1-75" / "1-90" abaixo do QR
+static lv_obj_t *s_qr_full = NULL;      // overlay do QR expandido (NULL fechado)
+static uint8_t   s_qr_bright = 100;     // brilho de antes de expandir
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -252,10 +258,13 @@ static void sync_dots(void)
     }
 }
 
+static void qr_close(void);   // definido junto da página CARTELAS
+
 // Página CARTELAS — refaz o QR e o rótulo com a FAIXA atual.
 static void cards_sync(void)
 {
     if (!s_qr) return;
+    qr_close();   // o expandido carrega o link da faixa anterior
     char url[sizeof(CARDS_URL) + 4];
     int n = snprintf(url, sizeof(url), CARDS_URL "%d", s_range);
     lv_qrcode_update(s_qr, url, n);
@@ -290,18 +299,18 @@ static void sync_globo(void)
         lv_obj_set_style_text_font(s_num_lbl, &kit_display_72, 0);
         lv_label_set_text(s_num_lbl, "FIM");
         lv_obj_set_style_text_color(s_num_lbl, lv_color_hex(KIT_COLOR_TEXT_MUTED), 0);
-        lv_label_set_text(s_letter_lbl, "");
     } else if (cur == 0) {
         lv_obj_set_style_text_font(s_num_lbl, &kit_display_120, 0);
         lv_label_set_text(s_num_lbl, "-");
         lv_obj_set_style_text_color(s_num_lbl, lv_color_hex(KIT_COLOR_TEXT_MUTED), 0);
-        lv_label_set_text(s_letter_lbl, "");
     } else {
+        // Letra e número no MESMO peso, numa linha só: "G-51" (a display_120
+        // carrega B/I/N/G/O além dos dígitos justamente pra isso).
         lv_obj_set_style_text_font(s_num_lbl, &kit_display_120, 0);
-        lv_label_set_text_fmt(s_num_lbl, "%d", cur);
-        lv_obj_set_style_text_color(s_num_lbl, lv_color_hex(s_accent), 0);
         letter_for(cur, lt);
-        lv_label_set_text(s_letter_lbl, lt);
+        if (lt[0]) lv_label_set_text_fmt(s_num_lbl, "%s-%d", lt, cur);
+        else       lv_label_set_text_fmt(s_num_lbl, "%d", cur);
+        lv_obj_set_style_text_color(s_num_lbl, lv_color_hex(s_accent), 0);
     }
 
     if (prev) {
@@ -557,7 +566,6 @@ static void start_draw(void)
     s_tick = 0;
     lv_obj_set_style_text_font(s_num_lbl, &kit_display_120, 0);
     lv_obj_set_style_text_color(s_num_lbl, lv_color_hex(KIT_COLOR_TEXT), 0);
-    lv_label_set_text(s_letter_lbl, "");
 
     const kit_api_table_t *t = api();
     if (t && t->audio) t->audio->sfx(KIT_SFX_BINGO_BALL);   // estalinho discreto → número saindo
@@ -753,8 +761,8 @@ static void build_page_adjust(lv_obj_t *tile)
     lv_obj_set_size(rrow, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(rrow, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(rrow, 10, 0);
-    s_range_pills[0] = make_pill(rrow, "1-75", 58, true, range_cb, 75, &s_range_pill_lbls[0]);
-    s_range_pills[1] = make_pill(rrow, "1-90", 58, true, range_cb, 90, &s_range_pill_lbls[1]);
+    s_range_pills[0] = make_pill(rrow, "1-75", KIT_TOUCH_TARGET_COMFORTABLE, true, range_cb, 75, &s_range_pill_lbls[0]);
+    s_range_pills[1] = make_pill(rrow, "1-90", KIT_TOUCH_TARGET_COMFORTABLE, true, range_cb, 90, &s_range_pill_lbls[1]);
     add_label(sec_r, "1-75 MOSTRA A LETRA DA COLUNA.\n1-90 \xC3\x89 O BING\xC3\x83O, S\xC3\x93 N\xC3\x9AMERO.",
               KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
 
@@ -766,7 +774,7 @@ static void build_page_adjust(lv_obj_t *tile)
     field_label(sec_x, "RODADA");
 
     s_reset_btn = lv_obj_create(sec_x);
-    lv_obj_set_size(s_reset_btn, lv_pct(100), 58);
+    lv_obj_set_size(s_reset_btn, lv_pct(100), KIT_TOUCH_TARGET_COMFORTABLE);
     lv_obj_set_style_radius(s_reset_btn, 15, 0);
     lv_obj_set_style_bg_color(s_reset_btn, lv_color_hex(KIT_COLOR_RED), 0);
     lv_obj_set_style_bg_opa(s_reset_btn, LV_OPA_TRANSP, 0);
@@ -809,8 +817,6 @@ static void build_page_stage(lv_obj_t *tile)
     lv_obj_clear_flag(col, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_center(col);
 
-    s_letter_lbl = add_label(col, "", s_accent, &kit_mono_26, 6);
-    lv_obj_set_height(s_letter_lbl, 30);
     s_num_lbl = add_label(col, "-", KIT_COLOR_TEXT_MUTED, &kit_display_120, 0);
     s_prev_lbl = add_label(col, "", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 2);
     lv_obj_set_style_pad_top(s_prev_lbl, 6, 0);
@@ -857,11 +863,11 @@ static void build_page_board(lv_obj_t *tile)
 
     // toggle LISTA / GRADE
     s_view_seg = plain_box(s_board_wrap);
-    lv_obj_set_size(s_view_seg, X_CONTENT, 44);
+    lv_obj_set_size(s_view_seg, X_CONTENT, KIT_TOUCH_TARGET_MIN);
     lv_obj_set_flex_flow(s_view_seg, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(s_view_seg, 8, 0);
-    s_view_pills[0] = make_pill(s_view_seg, "LISTA", 44, true, view_cb, VIEW_LIST, &s_view_pill_lbls[0]);
-    s_view_pills[1] = make_pill(s_view_seg, "GRADE", 44, true, view_cb, VIEW_GRID, &s_view_pill_lbls[1]);
+    s_view_pills[0] = make_pill(s_view_seg, "LISTA", KIT_TOUCH_TARGET_MIN, true, view_cb, VIEW_LIST, &s_view_pill_lbls[0]);
+    s_view_pills[1] = make_pill(s_view_seg, "GRADE", KIT_TOUCH_TARGET_MIN, true, view_cb, VIEW_GRID, &s_view_pill_lbls[1]);
 
     s_table = lv_table_create(s_board_wrap);
     lv_obj_set_width(s_table, X_CONTENT);
@@ -904,6 +910,60 @@ static const char CARDS_NOTE[] =
     "Se preferir, você pode marcar a cartela pelo próprio celular, mas "
     "recomendamos o uso de papel e caneta... é mais legal!";
 
+// O QR expandido: overlay de tela cheia com o código no maior tamanho que
+// cabe e o brilho no máximo — é o que faz a câmera do celular enganchar de
+// primeira numa tela de 1,8". Toque em qualquer ponto fecha e devolve o brilho.
+static void style_qr(lv_obj_t *q)
+{
+    lv_qrcode_set_dark_color(q, lv_color_hex(KIT_COLOR_BG));
+    lv_qrcode_set_light_color(q, lv_color_white());
+    lv_qrcode_set_quiet_zone(q, true);
+    lv_obj_set_style_border_width(q, 8, 0);
+    lv_obj_set_style_border_color(q, lv_color_white(), 0);
+    lv_obj_set_style_radius(q, 3, 0);
+}
+
+static void qr_close(void)
+{
+    if (!s_qr_full) return;
+    lv_obj_delete(s_qr_full);
+    s_qr_full = NULL;
+    kit_display_set_brightness_impl(s_qr_bright);
+}
+
+static void qr_close_cb(lv_event_t *e) { (void)e; qr_close(); }
+
+static void qr_open_cb(lv_event_t *e)
+{
+    (void)e;
+    if (s_qr_full || !s_screen) return;
+    beep(1400, 18);
+
+    s_qr_bright = kit_display_get_brightness_impl();
+    kit_display_set_brightness_impl(QR_BRIGHT);
+
+    s_qr_full = lv_obj_create(s_screen);
+    lv_obj_remove_style_all(s_qr_full);
+    lv_obj_set_size(s_qr_full, KIT_DISPLAY_WIDTH, KIT_DISPLAY_HEIGHT);
+    lv_obj_set_pos(s_qr_full, 0, 0);
+    lv_obj_set_style_bg_color(s_qr_full, lv_color_hex(KIT_COLOR_BG), 0);
+    lv_obj_set_style_bg_opa(s_qr_full, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(s_qr_full, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_qr_full, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s_qr_full, qr_close_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *big = lv_qrcode_create(s_qr_full);
+    lv_qrcode_set_size(big, QR_BIG);
+    style_qr(big);
+    char url[sizeof(CARDS_URL) + 4];
+    int n = snprintf(url, sizeof(url), CARDS_URL "%d", s_range);
+    lv_qrcode_update(big, url, n);
+    lv_obj_align(big, LV_ALIGN_CENTER, 0, -18);
+
+    lv_obj_t *l = add_label(s_qr_full, "Toque para fechar", KIT_COLOR_TEXT_MUTED, &kit_sans_22, 0);
+    lv_obj_align(l, LV_ALIGN_BOTTOM_MID, 0, -22);
+}
+
 static void build_page_cards(lv_obj_t *tile)
 {
     lv_obj_set_style_pad_all(tile, 0, 0);
@@ -922,13 +982,16 @@ static void build_page_cards(lv_obj_t *tile)
     lv_obj_set_scrollbar_mode(p, LV_SCROLLBAR_MODE_AUTO);
 
     s_qr = lv_qrcode_create(p);
-    lv_qrcode_set_size(s_qr, 156);
-    lv_qrcode_set_dark_color(s_qr, lv_color_hex(KIT_COLOR_BG));
-    lv_qrcode_set_light_color(s_qr, lv_color_white());
-    lv_qrcode_set_quiet_zone(s_qr, true);
-    lv_obj_set_style_border_width(s_qr, 8, 0);
-    lv_obj_set_style_border_color(s_qr, lv_color_white(), 0);
-    lv_obj_set_style_radius(s_qr, 3, 0);
+    lv_qrcode_set_size(s_qr, QR_SIZE);
+    style_qr(s_qr);
+    lv_obj_add_flag(s_qr, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(s_qr, 8);
+    lv_obj_add_event_cb(s_qr, qr_open_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *hint = add_label(p, "Toque para expandir", KIT_COLOR_TEXT_MUTED, &kit_sans_22, 0);
+    lv_obj_add_flag(hint, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(hint, 8);
+    lv_obj_add_event_cb(hint, qr_open_cb, LV_EVENT_CLICKED, NULL);
 
     s_qr_tag = add_label(p, "BINGO 1-75", s_accent, &kit_mono_20, 3);
 
@@ -1010,7 +1073,7 @@ void kit_bingo_destroy(void)
     s_range_pills[0] = s_range_pills[1] = NULL;
     s_range_pill_lbls[0] = s_range_pill_lbls[1] = NULL;
     s_reset_btn = s_reset_lbl = NULL;
-    s_letter_lbl = s_num_lbl = s_prev_lbl = s_count_lbl = s_hint_lbl = NULL;
+    s_num_lbl = s_prev_lbl = s_count_lbl = s_hint_lbl = NULL;
     s_go_btn = s_go_lbl = NULL;
     s_board_wrap = s_board_head = s_bingo_hdr = s_table = NULL;
     s_view_seg = s_list = NULL;
@@ -1018,4 +1081,8 @@ void kit_bingo_destroy(void)
     s_view_pill_lbls[0] = s_view_pill_lbls[1] = NULL;
     for (int i = 0; i < 9; i++) s_list_val[i] = NULL;
     s_qr = s_qr_tag = NULL;
+    if (s_qr_full) {   // a screen já levou o overlay: só devolve o brilho
+        s_qr_full = NULL;
+        kit_display_set_brightness_impl(s_qr_bright);
+    }
 }

@@ -632,17 +632,19 @@ static void update_battery(void)
 }
 
 // Ícone de Wi-Fi da barra de status: escondido com o rádio desligado; âmbar
-// enquanto procura/associa; verde conectado; apagado ligado-sem-rede.
+// enquanto procura/associa; verde conectado; cinza neutro ligado-sem-rede
+// (o cinza da paleta puxa pro oliva e lia como "amarelado" no ícone).
 static void update_wifi_icon(void)
 {
     if (!s_wifi_icon) return;
-    uint32_t c = KIT_COLOR_TEXT_MUTED;
+    const uint32_t gray = 0x6C6C6C;   // cinza neutro do ícone sem rede
+    uint32_t c = gray;
     bool show = true;
     switch (kit_network_get_state()) {
     case KIT_NET_CONNECTED:    c = KIT_COLOR_GREEN;  break;
     case KIT_NET_CONNECTING:   c = KIT_COLOR_YELLOW; break;
     case KIT_NET_PROVISIONING: c = KIT_COLOR_BLUE;   break;
-    case KIT_NET_DISCONNECTED: c = KIT_COLOR_TEXT_MUTED; break;
+    case KIT_NET_DISCONNECTED: c = gray; break;
     default:                   show = false; break;   // KIT_NET_OFF
     }
     if (show) {
@@ -1352,20 +1354,6 @@ static bool home_is_covered(void)
            s_onboarding_screen || s_home_hints_screen || s_feedback_screen;
 }
 
-// Gesto na Home: deslizar pra CIMA abre os Ajustes (atalho — a outra porta é o
-// card "Ajustes" na grade "VER TODOS"). O evento borbulha de qualquer filho até
-// o s_launcher_screen (GESTURE_BUBBLE), então filtramos: só age com a Home à
-// mostra (sem overlay) e quando o gesto é mesmo vertical pra cima.
-static void home_gesture_cb(lv_event_t *e)
-{
-    (void)e;
-    if (!s_home_deck || home_is_covered()) return;
-    lv_indev_t *indev = lv_indev_active();
-    if (!indev) return;
-    if (lv_indev_get_gesture_dir(indev) == LV_DIR_TOP)
-        open_settings_cb(NULL);
-}
-
 // Recallback do Tool Manager: o catálogo do cartão mudou (instalou/removeu Tool,
 // formatou, montou um cartão novo). Roda sempre na task LVGL (via lv_async_call).
 static void launcher_catalog_changed_impl(void *unused)
@@ -1561,13 +1549,12 @@ static void repeat_onboarding_cb(lv_event_t *e)
 // Coach-mark dos gestos da Home
 // ---------------------------------------------------------------------------
 // Aparece UMA vez, logo depois do "COMEÇAR" verde da introdução, por cima da
-// Home. Ensina os dois gestos que não têm botão: deslizar pro lado abre a visão
-// geral ("VER TODOS"), deslizar pra cima abre os Ajustes. Só entra por
-// onboarding_finish_cb — nunca reaparece fora do primeiro boot.
+// Home. Ensina o único gesto que não tem botão: deslizar pro lado abre a visão
+// geral ("VER TODOS"). Só entra por onboarding_finish_cb — nunca reaparece fora
+// do primeiro boot.
 
 // Uma dica: rastro de setas (caret repetido, esmaecendo na cauda) + a frase.
-// `vertical` empilha o rastro apontando pra cima; senão fica em linha pra direita.
-static void hint_row(lv_obj_t *parent, const char *glyph, bool vertical, const char *text)
+static void hint_row(lv_obj_t *parent, const char *glyph, const char *text)
 {
     lv_obj_t *row = lv_obj_create(parent);
     lv_obj_remove_style_all(row);
@@ -1577,7 +1564,7 @@ static void hint_row(lv_obj_t *parent, const char *glyph, bool vertical, const c
     lv_obj_set_style_pad_column(row, 18, 0);
     lv_obj_clear_flag(row, LV_OBJ_FLAG_SCROLLABLE);
 
-    lv_obj_t *trail = make_group(row, vertical ? LV_FLEX_FLOW_COLUMN : LV_FLEX_FLOW_ROW);
+    lv_obj_t *trail = make_group(row, LV_FLEX_FLOW_ROW);
     lv_obj_set_width(trail, 64);   // calha fixa: alinha as duas frases
     lv_obj_set_style_pad_column(trail, 4, 0);
     lv_obj_set_style_pad_row(trail, 0, 0);
@@ -1585,7 +1572,7 @@ static void hint_row(lv_obj_t *parent, const char *glyph, bool vertical, const c
     static const lv_opa_t kFade[3] = { LV_OPA_30, LV_OPA_60, LV_OPA_COVER };
     for (int i = 0; i < 3; i++) {
         lv_obj_t *g = add_label(trail, glyph, KIT_COLOR_YELLOW, &kit_mono_26, 0);
-        lv_obj_set_style_text_opa(g, vertical ? kFade[2 - i] : kFade[i], 0);
+        lv_obj_set_style_text_opa(g, kFade[i], 0);
     }
 
     lv_obj_t *t = add_label(row, text, KIT_COLOR_TEXT, &kit_sans_22, 0);
@@ -1611,9 +1598,8 @@ static void home_hints_show(void)
     lv_obj_set_style_pad_row(col, 26, 0);
     lv_obj_align(col, LV_ALIGN_TOP_MID, 0, 64);
 
-    add_label(col, "DUAS DICAS", KIT_COLOR_TEXT_MUTED, &kit_mono_20, 3);
-    hint_row(col, KIT_ICON_CHEVRON,  false, "Deslize para o lado para ver todas as ferramentas");
-    hint_row(col, KIT_ICON_TRIANGLE, true,  "Deslize para cima para abrir os ajustes");
+    add_label(col, "UMA DICA", KIT_COLOR_TEXT_MUTED, &kit_mono_20, 3);
+    hint_row(col, KIT_ICON_CHEVRON, "Deslize para o lado para ver todas as ferramentas");
 
     lv_obj_t *btn = make_button(s_home_hints_screen, "ENTENDI", home_hints_close_cb, true);
     lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -20);
@@ -4250,7 +4236,6 @@ kit_err_t kit_launcher_init(void)
     s_launcher_screen = lv_obj_create(NULL);
     lv_obj_set_style_bg_color(s_launcher_screen, lv_color_hex(KIT_COLOR_BG), 0);
     lv_obj_clear_flag(s_launcher_screen, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_event_cb(s_launcher_screen, home_gesture_cb, LV_EVENT_GESTURE, NULL);
 
     build_home(s_launcher_screen);
     kit_tool_manager_set_catalog_changed_cb(launcher_catalog_changed);
