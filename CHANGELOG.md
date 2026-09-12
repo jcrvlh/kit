@@ -9,6 +9,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.9.0] — 2026-09-12
+
 ### Adicionado
 - **QR Code expande ao toque.** Todo QR do KIT (Bingo, Adedonha, Soundbox)
   ficou maior, ganhou um "Toque para expandir" embaixo e, ao tocar, abre em

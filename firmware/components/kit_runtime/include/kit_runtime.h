@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 8
+#define KIT_VERSION_MINOR 9
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -43,7 +43,12 @@ extern "C" {
 //        A Soundbox sai do Core pro catálogo (io.github.jcrvlh.soundbox) e é a
 //        primeira Tool a ler o cartão fora da caixa privada do kit_storage_api_t.
 //        Superfície nova pras Tools -> bump obrigatório.
-#define KIT_VERSION_STRING "0.8.0"
+// 0.9.0: alinha com firmware/version.txt (QR que expande ao toque nas telas
+//        que têm um, chamada do Bingo em peso único, Home sem o gesto
+//        vertical — o componente kit_ui_qr é header-only no tools-sdk e só usa
+//        display->get_screen/set_brightness, que já existiam: nenhuma
+//        superfície nova pras Tools)
+#define KIT_VERSION_STRING "0.9.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.
