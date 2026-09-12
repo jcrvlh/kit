@@ -80,10 +80,13 @@ void kit_display_restore_rotation_impl(void)
     s_rot = s_base_rot;
 }
 
-// Tamanho do buffer de desenho: 368 x 16 linhas em RGB565 (2 bytes por pixel).
+// Tamanho do buffer de desenho: 368 x 24 linhas em RGB565 (2 bytes por pixel).
 // Eram 40 linhas na PSRAM — ver a alocação em kit_display_init() para o porquê
-// da troca (bounce buffer de DMA por quadro).
-#define BUFFER_LINES 16
+// da troca (bounce buffer de DMA por quadro). Depois caiu pra 16 pra dar folga
+// de RAM interna pro Wi-Fi/catálogo; 24 é o meio-termo — menos chunks de flush
+// (menos overhead de CASET/RASET por scroll) mantendo o buffer bem menor que
+// os 40 originais. Se voltar a faltar RAM interna sob Wi-Fi, cair de novo.
+#define BUFFER_LINES 24
 #define BUFFER_SIZE (KIT_DISPLAY_WIDTH * BUFFER_LINES * sizeof(lv_color16_t))
 
 static uint8_t *s_buf1 = NULL;
@@ -247,6 +250,10 @@ kit_err_t kit_display_init(void)
         notify_lvgl_flush_ready,
         s_disp
     );
+    // Testado a 60 MHz: piorou especificamente o swipe horizontal da Home
+    // (troca de página do tileview), mesmo com o buffer maior. Revertido pro
+    // default do vendor (40 MHz) — ver kit_display.c BUFFER_LINES para o outro
+    // lado do bisect.
     ret = esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)SPI2_HOST, &io_config, &s_io_handle);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Falha ao criar Painel IO QSPI: %s", esp_err_to_name(ret));

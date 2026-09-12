@@ -84,6 +84,16 @@ tools-sdk/examples/**/build/
 # publica-tool, design-bauhaus, marketing-assets). Ferramental local, fora do repo.
 /.claude/skills/
 
+# Docs de Tools do catálogo (vivem em kit-tools, não built-in no Core) — notas
+# locais, fora do repo público.
+/docs/tools/veto.md
+/docs/tools/testa.md
+/docs/tools/pavio.md
+/docs/tools/adedonha.md
+/docs/tools/repete.md
+/docs/tools/quebragelo.md
+/docs/tools/mimica.md
+
 # Binários de teste nativo dos exemplos (regeneráveis via cmake/kit-cli)
 tools-sdk/examples/*/test_*
 !tools-sdk/examples/*/test_*.c

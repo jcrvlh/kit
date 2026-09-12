@@ -51,6 +51,18 @@ typedef struct {
         unsigned int use_qspi_interface: 1;
         unsigned int reset_level: 1;
     } flags;
+    // KIT: cache da última janela de endereçamento (CASET/RASET) enviada ao
+    // painel. O LVGL, quando o buffer de flush é menor que a área invalidada,
+    // chama draw_bitmap várias vezes em sequência com o MESMO x_start/x_end e
+    // só o y mudando (ele varre a área em fatias horizontais). Sem isto, cada
+    // fatia pagava 2 transações síncronas de comando (CASET+RASET) mesmo com a
+    // coluna igual à da fatia anterior — overhead fixo que pesa mais quanto
+    // mais estreita/alta for a área (típico do swipe horizontal da Home, que
+    // invalida uma faixa vertical fina a cada frame de arraste).
+    bool caset_valid;
+    bool raset_valid;
+    int last_x_start, last_x_end;
+    int last_y_start, last_y_end;
 } co5300_panel_t;
 
 esp_err_t esp_lcd_new_panel_co5300_spi(const esp_lcd_panel_io_handle_t io, const esp_lcd_panel_dev_config_t *panel_dev_config, esp_lcd_panel_handle_t *ret_panel)
@@ -270,18 +282,30 @@ static esp_err_t panel_co5300_draw_bitmap(esp_lcd_panel_t *panel, int x_start, i
     y_end += co5300->y_gap;
 
     // define an area of frame memory where MCU can access
-    ESP_RETURN_ON_ERROR(tx_param(co5300, io, LCD_CMD_CASET, (uint8_t[]) {
-        (x_start >> 8) & 0xFF,
-        x_start & 0xFF,
-        ((x_end - 1) >> 8) & 0xFF,
-        (x_end - 1) & 0xFF,
-    }, 4), TAG, "send command failed");
-    ESP_RETURN_ON_ERROR(tx_param(co5300, io, LCD_CMD_RASET, (uint8_t[]) {
-        (y_start >> 8) & 0xFF,
-        y_start & 0xFF,
-        ((y_end - 1) >> 8) & 0xFF,
-        (y_end - 1) & 0xFF,
-    }, 4), TAG, "send command failed");
+    // KIT: só reenvia CASET/RASET quando a janela realmente muda em relação à
+    // última chamada — ver o comentário do cache em co5300_panel_t.
+    if (!co5300->caset_valid || co5300->last_x_start != x_start || co5300->last_x_end != x_end) {
+        ESP_RETURN_ON_ERROR(tx_param(co5300, io, LCD_CMD_CASET, (uint8_t[]) {
+            (x_start >> 8) & 0xFF,
+            x_start & 0xFF,
+            ((x_end - 1) >> 8) & 0xFF,
+            (x_end - 1) & 0xFF,
+        }, 4), TAG, "send command failed");
+        co5300->last_x_start = x_start;
+        co5300->last_x_end = x_end;
+        co5300->caset_valid = true;
+    }
+    if (!co5300->raset_valid || co5300->last_y_start != y_start || co5300->last_y_end != y_end) {
+        ESP_RETURN_ON_ERROR(tx_param(co5300, io, LCD_CMD_RASET, (uint8_t[]) {
+            (y_start >> 8) & 0xFF,
+            y_start & 0xFF,
+            ((y_end - 1) >> 8) & 0xFF,
+            (y_end - 1) & 0xFF,
+        }, 4), TAG, "send command failed");
+        co5300->last_y_start = y_start;
+        co5300->last_y_end = y_end;
+        co5300->raset_valid = true;
+    }
     // transfer frame buffer
     size_t len = (x_end - x_start) * (y_end - y_start) * co5300->fb_bits_per_pixel / 8;
     // KIT: o original descartava este retorno e devolvia ESP_OK sempre. Quando

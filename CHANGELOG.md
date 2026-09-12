@@ -9,6 +9,19 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.14.0] — 2026-09-12
+
+### Alterado
+- **Home mais fluida ao deslizar e rolar.** Ajustes internos de renderização
+  do display (buffer de desenho maior, menos comandos redundantes no
+  controlador da tela) e os ícones das Tools passam a ser um único desenho
+  leve em vez de várias peças montadas na hora — a rolagem vertical da grade
+  "VER TODOS" ficou nitidamente mais leve.
+- **Ícones das Tools sem a caixa de fundo.** Tanto na grade "VER TODOS" quanto
+  nos cartões de "últimos acessados", o ícone aparece direto sobre a cor da
+  Tool, sem a caixinha semi-transparente atrás — e um pouco maior nos cartões
+  de recentes.
+
 ## [0.13.0] — 2026-09-12
 
 ### Adicionado
