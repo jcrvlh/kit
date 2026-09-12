@@ -24,6 +24,7 @@ static TaskHandle_t   s_dns_task;
 static esp_netif_t   *s_ap_netif;
 static volatile bool  s_active;
 static volatile bool  s_dns_run;
+static volatile bool  s_stopping;   // teardown em curso na kit_portal_stop
 
 // ---------------------------------------------------------------------------
 // Página do portal (auto-contida, sem CDN)
@@ -328,6 +329,7 @@ static void start_httpd(void)
 kit_err_t kit_network_portal_start(const char *ap_name)
 {
     if (s_active) return KIT_OK;
+    if (s_stopping) return KIT_FAIL;   // teardown anterior ainda em curso
 
     // Garante STA no ar (scan + associação usam a interface STA).
     kit_network_start();
@@ -354,19 +356,47 @@ kit_err_t kit_network_portal_start(const char *ap_name)
     return KIT_OK;
 }
 
-kit_err_t kit_network_portal_stop(void)
+// kit_network_portal_stop() é chamada direto de callback de LVGL (não há task
+// de LVGL própria neste firmware — lv_timer_handler() roda no loop principal).
+// httpd_stop() e o join no dns_task (até 1-2s, recvfrom() só nota s_dns_run
+// depois do próprio SO_RCVTIMEO de 1s) bloqueavam esse loop inteiro — tela
+// congelada ao fechar o portal. Todo o teardown lento sai daqui numa task
+// curta; a chamada original só sinaliza e retorna.
+static void portal_stop_task(void *arg)
 {
-    if (!s_active) return KIT_OK;
-    s_active = false;
+    (void)arg;
+    httpd_handle_t httpd = s_httpd;
+    s_httpd = NULL;
+    if (httpd) httpd_stop(httpd);
 
-    if (s_httpd) { httpd_stop(s_httpd); s_httpd = NULL; }
-    s_dns_run = false;
     for (int i = 0; i < 20 && s_dns_task; i++) vTaskDelay(pdMS_TO_TICKS(100));
 
     // Volta para STA puro; o netif do AP fica alocado para reuso.
     esp_wifi_set_mode(WIFI_MODE_STA);
 
+    s_stopping = false;
     ESP_LOGI(TAG, "portal encerrado");
+    vTaskDelete(NULL);
+}
+
+kit_err_t kit_network_portal_stop(void)
+{
+    if (!s_active) return KIT_OK;
+    s_active = false;
+    s_dns_run = false;
+    s_stopping = true;
+
+    if (xTaskCreate(portal_stop_task, "kit_portal_stop", 3072, NULL, 4, NULL) != pdPASS) {
+        // Sem RAM pra task nova — melhor travar 1-2s do que vazar o AP/httpd.
+        ESP_LOGW(TAG, "portal_stop_task falhou ao criar — encerrando na chamada");
+        httpd_handle_t httpd = s_httpd;
+        s_httpd = NULL;
+        if (httpd) httpd_stop(httpd);
+        for (int i = 0; i < 20 && s_dns_task; i++) vTaskDelay(pdMS_TO_TICKS(100));
+        esp_wifi_set_mode(WIFI_MODE_STA);
+        s_stopping = false;
+    }
+
     return KIT_OK;
 }
 

@@ -9,6 +9,16 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Corrigido
+- **Configurar o Wi-Fi não trava mais o KIT.** Ao abrir Ajustes → Wi-Fi →
+  Configurar rede, a tela congelava (às vezes até reiniciar sozinha) ou
+  aparecia "misturada", com pedaços da tela antiga sobre a nova. Os quadros
+  estavam sendo descartados em silêncio enquanto o Wi-Fi do portal estava no
+  ar; agora a tela continua respondendo normalmente durante toda a
+  configuração.
+- **Sair da tela de configuração de Wi-Fi é instantâneo.** O botão de voltar
+  segurava a interface por 1 a 2 segundos enquanto o portal era desligado.
+
 ## [0.10.0] — 2026-09-12
 
 ### Alterado
