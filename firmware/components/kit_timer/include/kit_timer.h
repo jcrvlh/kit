@@ -14,11 +14,16 @@ extern "C" {
  *
  * Duas páginas (tileview, arrasta na horizontal), no mesmo idioma da
  * Dice / Bottle / Coin:
- *   0 AJUSTE     — modo (CRONÔMETRO ↑ / REGRESSIVO ↓); no regressivo, tempos
- *                  fixos (3/5/10/15/30 min) + roda MM:SS (a mesma lv_roller
- *                  da Coin Tool) para digitar o tempo.
+ *   0 AJUSTE     — um único seletor MODO com 4 opções mutuamente exclusivas:
+ *                  CRONÔMETRO (conta pra cima), REGRESSIVO (tempos fixos
+ *                  3/5/10/15/30 min + roda de arraste MM:SS), AMPULHETA
+ *                  (corre de cabeça pra baixo) e POMODORO (FOCO/DESCANSO).
+ *                  Cada opção revela sua própria configuração logo abaixo.
  *   1 RELÓGIO    — só o mostrador MM:SS e dois botões: PARAR e COMEÇAR
  *                  (alterna COMEÇAR → PAUSAR → CONTINUAR). Página inicial.
+ *                  No Pomodoro, uma bolinha ao lado do rótulo marca a fase
+ *                  (amarela=FOCO, verde=DESCANSO); ao zerar, o mostrador vira
+ *                  progressivo (fase "atrasada") até tocar em INTERVALO/FOCO.
  *
  * Enquanto conta, a Tool segura o repouso/desligamento (kit_power keep-awake)
  * e apenas escurece o painel após ~15 s sem toque, sem apagar. Ao zerar a

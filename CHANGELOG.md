@@ -9,6 +9,25 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.12.0] — 2026-09-12
+
+### Adicionado
+- **Modo Pomodoro na Timer Tool.** Alterna FOCO e DESCANSO, mas não sozinho:
+  ao zerar uma fase o mostrador vira um cronômetro progressivo até você tocar
+  em **INTERVALO** ou **FOCO** para seguir para a próxima. Uma bolinha
+  discreta ao lado do relógio marca a fase (amarela = FOCO, verde =
+  DESCANSO); os tempos de FOCO e DESCANSO são configuráveis (padrão 25 / 5
+  min).
+
+### Alterado
+- **Timer ganha um único seletor MODO** (Cronômetro / Regressivo / Ampulheta /
+  Pomodoro) no lugar de pílulas Ligado/Desligado espalhadas pela tela de
+  Ajuste — cada opção mostra só a sua própria configuração.
+- **Legibilidade da tela de Ajuste do Timer:** textos de ajuda maiores e em
+  cor cheia (Ampulheta e Pomodoro), etiqueta de status do relógio maior, e os
+  tempos fixos (3/5/10/15/30 min) reorganizados em linhas de 3 em vez de 5
+  espremidos numa linha só.
+
 ## [0.11.0] — 2026-09-12
 
 ### Corrigido
