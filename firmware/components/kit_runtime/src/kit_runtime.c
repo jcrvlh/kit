@@ -469,7 +469,11 @@ void kit_runtime_run(void)
 
         // Confere os botões físicos ~a cada 200 ms (o AXP2101 mantém o evento
         // latcheado; poll raro evita disputa no barramento I2C compartilhado).
-        if (now - last_btn_us >= 200000) {
+        // Com a tela apagada só o PWR importa (BOOT é ignorado nesse estado,
+        // ver poll_system_buttons) — 500 ms ainda acorda sem atraso perceptível
+        // e poupa leituras I2C enquanto dorme.
+        uint32_t btn_period_us = s_screen_on ? 200000 : 500000;
+        if (now - last_btn_us >= btn_period_us) {
             last_btn_us = now;
             poll_system_buttons();
         }
