@@ -1056,7 +1056,7 @@ static void build_page_adjust(lv_obj_t *tile)
     lv_obj_set_style_pad_column(mode_row, 8, 0);
     static const char *MODE_LABELS[] = { "CRON\xC3\x94METRO", "REGRESSIVO" };
     for (int i = 0; i < 2; i++)
-        s_mode_pills[i] = make_pill(mode_row, MODE_LABELS[i], 54, mode_pill_cb, i,
+        s_mode_pills[i] = make_pill(mode_row, MODE_LABELS[i], KIT_TOUCH_TARGET_COMFORTABLE, mode_pill_cb, i,
                                     &s_mode_pill_lbls[i]);
 
     // -------- SÓ NO REGRESSIVO --------
@@ -1074,7 +1074,7 @@ static void build_page_adjust(lv_obj_t *tile)
     for (int i = 0; i < PRESET_COUNT; i++) {
         char n[4];
         snprintf(n, sizeof(n), "%d", PRESET_MIN[i]);
-        s_preset_pills[i] = make_pill(preset_row, n, 56, preset_pill_cb, i,
+        s_preset_pills[i] = make_pill(preset_row, n, KIT_TOUCH_TARGET_COMFORTABLE, preset_pill_cb, i,
                                       &s_preset_pill_lbls[i]);
     }
 
@@ -1101,7 +1101,7 @@ static void build_page_adjust(lv_obj_t *tile)
     lv_obj_set_style_pad_column(flip_row, 8, 0);
     static const char *FLIP_LABELS[] = { "LIGADO", "DESLIGADO" };
     for (int i = 0; i < 2; i++)
-        s_flip_pills[i] = make_pill(flip_row, FLIP_LABELS[i], 54, flip_pill_cb, i,
+        s_flip_pills[i] = make_pill(flip_row, FLIP_LABELS[i], KIT_TOUCH_TARGET_COMFORTABLE, flip_pill_cb, i,
                                     &s_flip_pill_lbls[i]);
 
     s_flip_cfg = plain_box(p);

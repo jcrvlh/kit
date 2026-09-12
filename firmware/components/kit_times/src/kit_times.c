@@ -509,11 +509,11 @@ static void build_page_adjust(lv_obj_t *tile)
     lv_obj_set_size(step, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(step, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(step, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    make_pill(step, "-", 60, false, people_cb, -1, NULL);
+    make_pill(step, "-", KIT_TOUCH_TARGET_COMFORTABLE, false, people_cb, -1, NULL);
     s_people_lbl = add_label(step, "4", KIT_COLOR_TEXT, &kit_display_44, 0);
-    make_pill(step, "+", 60, false, people_cb, 1, NULL);
-    lv_obj_set_width(lv_obj_get_child(step, 0), 72);
-    lv_obj_set_width(lv_obj_get_child(step, 2), 72);
+    make_pill(step, "+", KIT_TOUCH_TARGET_COMFORTABLE, false, people_cb, 1, NULL);
+    lv_obj_set_width(lv_obj_get_child(step, 0), KIT_TOUCH_TARGET_COMFORTABLE);
+    lv_obj_set_width(lv_obj_get_child(step, 2), KIT_TOUCH_TARGET_COMFORTABLE);
 
     // -------- TIMES --------
     lv_obj_t *sec_t = plain_box(p);
@@ -529,7 +529,7 @@ static void build_page_adjust(lv_obj_t *tile)
     for (int i = 0; i < TEAMS_OPT_COUNT; i++) {
         char n[4];
         snprintf(n, sizeof(n), "%d", TEAMS_OPTS[i]);
-        s_teams_pills[i] = make_pill(trow, n, 58, true, teams_pill_cb, i, &s_teams_pill_lbls[i]);
+        s_teams_pills[i] = make_pill(trow, n, KIT_TOUCH_TARGET_COMFORTABLE, true, teams_pill_cb, i, &s_teams_pill_lbls[i]);
     }
 }
 

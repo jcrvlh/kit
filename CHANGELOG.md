@@ -9,6 +9,17 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.10.0] — 2026-09-12
+
+### Alterado
+- **O KIT agora guarda até 32 Tools do catálogo** ao mesmo tempo (era 16), além
+  das que já vêm de fábrica. A barra `TOOLS X/Y` da tela Catálogo e o texto
+  "Sobre o limite" acompanham o número novo.
+- **Botões das telas AJUSTE maiores em todas as Tools de fábrica.** Dados,
+  Garrafa, Moeda, Timer, Times e Placar seguem agora o mesmo tamanho de toque do
+  Bingo (80 px) - chips de opção, botões `-`/`+` e o APAGAR do Placar. Menos erro
+  de dedo numa tela de 1,8".
+
 ## [0.9.0] — 2026-09-12
 
 ### Adicionado

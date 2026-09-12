@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 9
+#define KIT_VERSION_MINOR 10
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -48,7 +48,10 @@ extern "C" {
 //        vertical — o componente kit_ui_qr é header-only no tools-sdk e só usa
 //        display->get_screen/set_brightness, que já existiam: nenhuma
 //        superfície nova pras Tools)
-#define KIT_VERSION_STRING "0.9.0"
+// 0.10.0: alinha com firmware/version.txt (teto do catálogo de Tools do
+//        cartão 16->32 e botoes das telas AJUSTE das Tools de fábrica no
+//        piso de 80 px — nenhuma superfície nova pras Tools)
+#define KIT_VERSION_STRING "0.10.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

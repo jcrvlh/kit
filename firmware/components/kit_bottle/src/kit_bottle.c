@@ -32,7 +32,7 @@ static const char *TAG = "KIT_BOTTLE";
 #define B_TITLEBAR   88
 #define B_FOOT       104
 #define B_CHIP       56
-#define B_STEP       56
+#define B_STEP       KIT_TOUCH_TARGET_COMFORTABLE   // 80
 #define B_GO_H       76
 
 #define B_PAGE_H     (KIT_DISPLAY_HEIGHT - B_TITLEBAR - B_FOOT) // 256

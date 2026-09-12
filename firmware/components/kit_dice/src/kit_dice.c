@@ -25,7 +25,7 @@ static const char *TAG = "KIT_DICE";
 #define D_TITLEBAR   88
 #define D_FOOT       104
 #define D_CHIP       56
-#define D_STEP       56
+#define D_STEP       KIT_TOUCH_TARGET_COMFORTABLE   // 80
 #define D_ROLL_H     76
 #define D_ROLL_MARGIN 18                                          // botão -> base da tela
 #define D_PAGE_H     (KIT_DISPLAY_HEIGHT - D_TITLEBAR - D_FOOT)   // 256
@@ -498,7 +498,7 @@ static void build_page_setup(lv_obj_t *tile)
 
     for (int i = 0; i < DICE_KINDS; i++) {
         lv_obj_t *c = lv_obj_create(chips);
-        lv_obj_set_size(c, 80, 54);
+        lv_obj_set_size(c, 80, KIT_TOUCH_TARGET_COMFORTABLE);
         lv_obj_set_style_bg_color(c, lv_color_hex(KIT_COLOR_SURFACE), 0);
         lv_obj_set_style_border_width(c, 0, 0);
         lv_obj_set_style_radius(c, 15, 0);
