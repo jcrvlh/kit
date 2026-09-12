@@ -777,7 +777,7 @@ static void seg_grid(lv_obj_t *parent, const char *title, const char *const *opt
 static void seg_row(lv_obj_t *parent, const char *title, const char *const *opts,
                     int n, lv_event_cb_t cb, lv_obj_t **pills, lv_obj_t **lbls)
 {
-    seg_grid(parent, title, opts, n, n, 58, cb, pills, lbls);
+    seg_grid(parent, title, opts, n, n, KIT_TOUCH_TARGET_COMFORTABLE, cb, pills, lbls);
 }
 
 static void build_name_editor(lv_obj_t *parent)
@@ -791,7 +791,7 @@ static void build_name_editor(lv_obj_t *parent)
 
     // Stepper do jogador em edição: ◄ | JOGADOR N | ► — mesmo formato do Fora.
     lv_obj_t *pick = plain_box(sec);
-    lv_obj_set_size(pick, lv_pct(100), 58);
+    lv_obj_set_size(pick, lv_pct(100), KIT_TOUCH_TARGET_COMFORTABLE);
     lv_obj_set_flex_flow(pick, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(pick, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(pick, 10, 0);
@@ -804,7 +804,7 @@ static void build_name_editor(lv_obj_t *parent)
         }
         lv_obj_t *b = lv_obj_create(pick);
         lv_obj_remove_style_all(b);
-        lv_obj_set_size(b, 58, 58);
+        lv_obj_set_size(b, KIT_TOUCH_TARGET_COMFORTABLE, KIT_TOUCH_TARGET_COMFORTABLE);
         lv_obj_set_style_bg_color(b, lv_color_hex(KIT_COLOR_SURFACE), 0);
         lv_obj_set_style_bg_opa(b, LV_OPA_COVER, 0);
         lv_obj_set_style_radius(b, 16, 0);
@@ -845,7 +845,7 @@ static void build_name_editor(lv_obj_t *parent)
 
     // APAGAR
     s_name_clear = lv_obj_create(sec);
-    lv_obj_set_size(s_name_clear, lv_pct(100), 56);
+    lv_obj_set_size(s_name_clear, lv_pct(100), KIT_TOUCH_TARGET_COMFORTABLE);
     lv_obj_set_style_bg_color(s_name_clear, lv_color_hex(KIT_COLOR_SURFACE), 0);
     lv_obj_set_style_bg_opa(s_name_clear, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(s_name_clear, 0, 0);
@@ -853,6 +853,7 @@ static void build_name_editor(lv_obj_t *parent)
     lv_obj_set_style_pad_all(s_name_clear, 0, 0);
     lv_obj_clear_flag(s_name_clear, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(s_name_clear, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_ext_click_area(s_name_clear, 8);
     lv_obj_add_event_cb(s_name_clear, name_clear_cb, LV_EVENT_CLICKED, NULL);
     lv_obj_center(add_label(s_name_clear, "APAGAR", KIT_COLOR_TEXT_MUTED, &kit_mono_20, 2));
 }
@@ -877,7 +878,7 @@ static void build_page_adjust(lv_obj_t *tile)
     seg_row(p, "JOGADORES", PLAYERS_LBL, 3, players_cb, s_players_pills, s_players_lbls);
     build_name_editor(p);
     // META tem 6 opções — quebra em 2 linhas de 3 pra caber botão maior.
-    seg_grid(p, "META", META_LBL, META_N, 3, 68, meta_cb, s_meta_pills, s_meta_lbls);
+    seg_grid(p, "META", META_LBL, META_N, 3, KIT_TOUCH_TARGET_COMFORTABLE, meta_cb, s_meta_pills, s_meta_lbls);
 }
 
 static void build_page_board(lv_obj_t *tile)

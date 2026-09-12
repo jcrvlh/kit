@@ -21,7 +21,9 @@ extern "C" {
  */
 
 #define KIT_CATALOG_URL "https://jcrvlh.github.io/kit-tools/index.json"
-#define KIT_CATALOG_MAX 24
+#define KIT_CATALOG_MAX 32   // acompanha KIT_TOOL_CATALOG_MAX: a lista
+                             // online nunca pode ser menor que o teto
+                             // de Tools instaláveis
 
 typedef enum {
     KIT_CAT_NOT_INSTALLED = 0,

@@ -554,7 +554,7 @@ static lv_obj_t *make_step_btn(lv_obj_t *parent, const char *sym,
                                 lv_event_cb_t cb, int code)
 {
     lv_obj_t *b = lv_obj_create(parent);
-    lv_obj_set_size(b, 68, 68);
+    lv_obj_set_size(b, KIT_TOUCH_TARGET_COMFORTABLE, KIT_TOUCH_TARGET_COMFORTABLE);
     lv_obj_set_style_bg_color(b, lv_color_hex(KIT_COLOR_SURFACE), 0);
     lv_obj_set_style_border_width(b, 0, 0);
     lv_obj_set_style_radius(b, 20, 0);
@@ -604,7 +604,7 @@ static void build_page_setup(lv_obj_t *tile)
     static const char *MODE_LABELS[] = { "MOEDA", "SIM/N\xC3\x83O", "CUSTOM" };
     for (int i = 0; i < MODE_COUNT; i++) {
         lv_obj_t *c = lv_obj_create(mode_row);
-        lv_obj_set_height(c, 54);
+        lv_obj_set_height(c, KIT_TOUCH_TARGET_COMFORTABLE);
         lv_obj_set_flex_grow(c, 1);
         lv_obj_set_style_bg_color(c, lv_color_hex(KIT_COLOR_SURFACE), 0);
         lv_obj_set_style_bg_opa(c, LV_OPA_COVER, 0);
@@ -679,7 +679,7 @@ static void build_page_setup(lv_obj_t *tile)
     static const char *BO_LABELS[] = { "1", "3", "5", "7" };
     for (int i = 0; i < BESTOF_COUNT; i++) {
         lv_obj_t *c = lv_obj_create(bo_row);
-        lv_obj_set_size(c, 78, 54);
+        lv_obj_set_size(c, 78, KIT_TOUCH_TARGET_COMFORTABLE);
         lv_obj_set_style_bg_color(c, lv_color_hex(KIT_COLOR_SURFACE), 0);
         lv_obj_set_style_bg_opa(c, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(c, 0, 0);
@@ -699,7 +699,7 @@ static void build_page_setup(lv_obj_t *tile)
 
     // -------- PESO --------
     lv_obj_t *weight_row = plain_box(p);
-    lv_obj_set_size(weight_row, lv_pct(100), 68);
+    lv_obj_set_size(weight_row, lv_pct(100), KIT_TOUCH_TARGET_COMFORTABLE);
     lv_obj_set_flex_flow(weight_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(weight_row, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(weight_row, 8, 0);

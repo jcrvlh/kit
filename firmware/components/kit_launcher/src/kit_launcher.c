@@ -142,7 +142,7 @@ static const home_tool_t HOME_TOOLS_BUILTIN[] = {
 
 // Grade efetiva da Home: built-ins + o catálogo dinâmico do cartão SD
 // (kit_tool_manager_get_count/get_entry), montada uma vez em build_home_tools().
-#define KIT_HOME_TOOLS_MAX (HOME_TOOLS_BUILTIN_N + 16)
+#define KIT_HOME_TOOLS_MAX (HOME_TOOLS_BUILTIN_N + 32)
 static home_tool_t s_home_tools[KIT_HOME_TOOLS_MAX];
 static int         s_home_tools_n = 0;
 
@@ -3038,7 +3038,7 @@ static void catalog_limit_page(lv_obj_t *tile)
     struct { const char *t, *b; } steps[] = {
         { "POR QUE TEM UM LIMITE?",
           "O KIT guarda as Tools que voc\xC3\xAA baixa num cart\xC3\xA3ozinho de mem\xC3\xB3ria. "
-          "Cabe at\xC3\xA9 16 Tools do cat\xC3\xA1logo ao mesmo tempo, al\xC3\xA9m das que j\xC3\xA1 "
+          "Cabe at\xC3\xA9 32 Tools do cat\xC3\xA1logo ao mesmo tempo, al\xC3\xA9m das que j\xC3\xA1 "
           "v\xC3\xAAm de f\xC3\xA1" "brica." },
         { "DEU O LIMITE?",
           "Segure o card de uma Tool que voc\xC3\xAA n\xC3\xA3o usa, na tela inicial, e toque "
