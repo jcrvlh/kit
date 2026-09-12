@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 11
+#define KIT_VERSION_MINOR 12
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -54,7 +54,11 @@ extern "C" {
 // 0.11.0: alinha com firmware/version.txt (configurar Wi-Fi travava/embaralhava
 //        a tela — buffers do LVGL saíram da PSRAM pra RAM interna DMA-capaz;
 //        nenhuma superfície nova pras Tools)
-#define KIT_VERSION_STRING "0.11.0"
+// 0.12.0: alinha com firmware/version.txt (Timer ganha Modo Pomodoro, seletor
+//        MODO unificado (Cronômetro/Regressivo/Ampulheta/Pomodoro) e passe de
+//        legibilidade nos textos/botões da tela AJUSTE — nenhuma superfície
+//        nova pras Tools)
+#define KIT_VERSION_STRING "0.12.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

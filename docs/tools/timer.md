@@ -43,12 +43,26 @@ coisa que o botão **COMEÇAR** (`kit_timer_toggle`, via `kit_runtime`).
 
 ## Tela AJUSTE
 
-- **MODO** — `CRONÔMETRO` (conta para cima a partir de `00:00`) ou `REGRESSIVO`
-  (conta para baixo). Trocar de modo zera uma contagem em andamento.
-- Só no **REGRESSIVO**:
+Um único seletor **MODO**, em grade 2×2, com 4 opções mutuamente exclusivas —
+trocar de modo sempre para uma contagem em andamento e revela, logo abaixo, só
+a configuração do modo escolhido (as roletas são de arraste — mesmo gesto da
+sigla do Placar — não `lv_roller`):
+
+- **CRONÔMETRO** — conta para cima a partir de `00:00`. Sem configuração.
+- **REGRESSIVO**
   - **TEMPOS FIXOS · MIN** — pílulas de um toque: `3 · 5 · 10 · 15 · 30`.
-  - **OU DEFINA** — duas rodas (`lv_roller`, a mesma da Coin Tool): minutos
-    `00–99` e segundos `00–59`. Mexer numa roda limpa o destaque do preset.
+  - **OU DEFINA** — par de roletas MM:SS de arraste (minutos `00–99`, segundos
+    `00–59`). Mexer numa roleta limpa o destaque do preset.
+- **AMPULHETA** — com o KIT de cabeça pra baixo o timer corre e a tela gira
+  180°; qualquer outra posição pausa e guarda o restante (orientação lida pelo
+  acelerômetro). Uma roleta MM:SS define o tempo cheio. Segura a tela acesa
+  (o acelerômetro depende do painel ligado).
+- **POMODORO** — alterna FOCO e DESCANSO, mas não sozinho: ao zerar uma fase,
+  o mostrador vira um cronômetro progressivo ("atrasado") até a pessoa tocar
+  em **INTERVALO** / **FOCO** pra seguir pra próxima. Duas
+  roletas MM:SS configuram o tempo de FOCO e de DESCANSO (padrão 25:00 / 5:00).
+  Na tela RELÓGIO, uma bolinha ao lado do rótulo marca a fase (amarela = FOCO,
+  verde = DESCANSO); os dígitos ficam na cor da fase enquanto atrasado.
 
 A configuração (`modo` + `segundos`) é salva na hora
 ([Storage API](../api/storage.md), chaves `timer_mode` e `timer_secs`) e

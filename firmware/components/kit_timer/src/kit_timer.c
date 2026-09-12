@@ -12,20 +12,30 @@
 
 // Timer Tool — linguagem "Brutalist Bauhaus" (ver docs/design/design-language.md).
 // Titlebar fixa + tileview de 2 páginas (arrasta na horizontal):
-//   0 AJUSTE   — modo (CRONÔMETRO ↑ / REGRESSIVO ↓); no regressivo, tempos
-//                fixos + roleta de arraste MM:SS (time_wheel_t) + Modo Ampulheta.
+//   0 AJUSTE   — um único seletor MODO com 4 opções (CRONÔMETRO / REGRESSIVO /
+//                AMPULHETA / POMODORO); cada uma revela sua própria
+//                configuração logo abaixo (tempos fixos + roleta, ou a
+//                explicação + roleta do modo especial escolhido).
 //   1 RELÓGIO  — só o mostrador MM:SS e os botões PARAR / COMEÇAR (a página
 //                inicial). O botão COMEÇAR alterna COMEÇAR → PAUSAR → CONTINUAR.
 // PWR físico (e chacoalhar) fazem a mesma coisa que o botão COMEÇAR
 // (kit_timer_toggle -> Runtime). A saída é feita pela API (system->exit).
 //
-// Modo Ampulheta (opcional, no AJUSTE): com o KIT de cabeça pra baixo o timer
-// corre e a tela gira 180°; qualquer outra posição pausa e guarda o restante.
-// A orientação vem do acelerômetro (kit_imu_poll_orientation).
+// Modo Ampulheta: com o KIT de cabeça pra baixo o timer corre e a tela gira
+// 180°; qualquer outra posição pausa e guarda o restante. A orientação vem do
+// acelerômetro (kit_imu_poll_orientation).
+//
+// Modo Pomodoro: alterna FOCO ↔ DESCANSO, mas não sozinho — ao zerar uma fase,
+// o mostrador vira um cronômetro progressivo (conta pra cima, "atrasado") na
+// cor da fase que acabou, e o botão primário vira "INTERVALO" / "FOCO"; só ao
+// tocar é que a próxima fase começa a contar. Sinalização
+// discreta: uma bolinha ao lado do rótulo (amarela = FOCO, verde = DESCANSO) e
+// os dígitos ficam na cor da fase enquanto atrasado.
 //
 // Enquanto conta, a Tool segura o repouso/desligamento (kit_power keep-awake) e
 // só escurece o painel após ~15 s sem toque — sem apagar. Ao zerar a contagem
-// regressiva, roda uma animação de anéis + "TEMPO". Sem áudio por enquanto.
+// regressiva (fora do Pomodoro), roda uma animação de anéis + "TEMPO". Sem
+// áudio adicional, além dos efeitos de tique/alarme já existentes.
 
 static const char *TAG = "KIT_TIMER";
 
@@ -38,13 +48,21 @@ static const char *TAG = "KIT_TIMER";
 #define T_PAGE_H     (KIT_DISPLAY_HEIGHT - T_TITLEBAR)            // 360
 #define T_CHIP       56
 #define T_BTN_H      76
-#define T_BTN_W      ((T_CONTENT - 12) / 2)                       // 162
+// PARAR é sempre uma palavra curta; o botão primário cicla por rótulos bem
+// mais compridos (CONTINUAR, INTERVALO) — larguras assimétricas pra caber o
+// rótulo primário num mono_26 legível sem estourar (ver make_footer_btn).
+#define T_BTN_GAP    14
+#define T_BTN_W_STOP 130
+#define T_BTN_W_GO   (T_CONTENT - T_BTN_W_STOP - T_BTN_GAP)        // 192
 #define T_BTN_MARGIN 18
 #define PAGES        2
 
-// Contagem
+// Contagem — um único seletor MODO com 4 opções mutuamente exclusivas.
 #define MODE_UP      0    // cronômetro (conta para cima)
 #define MODE_DOWN    1    // regressivo (conta para baixo)
+#define MODE_FLIP    2    // Ampulheta
+#define MODE_POMO    3    // Pomodoro
+#define MODE_COUNT   4
 #define SECS_MIN     1
 #define SECS_MAX     (99 * 60 + 59)   // 99:59
 
@@ -61,6 +79,13 @@ static const char *TAG = "KIT_TIMER";
 // Modo Ampulheta — KIT de cabeça pra baixo corre um timer; qualquer outra
 // posição pausa (guarda o restante). Como uma ampulheta.
 #define FLIP_GUARD_US 800000LL   // ignora "chacoalhar" logo após uma virada
+
+// Modo Pomodoro — alterna FOCO ↔ DESCANSO; ao zerar uma fase, não começa a
+// próxima sozinho (fica "atrasado", contando pra cima) até confirmar no botão.
+#define POMO_FOCUS   0
+#define POMO_REST    1
+#define POMO_FOCUS_DEFAULT_S (25 * 60)
+#define POMO_REST_DEFAULT_S  (5 * 60)
 
 // Brilho reduzido
 #define DIM_AFTER_MS 15000
@@ -90,14 +115,19 @@ static lv_timer_t *s_anim_timer  = NULL;   // 200 ms — pisca o "dois pontos" +
 static lv_timer_t *s_fin_timer   = NULL;   // ~420 ms — pisca o fundo da tela de fim
 static lv_timer_t *s_orient_timer = NULL;  // 200 ms — lê a orientação (só no Modo Ampulheta)
 
-// Modo Ampulheta
-static bool    s_flip_on   = false;      // persistido ("timer_flip")
+// Modo Ampulheta (s_mode == MODE_FLIP)
 static int     s_flip_set  = 300;        // tempo cheio (persist "timer_flip_s")
 static int     s_flip_rem  = 300;        // restante (runtime)
 static bool    s_flip_spent = false;     // zerou; só re-arma ao sair da posição
 static bool    s_flip_pos   = false;     // KIT está na posição de correr agora? (ver flip_run_orient)
 static bool    s_flip_touched = false;   // já correu ao menos uma vez (mostra valor pausado)
 static int64_t s_flip_last_change_us = 0;
+
+// Modo Pomodoro (s_mode == MODE_POMO)
+static int  s_pomo_focus_secs = POMO_FOCUS_DEFAULT_S;   // persist "timer_pomo_focus"
+static int  s_pomo_rest_secs  = POMO_REST_DEFAULT_S;    // persist "timer_pomo_rest"
+static int  s_pomo_phase      = POMO_FOCUS;   // fase atual (a que está contando ou acabou de zerar)
+static bool s_pomo_pending    = false;   // fase zerou; aguardando toque em COMEÇAR ___ (conta pra cima)
 
 // ---------------------------------------------------------------------------
 // Objetos LVGL
@@ -116,9 +146,10 @@ typedef struct {
     void (*on_change)(void);
 } time_wheel_t;
 
-// 2 do tempo regressivo + 2x2 do Modo Ampulheta. Instâncias estáticas: sem
-// lv_malloc (o pool do LVGL já é apertado nesta board).
-static time_wheel_t s_wheels[6];
+// 2 do tempo regressivo + 2 do Modo Ampulheta + 2x2 (FOCO/DESCANSO) do Modo
+// Pomodoro. Instâncias estáticas: sem lv_malloc (o pool do LVGL já é apertado
+// nesta board).
+static time_wheel_t s_wheels[8];
 static int          s_wheel_n = 0;
 static bool         s_wheel_locked = false;
 static lv_dir_t     s_pg_sdir = LV_DIR_VER;
@@ -126,20 +157,22 @@ static lv_dir_t     s_tv_sdir = LV_DIR_HOR;
 
 // Página 0 — Ajuste
 static lv_obj_t *s_adjust_page = NULL;   // container rolável do tile 0 (roleta congela o scroll)
-static lv_obj_t *s_mode_pills[2];
-static lv_obj_t *s_mode_pill_lbls[2];
-static lv_obj_t *s_down_cnt   = NULL;
+static lv_obj_t *s_mode_pills[MODE_COUNT];
+static lv_obj_t *s_mode_pill_lbls[MODE_COUNT];
+static lv_obj_t *s_down_cnt   = NULL;    // config do REGRESSIVO (oculta fora dele)
 static lv_obj_t *s_preset_pills[PRESET_COUNT];
 static lv_obj_t *s_preset_pill_lbls[PRESET_COUNT];
 static time_wheel_t *s_wheel_mm = NULL;
 static time_wheel_t *s_wheel_ss = NULL;
 static lv_obj_t *s_hint_lbl   = NULL;
-static lv_obj_t *s_flip_pills[2];
-static lv_obj_t *s_flip_pill_lbls[2];
-static lv_obj_t *s_flip_cfg   = NULL;    // container da roleta (oculto quando desligado)
+static lv_obj_t *s_flip_cfg   = NULL;    // config da AMPULHETA (oculta fora dela)
 static time_wheel_t *s_wheel_flip[2] = { NULL, NULL };   // MM, SS
+static lv_obj_t *s_pomo_cfg   = NULL;    // config do POMODORO (oculta fora dele)
+static time_wheel_t *s_wheel_pomo_focus[2] = { NULL, NULL };   // MM, SS
+static time_wheel_t *s_wheel_pomo_rest[2]  = { NULL, NULL };   // MM, SS
 
 // Página 1 — Relógio
+static lv_obj_t *s_modetag_dot = NULL;   // bolinha discreta (Pomodoro: amarela=FOCO, verde=DESCANSO)
 static lv_obj_t *s_modetag_lbl = NULL;
 static lv_obj_t *s_mm_lbl      = NULL;
 static lv_obj_t *s_ss_lbl      = NULL;
@@ -164,10 +197,12 @@ static uint32_t s_fin_ticks   = 0;
 
 static const kit_api_table_t *api(void) { return kit_api_get_table(); }
 
-static uint32_t on_accent(void)
+static uint32_t on_color_for(uint32_t bg)
 {
-    return (s_accent == KIT_COLOR_YELLOW) ? KIT_COLOR_ON_YELLOW : KIT_COLOR_ON_COLOR;
+    return (bg == KIT_COLOR_YELLOW) ? KIT_COLOR_ON_YELLOW : KIT_COLOR_ON_COLOR;
 }
+
+static uint32_t on_accent(void) { return on_color_for(s_accent); }
 
 static lv_obj_t *add_label(lv_obj_t *parent, const char *txt, uint32_t color,
                            const lv_font_t *font, int letter_space)
@@ -214,14 +249,16 @@ static void load_prefs(void)
     const kit_api_table_t *t = api();
     if (!t || !t->storage) return;
     int32_t v;
-    if (t->storage->get_i32("timer_mode", &v) == KIT_OK && (v == MODE_UP || v == MODE_DOWN))
+    if (t->storage->get_i32("timer_mode", &v) == KIT_OK && v >= 0 && v < MODE_COUNT)
         s_mode = (int)v;
     if (t->storage->get_i32("timer_secs", &v) == KIT_OK && v >= SECS_MIN && v <= SECS_MAX)
         s_set_secs = (int)v;
-    if (t->storage->get_i32("timer_flip", &v) == KIT_OK)
-        s_flip_on = (v != 0);
     if (t->storage->get_i32("timer_flip_s", &v) == KIT_OK && v >= SECS_MIN && v <= SECS_MAX)
         s_flip_set = (int)v;
+    if (t->storage->get_i32("timer_pomo_focus", &v) == KIT_OK && v >= SECS_MIN && v <= SECS_MAX)
+        s_pomo_focus_secs = (int)v;
+    if (t->storage->get_i32("timer_pomo_rest", &v) == KIT_OK && v >= SECS_MIN && v <= SECS_MAX)
+        s_pomo_rest_secs = (int)v;
 }
 
 static void save_prefs(void)
@@ -230,8 +267,9 @@ static void save_prefs(void)
     if (!t || !t->storage) return;
     t->storage->set_i32("timer_mode", s_mode);
     t->storage->set_i32("timer_secs", s_set_secs);
-    t->storage->set_i32("timer_flip", s_flip_on ? 1 : 0);
     t->storage->set_i32("timer_flip_s", s_flip_set);
+    t->storage->set_i32("timer_pomo_focus", s_pomo_focus_secs);
+    t->storage->set_i32("timer_pomo_rest", s_pomo_rest_secs);
 }
 
 // ---------------------------------------------------------------------------
@@ -258,7 +296,7 @@ static void sync_keep_awake(void)
     bool finishing = (s_finish && !lv_obj_has_flag(s_finish, LV_OBJ_FLAG_HIDDEN));
     // Modo Ampulheta segura a tela acesa: com ela apagada o acelerômetro
     // desliga (kit_imu) e não dá pra detectar a virada.
-    t->power->keep_awake(s_run != RUN_IDLE || finishing || s_flip_on);
+    t->power->keep_awake(s_run != RUN_IDLE || finishing || s_mode == MODE_FLIP);
 }
 
 // ---------------------------------------------------------------------------
@@ -279,16 +317,30 @@ static void sync_dots(void)
 static void sync_mode_pills(void)
 {
     uint32_t sel_txt = on_accent();
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < MODE_COUNT; i++) {
         bool sel = (i == s_mode);
         lv_obj_set_style_bg_color(s_mode_pills[i],
             lv_color_hex(sel ? s_accent : KIT_COLOR_SURFACE), 0);
         lv_obj_set_style_text_color(s_mode_pill_lbls[i],
             lv_color_hex(sel ? sel_txt : KIT_COLOR_TEXT), 0);
     }
+}
+
+// Cada modo tem no máximo uma seção de configuração visível por vez, logo
+// abaixo do seletor MODO — a do modo escolhido, escondendo as outras.
+static void sync_mode_sections(void)
+{
     if (s_down_cnt) {
         if (s_mode == MODE_DOWN) lv_obj_clear_flag(s_down_cnt, LV_OBJ_FLAG_HIDDEN);
         else                     lv_obj_add_flag(s_down_cnt, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (s_flip_cfg) {
+        if (s_mode == MODE_FLIP) lv_obj_clear_flag(s_flip_cfg, LV_OBJ_FLAG_HIDDEN);
+        else                     lv_obj_add_flag(s_flip_cfg, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (s_pomo_cfg) {
+        if (s_mode == MODE_POMO) lv_obj_clear_flag(s_pomo_cfg, LV_OBJ_FLAG_HIDDEN);
+        else                     lv_obj_add_flag(s_pomo_cfg, LV_OBJ_FLAG_HIDDEN);
     }
 }
 
@@ -318,22 +370,32 @@ static void sync_wheels(void)
     if (s_wheel_ss) { s_wheel_ss->val = s_set_secs % 60; wheel_paint(s_wheel_ss); }
     if (s_wheel_flip[0]) { s_wheel_flip[0]->val = s_flip_set / 60; wheel_paint(s_wheel_flip[0]); }
     if (s_wheel_flip[1]) { s_wheel_flip[1]->val = s_flip_set % 60; wheel_paint(s_wheel_flip[1]); }
+    if (s_wheel_pomo_focus[0]) { s_wheel_pomo_focus[0]->val = s_pomo_focus_secs / 60; wheel_paint(s_wheel_pomo_focus[0]); }
+    if (s_wheel_pomo_focus[1]) { s_wheel_pomo_focus[1]->val = s_pomo_focus_secs % 60; wheel_paint(s_wheel_pomo_focus[1]); }
+    if (s_wheel_pomo_rest[0])  { s_wheel_pomo_rest[0]->val  = s_pomo_rest_secs / 60;  wheel_paint(s_wheel_pomo_rest[0]); }
+    if (s_wheel_pomo_rest[1])  { s_wheel_pomo_rest[1]->val  = s_pomo_rest_secs % 60;  wheel_paint(s_wheel_pomo_rest[1]); }
 }
 
-static void sync_flip_pills(void)
+// Sinalização discreta do Pomodoro: uma bolinha ao lado do rótulo (amarela =
+// FOCO, verde = DESCANSO — a mesma cor identifica a fase esteja ela contando
+// ou atrasada) e os dígitos só mudam de cor quando atrasado (aguardando
+// confirmação). Fora do Pomodoro a bolinha some e tudo fica no visual normal.
+static void sync_pomo_paint(void)
 {
-    uint32_t sel_txt = on_accent();
-    for (int i = 0; i < 2; i++) {
-        bool sel = (i == 0) == s_flip_on;   // pílula 0 = LIGADO
-        lv_obj_set_style_bg_color(s_flip_pills[i],
-            lv_color_hex(sel ? s_accent : KIT_COLOR_SURFACE), 0);
-        lv_obj_set_style_text_color(s_flip_pill_lbls[i],
-            lv_color_hex(sel ? sel_txt : KIT_COLOR_TEXT), 0);
+    if (!s_modetag_dot) return;
+    if (s_mode != MODE_POMO) {
+        lv_obj_add_flag(s_modetag_dot, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_style_text_color(s_mm_lbl, lv_color_hex(KIT_COLOR_TEXT), 0);
+        lv_obj_set_style_text_color(s_ss_lbl, lv_color_hex(KIT_COLOR_TEXT), 0);
+        return;
     }
-    if (s_flip_cfg) {
-        if (s_flip_on) lv_obj_clear_flag(s_flip_cfg, LV_OBJ_FLAG_HIDDEN);
-        else           lv_obj_add_flag(s_flip_cfg, LV_OBJ_FLAG_HIDDEN);
-    }
+    uint32_t phase_c = (s_pomo_phase == POMO_FOCUS) ? KIT_COLOR_YELLOW : KIT_COLOR_GREEN;
+    lv_obj_clear_flag(s_modetag_dot, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_bg_color(s_modetag_dot, lv_color_hex(phase_c), 0);
+
+    uint32_t digit_c = s_pomo_pending ? phase_c : KIT_COLOR_TEXT;
+    lv_obj_set_style_text_color(s_mm_lbl, lv_color_hex(digit_c), 0);
+    lv_obj_set_style_text_color(s_ss_lbl, lv_color_hex(digit_c), 0);
 }
 
 static void sync_hint(void)
@@ -353,15 +415,18 @@ static void sync_clock(void)
 
     int t;
     const char *tag;
-    if (s_flip_on && s_flip_pos) {
+    if (s_mode == MODE_FLIP && s_flip_pos) {
         t = s_flip_rem;                              // correndo — só o número
         tag = "";
-    } else if (s_flip_on && s_flip_touched) {
+    } else if (s_mode == MODE_FLIP && s_flip_touched) {
         t = s_flip_rem;                              // pausado — mostra onde parou
         tag = "PAUSADO";
-    } else if (s_flip_on) {
+    } else if (s_mode == MODE_FLIP) {
         t = s_flip_set;                              // ainda não virou
         tag = "PRONTO";
+    } else if (s_mode == MODE_POMO) {
+        t = s_cur_secs;
+        tag = (s_pomo_phase == POMO_REST) ? "DESCANSO" : "FOCO";
     } else {
         t = s_cur_secs;
         tag = (s_mode == MODE_UP) ? "CRON\xC3\x94METRO" : "REGRESSIVO";
@@ -390,7 +455,7 @@ static void sync_buttons(void)
 
     // Modo Ampulheta: a orientação é o controle. Some com o COMEÇAR, mostra a
     // dica, e deixa o PARAR só pra zerar o que já rodou.
-    if (s_flip_on) {
+    if (s_mode == MODE_FLIP) {
         lv_obj_add_flag(s_go_btn, LV_OBJ_FLAG_HIDDEN);
         bool stop_on = !s_flip_pos && (s_flip_touched || s_flip_rem != s_flip_set);
         lv_opa_t o = stop_on ? LV_OPA_COVER : LV_OPA_40;
@@ -403,6 +468,26 @@ static void sync_buttons(void)
     lv_obj_clear_flag(s_go_btn, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(s_stop_btn, LV_OBJ_FLAG_HIDDEN);
 
+    // Modo Pomodoro, fase zerada: o botão primário vira a confirmação da
+    // próxima fase — reforça a cor de quem está prestes a começar.
+    if (s_mode == MODE_POMO && s_pomo_pending) {
+        // Rótulo de botão é pra ser curto (ver design-language.md) — "COMEÇAR
+        // INTERVALO" estourava a largura fixa do botão.
+        bool next_is_rest = (s_pomo_phase == POMO_FOCUS);
+        lv_label_set_text(s_go_lbl, next_is_rest ? "INTERVALO" : "FOCO");
+        uint32_t go_bg = next_is_rest ? KIT_COLOR_GREEN : KIT_COLOR_YELLOW;
+        lv_obj_set_style_bg_color(s_go_btn, lv_color_hex(go_bg), 0);
+        lv_obj_set_style_text_color(s_go_lbl, lv_color_hex(on_color_for(go_bg)), 0);
+        lv_obj_invalidate(s_go_btn);
+
+        lv_obj_set_style_border_opa(s_stop_btn, LV_OPA_COVER, 0);
+        lv_obj_set_style_text_opa(s_stop_btn, LV_OPA_COVER, 0);
+        lv_obj_add_flag(s_stop_btn, LV_OBJ_FLAG_CLICKABLE);
+        return;
+    }
+
+    lv_obj_set_style_bg_color(s_go_btn, lv_color_hex(s_accent), 0);
+    lv_obj_set_style_text_color(s_go_lbl, lv_color_hex(on_accent()), 0);
     const char *go = (s_run == RUN_IDLE)   ? "COME\xC3\x87""AR"
                    : (s_run == RUN_PAUSED) ? "CONTINUAR"
                                            : "PAUSAR";
@@ -412,7 +497,8 @@ static void sync_buttons(void)
     lv_obj_invalidate(s_go_btn);
 
     bool stop_on = (s_run != RUN_IDLE) ||
-                   (s_mode == MODE_UP ? s_cur_secs != 0 : s_cur_secs != s_set_secs);
+                   (s_mode == MODE_POMO ? (s_pomo_phase != POMO_FOCUS || s_cur_secs != s_pomo_focus_secs)
+                    : (s_mode == MODE_UP ? s_cur_secs != 0 : s_cur_secs != s_set_secs));
     // esmaece via border/text opa (parte), não `opa` do objeto — `opa`
     // intermediário força layer buffer (regra da board).
     lv_opa_t o = stop_on ? LV_OPA_COVER : LV_OPA_40;
@@ -428,6 +514,7 @@ static void sync_buttons(void)
 
 static void trigger_finish(void);
 static void count_tick_cb(lv_timer_t *t);
+static void pomo_enter_pending(void);
 
 static void start_counting(void)
 {
@@ -445,7 +532,7 @@ static void count_tick_cb(lv_timer_t *t)
     (void)t;
 
     // Modo Ampulheta: conta o restante enquanto o KIT está de cabeça pra baixo.
-    if (s_flip_on && s_flip_pos) {
+    if (s_mode == MODE_FLIP && s_flip_pos) {
         if (s_flip_rem > 0) s_flip_rem--;
         if (s_flip_rem <= 0) {
             s_flip_rem = 0;
@@ -456,6 +543,28 @@ static void count_tick_cb(lv_timer_t *t)
             return;
         }
         if (s_flip_rem <= 5) {
+            const kit_api_table_t *at = api();
+            if (at && at->audio) at->audio->sfx(KIT_SFX_TIMER_TICK);
+        }
+        sync_clock();
+        return;
+    }
+
+    // Modo Pomodoro: conta regressivo até zerar a fase; a partir daí não avança
+    // sozinho — fica "atrasado" contando pra cima até confirmar no botão (ver
+    // pomo_enter_pending / pomo_confirm_advance). Não abre a tela de fim.
+    if (s_mode == MODE_POMO) {
+        if (s_pomo_pending) {
+            if (s_cur_secs < SECS_MAX) s_cur_secs++;
+            sync_clock();
+            return;
+        }
+        if (s_cur_secs > 0) s_cur_secs--;
+        if (s_cur_secs <= 0) {
+            pomo_enter_pending();
+            return;
+        }
+        if (s_cur_secs <= 5) {
             const kit_api_table_t *at = api();
             if (at && at->audio) at->audio->sfx(KIT_SFX_TIMER_TICK);
         }
@@ -485,6 +594,39 @@ static void count_tick_cb(lv_timer_t *t)
     sync_clock();
 }
 
+// Uma fase do Pomodoro zerou: toca o alarme e entra em "atrasado" — o
+// mostrador passa a contar pra cima (s_cur_secs volta a 0) até a pessoa tocar
+// no botão pra começar a próxima fase. O contador (s_count_timer) não para.
+static void pomo_enter_pending(void)
+{
+    const kit_api_table_t *at = api();
+    if (at && at->audio) at->audio->sfx(KIT_SFX_TIMER_DONE);
+
+    s_pomo_pending = true;
+    s_cur_secs = 0;
+
+    show_colon(true);
+    sync_pomo_paint();
+    sync_clock();
+    sync_buttons();
+}
+
+// Confirma o avanço pra próxima fase (toque no botão "COMEÇAR ___" ou no
+// PWR/chacoalhar, ver toggle()) — troca FOCO ↔ DESCANSO e recarrega o tempo
+// cheio da fase nova. O contador segue rodando, agora de novo regressivo.
+static void pomo_confirm_advance(void)
+{
+    if (!s_pomo_pending) return;
+    s_pomo_phase = (s_pomo_phase == POMO_FOCUS) ? POMO_REST : POMO_FOCUS;
+    s_pomo_pending = false;
+    s_cur_secs = (s_pomo_phase == POMO_FOCUS) ? s_pomo_focus_secs : s_pomo_rest_secs;
+
+    show_colon(true);
+    sync_pomo_paint();
+    sync_clock();
+    sync_buttons();
+}
+
 // Alterna COMEÇAR → PAUSAR → CONTINUAR (botão primário / PWR / chacoalhar).
 static void toggle(void)
 {
@@ -493,12 +635,23 @@ static void toggle(void)
 
     // Modo Ampulheta: só a orientação controla — PWR e chacoalhar não fazem nada
     // (evita o falso disparo do tranco da virada).
-    if (s_flip_on) return;
+    if (s_mode == MODE_FLIP) return;
 
     wake_display();
 
+    // Modo Pomodoro, fase zerada: o botão primário (e o PWR/chacoalhar) só
+    // confirmam o avanço pra próxima fase — sem pausar.
+    if (s_mode == MODE_POMO && s_pomo_pending) {
+        pomo_confirm_advance();
+        return;
+    }
+
     if (s_run == RUN_IDLE) {
-        if (s_mode == MODE_DOWN) {
+        if (s_mode == MODE_POMO) {
+            s_pomo_phase = POMO_FOCUS;
+            s_pomo_pending = false;
+            s_cur_secs = s_pomo_focus_secs;
+        } else if (s_mode == MODE_DOWN) {
             if (s_set_secs < SECS_MIN) s_set_secs = SECS_MIN;
             s_cur_secs = s_set_secs;
         } else {
@@ -516,6 +669,7 @@ static void toggle(void)
     }
 
     show_colon(true);
+    sync_pomo_paint();
     sync_clock();
     sync_buttons();
     sync_keep_awake();
@@ -525,16 +679,22 @@ static void stop_reset(void)
 {
     wake_display();
     stop_counting();
-    if (s_flip_on) {
+    if (s_mode == MODE_FLIP) {
         s_flip_rem = s_flip_set;
         s_flip_spent = false;
         s_flip_touched = false;
+    } else if (s_mode == MODE_POMO) {
+        s_run = RUN_IDLE;
+        s_pomo_phase = POMO_FOCUS;
+        s_pomo_pending = false;
+        s_cur_secs = s_pomo_focus_secs;
     } else {
         s_run = RUN_IDLE;
         s_cur_secs = (s_mode == MODE_UP) ? 0 : s_set_secs;
     }
     show_colon(true);
     sync_wheels();
+    sync_pomo_paint();
     sync_clock();
     sync_buttons();
     sync_keep_awake();
@@ -566,7 +726,7 @@ static int flip_run_rotation(void)
 static void orient_tick_cb(lv_timer_t *t)
 {
     (void)t;
-    if (!s_flip_on || !s_screen) return;
+    if (s_mode != MODE_FLIP || !s_screen) return;
     if (s_finish && !lv_obj_has_flag(s_finish, LV_OBJ_FLAG_HIDDEN)) return;
 
     bool pos = (kit_imu_poll_orientation() == flip_run_orient());
@@ -604,7 +764,7 @@ static void orient_tick_cb(lv_timer_t *t)
 
 static void sync_orient_timer(void)
 {
-    bool want = s_flip_on && s_screen;
+    bool want = (s_mode == MODE_FLIP) && s_screen;
     if (want && !s_orient_timer)
         s_orient_timer = lv_timer_create(orient_tick_cb, 200, NULL);
     else if (!want && s_orient_timer) {
@@ -711,7 +871,7 @@ static void finish_dismiss(void)
     if (s_finish) lv_obj_add_flag(s_finish, LV_OBJ_FLAG_HIDDEN);
     // No Modo Ampulheta o timer que zerou fica "gasto" (rem = 0) — só re-conta
     // depois de sair da posição e voltar; não mexe no timer manual.
-    if (!s_flip_on) {
+    if (s_mode != MODE_FLIP) {
         s_cur_secs = (s_mode == MODE_UP) ? 0 : s_set_secs;
         s_run = RUN_IDLE;
     }
@@ -742,14 +902,48 @@ static void go_cb(lv_event_t *e)      { (void)e; toggle(); }
 static void stop_cb(lv_event_t *e)    { (void)e; if (s_run != RUN_IDLE || s_cur_secs) stop_reset(); }
 static void finish_cb(lv_event_t *e)  { (void)e; finish_dismiss(); }
 
+// Único seletor MODO (CRONÔMETRO / REGRESSIVO / AMPULHETA / POMODORO) — troca
+// pra qualquer um dos 4 sempre para o que estava rodando e limpa o estado dos
+// modos especiais, pra nunca ter dois ativos ao mesmo tempo.
 static void mode_pill_cb(lv_event_t *e)
 {
     int i = (int)(intptr_t)lv_event_get_user_data(e);
-    if (i != MODE_UP && i != MODE_DOWN) return;
+    if (i < 0 || i >= MODE_COUNT || i == s_mode) return;
+
+    stop_counting();
+    s_run = RUN_IDLE;
+    if (s_mode == MODE_FLIP) {
+        s_flip_pos = false;
+        s_flip_touched = false;
+        if (kit_display_rotation() != kit_display_base_rotation()) {
+            kit_display_restore_rotation_impl();
+            lv_obj_invalidate(s_screen);
+        }
+    }
+
     s_mode = i;
-    stop_reset();
+    s_pomo_phase = POMO_FOCUS;
+    s_pomo_pending = false;
+    if (s_mode == MODE_FLIP) {
+        s_flip_rem = s_flip_set;
+        s_flip_spent = false;
+        s_flip_touched = false;
+    }
+    s_cur_secs = (s_mode == MODE_UP)   ? 0
+               : (s_mode == MODE_DOWN) ? s_set_secs
+               : (s_mode == MODE_POMO) ? s_pomo_focus_secs
+                                       : s_flip_set;
+
     sync_mode_pills();
+    sync_mode_sections();
+    sync_orient_timer();
+    sync_wheels();
     sync_hint();
+    sync_keep_awake();
+    show_colon(true);
+    sync_pomo_paint();
+    sync_clock();
+    sync_buttons();
     save_prefs();
 }
 
@@ -856,31 +1050,28 @@ static void wheel_tap_cb(lv_event_t *e)
     if (w->on_change) w->on_change();
 }
 
-static void flip_pill_cb(lv_event_t *e)
+// on_change das roletas do Modo Pomodoro (FOCO e DESCANSO).
+static void pomo_focus_wheel_changed(void)
 {
-    int i = (int)(intptr_t)lv_event_get_user_data(e);
-    bool on = (i == 0);   // pílula 0 = LIGADO
-    if (on == s_flip_on) return;
-    s_flip_on = on;
-    if (!on) {   // desligou: volta pro timer manual
-        s_flip_pos = false;
-        s_flip_touched = false;
-        stop_counting();
-        s_run = RUN_IDLE;
-        s_cur_secs = (s_mode == MODE_UP) ? 0 : s_set_secs;
-        if (kit_display_rotation() != kit_display_base_rotation()) {
-            kit_display_restore_rotation_impl();
-            lv_obj_invalidate(s_screen);
-        }
-    } else {
-        s_flip_rem = s_flip_set;
-        s_flip_spent = false;
-        s_flip_touched = false;
-    }
-    sync_flip_pills();
-    sync_orient_timer();
-    sync_keep_awake();
-    show_colon(true);
+    if (!s_wheel_pomo_focus[0] || !s_wheel_pomo_focus[1]) return;
+    int secs = s_wheel_pomo_focus[0]->val * 60 + s_wheel_pomo_focus[1]->val;
+    if (secs < SECS_MIN) secs = SECS_MIN;
+    if (secs > SECS_MAX) secs = SECS_MAX;
+    s_pomo_focus_secs = secs;
+    if (s_run == RUN_IDLE && s_pomo_phase == POMO_FOCUS) s_cur_secs = secs;
+    sync_clock();
+    sync_buttons();
+    save_prefs();
+}
+
+static void pomo_rest_wheel_changed(void)
+{
+    if (!s_wheel_pomo_rest[0] || !s_wheel_pomo_rest[1]) return;
+    int secs = s_wheel_pomo_rest[0]->val * 60 + s_wheel_pomo_rest[1]->val;
+    if (secs < SECS_MIN) secs = SECS_MIN;
+    if (secs > SECS_MAX) secs = SECS_MAX;
+    s_pomo_rest_secs = secs;
+    if (s_run == RUN_IDLE && s_pomo_phase == POMO_REST) s_cur_secs = secs;
     sync_clock();
     sync_buttons();
     save_prefs();
@@ -1044,20 +1235,28 @@ static void build_page_adjust(lv_obj_t *tile)
     s_adjust_page = p;   // a roleta de arraste congela o scroll deste container
 
     // -------- MODO --------
+    // Um único seletor com as 4 opções, em grade 2x2 (nomes longos não cabem
+    // numa linha só de 4). Cada opção revela sua própria config logo abaixo.
     lv_obj_t *sec_mode = plain_box(p);
     lv_obj_set_size(sec_mode, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(sec_mode, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(sec_mode, 9, 0);
     field_label(sec_mode, "MODO");
 
-    lv_obj_t *mode_row = plain_box(sec_mode);
-    lv_obj_set_size(mode_row, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(mode_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(mode_row, 8, 0);
-    static const char *MODE_LABELS[] = { "CRON\xC3\x94METRO", "REGRESSIVO" };
-    for (int i = 0; i < 2; i++)
-        s_mode_pills[i] = make_pill(mode_row, MODE_LABELS[i], KIT_TOUCH_TARGET_COMFORTABLE, mode_pill_cb, i,
-                                    &s_mode_pill_lbls[i]);
+    static const char *MODE_LABELS[MODE_COUNT] = {
+        "CRON\xC3\x94METRO", "REGRESSIVO", "AMPULHETA", "POMODORO"
+    };
+    for (int row = 0; row < 2; row++) {
+        lv_obj_t *mode_row = plain_box(sec_mode);
+        lv_obj_set_size(mode_row, lv_pct(100), LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(mode_row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_style_pad_column(mode_row, 8, 0);
+        for (int col = 0; col < 2; col++) {
+            int i = row * 2 + col;
+            s_mode_pills[i] = make_pill(mode_row, MODE_LABELS[i], KIT_TOUCH_TARGET_COMFORTABLE, mode_pill_cb, i,
+                                        &s_mode_pill_lbls[i]);
+        }
+    }
 
     // -------- SÓ NO REGRESSIVO --------
     s_down_cnt = plain_box(p);
@@ -1067,11 +1266,17 @@ static void build_page_adjust(lv_obj_t *tile)
     lv_obj_set_style_pad_top(s_down_cnt, 4, 0);
 
     field_label(s_down_cnt, "TEMPOS FIXOS \xC2\xB7 MIN");
-    lv_obj_t *preset_row = plain_box(s_down_cnt);
-    lv_obj_set_size(preset_row, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(preset_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(preset_row, 6, 0);
+    // 3 por linha (pedido explícito do jcrvlh) — números de 1-2 dígitos cabem
+    // bem mais folgados que um rótulo de palavra, então a regra geral de
+    // "máx. 2 chips" do design-language.md abre exceção aqui.
+    lv_obj_t *preset_row = NULL;
     for (int i = 0; i < PRESET_COUNT; i++) {
+        if (i % 3 == 0) {
+            preset_row = plain_box(s_down_cnt);
+            lv_obj_set_size(preset_row, lv_pct(100), LV_SIZE_CONTENT);
+            lv_obj_set_flex_flow(preset_row, LV_FLEX_FLOW_ROW);
+            lv_obj_set_style_pad_column(preset_row, 8, 0);
+        }
         char n[4];
         snprintf(n, sizeof(n), "%d", PRESET_MIN[i]);
         s_preset_pills[i] = make_pill(preset_row, n, KIT_TOUCH_TARGET_COMFORTABLE, preset_pill_cb, i,
@@ -1081,33 +1286,20 @@ static void build_page_adjust(lv_obj_t *tile)
     field_label(s_down_cnt, "OU DEFINA \xC2\xB7 ARRASTA / TOCA");
     make_wheel_pair(s_down_cnt, &s_wheel_mm, &s_wheel_ss, cd_wheel_changed);
 
-    s_hint_lbl = add_label(s_down_cnt, "", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    // Status secundário curto e em CAIXA ALTA — mono continua certo aqui, só
+    // precisa do tamanho de status (26), não do de tabela de specs (16).
+    s_hint_lbl = add_label(s_down_cnt, "", KIT_COLOR_TEXT_MUTED, &kit_mono_26, 2);
     lv_label_set_long_mode(s_hint_lbl, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(s_hint_lbl, lv_pct(100));
     lv_obj_set_style_text_align(s_hint_lbl, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_pad_top(s_hint_lbl, 4, 0);
 
-    // -------- MODO AMPULHETA --------
-    lv_obj_t *sec_flip = plain_box(p);
-    lv_obj_set_size(sec_flip, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(sec_flip, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(sec_flip, 9, 0);
-    lv_obj_set_style_pad_top(sec_flip, 8, 0);
-    field_label(sec_flip, "MODO AMPULHETA");
-
-    lv_obj_t *flip_row = plain_box(sec_flip);
-    lv_obj_set_size(flip_row, lv_pct(100), LV_SIZE_CONTENT);
-    lv_obj_set_flex_flow(flip_row, LV_FLEX_FLOW_ROW);
-    lv_obj_set_style_pad_column(flip_row, 8, 0);
-    static const char *FLIP_LABELS[] = { "LIGADO", "DESLIGADO" };
-    for (int i = 0; i < 2; i++)
-        s_flip_pills[i] = make_pill(flip_row, FLIP_LABELS[i], KIT_TOUCH_TARGET_COMFORTABLE, flip_pill_cb, i,
-                                    &s_flip_pill_lbls[i]);
-
+    // -------- SÓ NA AMPULHETA --------
     s_flip_cfg = plain_box(p);
     lv_obj_set_size(s_flip_cfg, lv_pct(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(s_flip_cfg, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(s_flip_cfg, 9, 0);
+    lv_obj_set_style_pad_top(s_flip_cfg, 4, 0);
 
     // No Modo canhoto a posição de correr é "de pé" (a base já é 180°).
     const char *fx_txt = (kit_display_base_rotation() == 180)
@@ -1117,21 +1309,46 @@ static void build_page_adjust(lv_obj_t *tile)
         : "Vire o KIT de cabe\xC3\xA7""a pra baixo pra correr o timer; a tela gira "
           "junto. Qualquer outra posi\xC3\xA7\xC3\xA3o pausa e guarda onde parou. A "
           "tela fica acesa neste modo.";
+    // Corpo de leitura: kit_sans_28 em cor cheia, caixa normal (mesmo padrão
+    // do "COMO JOGA" do Bingo/Mímica) — mono apagado numa tela de 1,8" não se lê.
     lv_obj_t *fx = add_label(s_flip_cfg, fx_txt,
-        KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+        KIT_COLOR_TEXT, &kit_sans_28, 0);
     lv_label_set_long_mode(fx, LV_LABEL_LONG_WRAP);
     lv_obj_set_width(fx, lv_pct(100));
 
     field_label(s_flip_cfg, "TEMPO");
     make_wheel_pair(s_flip_cfg, &s_wheel_flip[0], &s_wheel_flip[1], flip_wheel_changed);
+
+    // -------- SÓ NO POMODORO --------
+    s_pomo_cfg = plain_box(p);
+    lv_obj_set_size(s_pomo_cfg, lv_pct(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(s_pomo_cfg, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(s_pomo_cfg, 9, 0);
+    lv_obj_set_style_pad_top(s_pomo_cfg, 4, 0);
+
+    // Corpo de leitura: kit_sans_28 em cor cheia, caixa normal — mono apagado
+    // numa tela de 1,8" não se lê (mesmo padrão do "COMO JOGA" do Bingo/Mímica).
+    lv_obj_t *px = add_label(s_pomo_cfg,
+        "Ao zerar uma fase, o rel\xC3\xB3gio conta pra cima at\xC3\xA9 voc\xC3\xAA "
+        "tocar em INTERVALO ou FOCO pra seguir pra pr\xC3\xB3xima. Uma bolinha "
+        "amarela marca FOCO, verde marca DESCANSO.",
+        KIT_COLOR_TEXT, &kit_sans_28, 0);
+    lv_label_set_long_mode(px, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(px, lv_pct(100));
+
+    field_label(s_pomo_cfg, "FOCO");
+    make_wheel_pair(s_pomo_cfg, &s_wheel_pomo_focus[0], &s_wheel_pomo_focus[1], pomo_focus_wheel_changed);
+
+    field_label(s_pomo_cfg, "DESCANSO");
+    make_wheel_pair(s_pomo_cfg, &s_wheel_pomo_rest[0], &s_wheel_pomo_rest[1], pomo_rest_wheel_changed);
 }
 
 // Página 1 — RELÓGIO
-static lv_obj_t *make_footer_btn(lv_obj_t *parent, const char *txt,
+static lv_obj_t *make_footer_btn(lv_obj_t *parent, const char *txt, int w,
                                  lv_event_cb_t cb, bool primary, lv_obj_t **out_lbl)
 {
     lv_obj_t *b = lv_obj_create(parent);
-    lv_obj_set_size(b, T_BTN_W, T_BTN_H);
+    lv_obj_set_size(b, w, T_BTN_H);
     lv_obj_set_style_radius(b, T_BTN_H / 2, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_pad_all(b, 0, 0);
@@ -1149,7 +1366,11 @@ static lv_obj_t *make_footer_btn(lv_obj_t *parent, const char *txt,
         lv_obj_set_style_border_color(b, lv_color_hex(KIT_COLOR_TEXT), 0);
     }
     lv_obj_add_event_cb(b, cb, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *l = add_label(b, txt, primary ? on_accent() : KIT_COLOR_TEXT, &kit_mono_20, 2);
+    // mono_26, não mono_20 — a área de toque já era boa, mas o rótulo ficava
+    // pequeno num botão de 76 px de altura. As larguras assimétricas dos dois
+    // botões (ver T_BTN_W_STOP/GO) garantem espaço mesmo pro rótulo mais
+    // comprido (CONTINUAR/INTERVALO) sem estourar.
+    lv_obj_t *l = add_label(b, txt, primary ? on_accent() : KIT_COLOR_TEXT, &kit_mono_26, 2);
     lv_obj_center(l);
     if (out_lbl) *out_lbl = l;
     return b;
@@ -1163,8 +1384,21 @@ static void build_page_clock(lv_obj_t *tile)
     lv_obj_set_size(box, lv_pct(100), lv_pct(100));
     lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
 
-    s_modetag_lbl = add_label(box, "REGRESSIVO", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 4);
-    lv_obj_align(s_modetag_lbl, LV_ALIGN_TOP_MID, 0, 16);
+    // Rótulo do modo + bolinha discreta do Pomodoro (amarela=FOCO, verde=DESCANSO,
+    // ver sync_pomo_paint) — some fora do Pomodoro.
+    lv_obj_t *tag_row = plain_box(box);
+    lv_obj_set_size(tag_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(tag_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(tag_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(tag_row, 9, 0);
+    lv_obj_align(tag_row, LV_ALIGN_TOP_MID, 0, 12);
+
+    s_modetag_dot = shape(tag_row, 13, 13, LV_RADIUS_CIRCLE, 0);
+    lv_obj_add_flag(s_modetag_dot, LV_OBJ_FLAG_HIDDEN);
+
+    // Status secundário (não é o protagonista, mas precisa ler de relance
+    // enquanto conta) — mono_16 era pequeno demais, ver design-language.md.
+    s_modetag_lbl = add_label(tag_row, "REGRESSIVO", KIT_COLOR_TEXT_MUTED, &kit_mono_26, 4);
 
     // Mostrador MM:SS — dígitos em kit_display_120 (só " - + 0-9"); o "dois
     // pontos" são dois quadrados desenhados (a fonte não tem ':').
@@ -1197,10 +1431,10 @@ static void build_page_clock(lv_obj_t *tile)
 
     s_ss_lbl = add_label(row, "00", KIT_COLOR_TEXT, &kit_display_120, 0);
 
-    s_stop_btn = make_footer_btn(box, "PARAR", stop_cb, false, NULL);
+    s_stop_btn = make_footer_btn(box, "PARAR", T_BTN_W_STOP, stop_cb, false, NULL);
     lv_obj_align(s_stop_btn, LV_ALIGN_BOTTOM_LEFT, T_PAD, -T_BTN_MARGIN);
 
-    s_go_btn = make_footer_btn(box, "COME\xC3\x87""AR", go_cb, true, &s_go_lbl);
+    s_go_btn = make_footer_btn(box, "COME\xC3\x87""AR", T_BTN_W_GO, go_cb, true, &s_go_lbl);
     lv_obj_align(s_go_btn, LV_ALIGN_BOTTOM_RIGHT, -T_PAD, -T_BTN_MARGIN);
 }
 
@@ -1282,16 +1516,21 @@ kit_err_t kit_timer_start(uint32_t accent)
     s_dimmed    = false;
     s_colon_vis = true;
     s_fin_on    = false;
-    s_flip_on   = false;
     s_flip_set  = 300;
     s_flip_pos  = false;
     s_flip_spent = false;
     s_flip_touched = false;
     s_flip_last_change_us = 0;
+    s_pomo_focus_secs = POMO_FOCUS_DEFAULT_S;
+    s_pomo_rest_secs  = POMO_REST_DEFAULT_S;
+    s_pomo_phase = POMO_FOCUS;
+    s_pomo_pending = false;
     s_wheel_n = 0;
     s_wheel_locked = false;
     load_prefs();
-    s_cur_secs  = (s_mode == MODE_UP) ? 0 : s_set_secs;
+    s_cur_secs  = (s_mode == MODE_UP)   ? 0
+                : (s_mode == MODE_POMO) ? s_pomo_focus_secs
+                                        : s_set_secs;
     s_flip_rem  = s_flip_set;
     kit_display_restore_rotation_impl();
 
@@ -1312,8 +1551,9 @@ kit_err_t kit_timer_start(uint32_t accent)
     sync_mode_pills();
     sync_presets();
     sync_wheels();
-    sync_flip_pills();
+    sync_mode_sections();
     sync_hint();
+    sync_pomo_paint();
     sync_clock();
     sync_buttons();
     sync_dots();
@@ -1350,6 +1590,10 @@ void kit_timer_destroy(void)
     s_wheel_mm = s_wheel_ss = NULL;
     s_wheel_flip[0] = s_wheel_flip[1] = NULL;
     s_flip_cfg = NULL;
+    s_pomo_cfg = NULL;
+    s_wheel_pomo_focus[0] = s_wheel_pomo_focus[1] = NULL;
+    s_wheel_pomo_rest[0]  = s_wheel_pomo_rest[1]  = NULL;
+    s_modetag_dot = NULL;
     s_modetag_lbl = s_mm_lbl = s_ss_lbl = s_colon = NULL;
     s_colon_sq[0] = s_colon_sq[1] = NULL;
     s_go_btn = s_go_lbl = s_stop_btn = NULL;
