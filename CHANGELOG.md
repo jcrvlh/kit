@@ -9,6 +9,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.11.0] — 2026-09-12
+
 ### Corrigido
 - **Configurar o Wi-Fi não trava mais o KIT.** Ao abrir Ajustes → Wi-Fi →
   Configurar rede, a tela congelava (às vezes até reiniciar sozinha) ou
