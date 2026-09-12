@@ -94,20 +94,7 @@ body {
   white-space: nowrap;
 }
 
-.iconbtn {
-  justify-self: end;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: var(--surface);
-  color: var(--paper);
-  border: 0;
-  border-radius: 12px;
-  cursor: pointer;
-}
-.iconbtn:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.mast-actions { justify-self: end; }
 
 /* ---- Cartela: lista de categorias ----------------------------------- */
 
@@ -140,8 +127,20 @@ body {
 .cats .c { font-size: 18px; }
 
 .howto {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.howto p {
+  font-family: var(--mono);
+  font-weight: 700;
   font-size: 13px;
-  color: var(--muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper);
   text-wrap: balance;
 }
 
@@ -195,11 +194,11 @@ body {
   cursor: pointer;
   width: 100%;
 }
-.btn-primary { background: var(--yellow); color: #000; }
+.btn-primary { background: var(--blue); color: var(--on-blue); }
 .btn-primary:disabled { background: var(--surface); color: var(--muted); cursor: not-allowed; }
 .btn-ghost {
   background: none;
-  color: var(--muted);
+  color: var(--paper);
   border: 1px solid var(--line);
   padding: 13px 0;
   font-size: 12px;
@@ -207,29 +206,58 @@ body {
 .btn-ghost:disabled { opacity: .4; cursor: not-allowed; }
 .btn:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
 
-/* ---- Alternador CATEGORIAS / PREENCHER --------------------------- */
+/* ---- Chamada pro modo celular / voltar --------------------------- */
 
-.seg {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-bottom: 16px;
+.cta {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.seg button {
+.cta p {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--paper);
+}
+.cta .btn { padding: 14px 0; }
+
+.or-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.or-divider::before, .or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.backlink {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 4px 0;
   font-family: var(--mono);
   font-weight: 700;
   font-size: 12px;
-  letter-spacing: 0.14em;
-  padding: 12px 0;
-  border: 0;
-  border-radius: 12px;
-  background: var(--surface);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--muted);
   cursor: pointer;
-  transition: background .12s, color .12s;
 }
-.seg button[aria-pressed="true"] { background: var(--blue); color: var(--on-blue); }
-.seg button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.backlink:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
 /* ---- Preencher no celular -------------------------------------- */
 
@@ -253,29 +281,7 @@ body {
   text-transform: uppercase;
   color: var(--muted);
 }
-.round-hd .rl-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.round-hd .rl-wrap span {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.round-hd .rl {
-  width: 54px;
-  height: 54px;
-  text-align: center;
-  font-family: var(--disp);
-  font-size: 26px;
-  text-transform: uppercase;
-  background: var(--bg);
-  color: var(--blue);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-.round-hd .rl::placeholder { color: var(--line); }
 .round-hd .rx {
-  align-self: flex-start;
   width: 34px;
   height: 34px;
   border: 0;
@@ -286,6 +292,35 @@ body {
   line-height: 1;
   cursor: pointer;
 }
+
+/* Letra: primeira coisa a preencher, protagonista do card */
+.round-letter { display: flex; flex-direction: column; gap: 6px; }
+.round-letter .rl-cap {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+.round-letter .rl {
+  width: 100%;
+  height: 64px;
+  text-align: center;
+  font-family: var(--disp);
+  font-size: 34px;
+  text-transform: uppercase;
+  background: var(--bg);
+  color: var(--blue);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.round-letter .rl::placeholder { color: var(--line); }
+.round-letter .rl-hint { font-size: 12px; color: var(--muted); }
+.round.no-letter .frow { opacity: .45; }
+
 .frow { display: flex; flex-direction: column; gap: 5px; }
 .frow label {
   font-family: var(--mono);
@@ -294,10 +329,11 @@ body {
   text-transform: uppercase;
   color: var(--muted);
 }
-.frow input, .round-hd .rl {
+.frow input {
   -webkit-appearance: none;
   appearance: none;
 }
+.frow input:disabled { cursor: not-allowed; }
 .frow input {
   font-family: var(--body);
   font-size: 16px;
@@ -360,16 +396,68 @@ body {
   text-align: center;
   word-break: break-word;
 }
-.score-q {
-  font-size: 13px;
-  color: var(--muted);
+#scoreAsk { display: flex; flex-direction: column; gap: 20px; margin-top: 6px; }
+.dlg .score-q {
+  font-family: var(--body);
+  font-weight: 600;
+  font-size: 21px;
+  line-height: 1.4;
+  color: #FFFFFF;
+  text-wrap: balance;
 }
-.score-opts { display: flex; flex-direction: column; gap: 8px; }
-.score-opt { font-size: 13px; letter-spacing: 0.06em; }
-.score-opt.rep  { background: var(--red);   color: #fff; }
-.score-opt.uni  { background: var(--yellow); color: #000; }
-.score-opt.solo { background: var(--green); color: #fff; }
-.score-opt.inv  { background: var(--surface); color: var(--muted); border: 1px solid var(--line); }
+.score-yn { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.score-yn .btn {
+  background: var(--surface);
+  color: var(--paper);
+  padding: 18px 0;
+  font-size: 14px;
+}
+.score-yn .btn:active { background: var(--blue); color: var(--on-blue); }
+
+#scoreDone { display: flex; flex-direction: column; gap: 12px; }
+.score-result {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--blue);
+  text-align: center;
+  padding: 4px 0;
+}
+
+.revise-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+.revise-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  background: var(--surface);
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--paper);
+  cursor: pointer;
+}
+.revise-list button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.revise-list .rv-cat {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  flex: 1;
+}
+.revise-list .rv-ans { font-size: 13px; color: var(--paper); flex: 2; word-break: break-word; }
+.revise-list .rv-pts {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--blue);
+  white-space: nowrap;
+}
 
 /* ---- Diálogo de impressão --------------------------------------- */
 
@@ -381,12 +469,15 @@ body {
   max-width: 340px;
   height: fit-content;
   max-height: calc(100% - 32px);
+  overflow: auto;
   border: 0;
   border-radius: 18px;
   padding: 0;
   background: var(--surface-alt);
   color: var(--paper);
 }
+.dlg:not([open]) { display: none; }
+.dlg[open] { display: block; }
 .dlg::backdrop { background: rgba(0, 0, 0, 0.6); }
 .dlg-in { display: flex; flex-direction: column; gap: 14px; padding: 22px; }
 .dlg h2 {
@@ -559,18 +650,10 @@ footer {
   <header class="mast">
     <div class="primitives" aria-hidden="true"><i class="sq"></i><i class="ci"></i><i class="tr"></i></div>
     <div class="wordmark">ADEDONHA</div>
-    <button type="button" class="iconbtn" id="print" aria-label="Imprimir folhas" title="Imprimir folhas">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
-           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M8 14h8v7H8z"/>
-      </svg>
-    </button>
+    <div class="mast-actions"></div>
   </header>
 
-  <div class="seg" id="seg" role="group" aria-label="Modo" hidden>
-    <button type="button" data-mode="cats" aria-pressed="true">CATEGORIAS</button>
-    <button type="button" data-mode="fill" aria-pressed="false">PREENCHER</button>
-  </div>
+  <button type="button" class="backlink" id="backToCats" hidden>&larr; CATEGORIAS</button>
 
   <main id="view">
     <section id="cartela" hidden>
@@ -580,7 +663,10 @@ footer {
     <section class="fill" id="fill" hidden></section>
   </main>
 
-  <p class="howto" id="howto"></p>
+  <section class="howto" id="howto">
+    <p id="howtoText"></p>
+    <button type="button" class="btn btn-primary" id="doprint" hidden>IMPRIMIR FOLHAS</button>
+  </section>
 
   <section class="picker" id="picker" hidden>
     <h2>Escolha as categorias</h2>
@@ -588,18 +674,22 @@ footer {
     <div class="count" id="count">0 escolhidas</div>
   </section>
 
-  <div class="actions">
-    <button type="button" class="btn btn-primary" id="doprint">IMPRIMIR FOLHAS</button>
-    <button type="button" class="btn btn-ghost" id="edit">TROCAR CATEGORIAS</button>
+  <div class="actions" id="actions">
     <button type="button" class="btn btn-ghost" id="apply" hidden>USAR ESTAS CATEGORIAS</button>
-    <button type="button" class="btn btn-ghost" id="copy">COPIAR LINK DA CARTELA</button>
   </div>
+
+  <div class="or-divider" id="orDivider" hidden>OU</div>
+
+  <section class="cta" id="cta" hidden>
+    <p>Quer jogar no celular?</p>
+    <button type="button" class="btn btn-primary" id="goFill">PREENCHER AQUI</button>
+  </section>
 
   <footer>KIT</footer>
 </div>
 
 <dialog class="dlg" id="printbox">
-  <form method="dialog" class="dlg-in">
+  <div class="dlg-in">
     <h2>Imprimir folhas</h2>
     <p>Uma folha A4 por pessoa, todas iguais. Sai em preto e branco.</p>
     <label>Quantas folhas
@@ -610,9 +700,9 @@ footer {
     </label>
     <div class="dlg-row">
       <button type="button" class="btn btn-ghost" id="dlgcancel">Cancelar</button>
-      <button type="submit" value="ok" class="btn btn-primary">Gerar e imprimir</button>
+      <button type="button" class="btn btn-primary" id="dlgprint">Gerar e imprimir</button>
     </div>
-  </form>
+  </div>
 </dialog>
 
 <dialog class="dlg" id="scorebox">
@@ -620,14 +710,30 @@ footer {
     <p class="score-progress" id="scoreProgress"></p>
     <h2 id="scoreCat"></h2>
     <p class="score-answer" id="scoreAnswer"></p>
-    <p class="score-q">Essa resposta foi:</p>
-    <div class="score-opts">
-      <button type="button" class="btn score-opt rep"  data-val="5">Repetida com alguém · 5 pts</button>
-      <button type="button" class="btn score-opt uni"  data-val="10">Única, mas outros acertaram · 10 pts</button>
-      <button type="button" class="btn score-opt solo" data-val="15">Só eu acertei essa categoria · 15 pts</button>
-      <button type="button" class="btn score-opt inv"  data-val="0">Não valeu · 0 pts</button>
+
+    <div id="scoreAsk">
+      <p class="score-q" id="scoreQ"></p>
+      <div class="score-yn">
+        <button type="button" class="btn" data-yn="yes">Sim</button>
+        <button type="button" class="btn" data-yn="no">Não</button>
+      </div>
     </div>
-    <button type="button" class="btn btn-ghost" id="scoreCancel">Cancelar contagem</button>
+
+    <div id="scoreDone" hidden>
+      <p class="score-result" id="scoreResult"></p>
+      <button type="button" class="btn btn-primary" id="scoreNext"></button>
+    </div>
+
+    <button type="button" class="btn btn-ghost" id="scoreCancel">Fechar</button>
+  </div>
+</dialog>
+
+<dialog class="dlg" id="revisebox">
+  <div class="dlg-in">
+    <h2>Revisar pontos</h2>
+    <p class="score-progress" id="reviseTotal"></p>
+    <ul class="revise-list" id="reviseList"></ul>
+    <button type="button" class="btn btn-ghost" id="reviseClose">Fechar</button>
   </div>
 </dialog>
 
@@ -691,16 +797,35 @@ let mode = "cats";                 // "cats" (lista + impressão) | "fill" (pree
 const elCartela = document.getElementById("cartela");
 const elCats    = document.getElementById("cats");
 const elKick    = document.getElementById("kick");
-const elHowto   = document.getElementById("howto");
+const elHowto     = document.getElementById("howto");
+const elHowtoText = document.getElementById("howtoText");
 const elPicker  = document.getElementById("picker");
 const elChips   = document.getElementById("chips");
 const elCount   = document.getElementById("count");
-const elSeg     = document.getElementById("seg");
 const elFill    = document.getElementById("fill");
+const elActions = document.getElementById("actions");
+const elCta     = document.getElementById("cta");
+const elOrDivider = document.getElementById("orDivider");
 const btnPrint  = document.getElementById("doprint");
-const btnEdit   = document.getElementById("edit");
 const btnApply  = document.getElementById("apply");
-const btnCopy   = document.getElementById("copy");
+const btnGoFill = document.getElementById("goFill");
+const btnBack   = document.getElementById("backToCats");
+
+/* Diálogo com fallback pra quem não tem <dialog> nativo (iOS < 15.4):
+   abre/fecha "na mão" via [open] em vez de showModal/close. */
+function showDlg(d) {
+  if (typeof d.showModal === "function") {
+    try { d.showModal(); return; } catch (e) { /* cai no fallback */ }
+  }
+  d.setAttribute("open", "");
+}
+function closeDlg(d) {
+  if (typeof d.close === "function") {
+    try { d.close(); return; } catch (e) { /* cai no fallback */ }
+  }
+  d.removeAttribute("open");
+  d.dispatchEvent(new Event("close"));
+}
 
 /* --- Preencher no celular: estado por conjunto de categorias -------
    Fica só no navegador de quem abriu (localStorage), sob a chave dos slugs
@@ -765,10 +890,11 @@ for (const c of POOL) {
 /* --- Render ------------------------------------------------------- */
 function render() {
   const has = cats.length > 0;
-  const showFill = has && !editing && mode === "fill";
+  const inFill = has && !editing && mode === "fill";
+  const inCats = has && !editing && mode === "cats";
 
-  elCartela.hidden = !has || editing || mode === "fill";
-  if (has && !editing && mode === "cats") {
+  elCartela.hidden = !inCats;
+  if (inCats) {
     elKick.textContent = cats.length + (cats.length === 1 ? " categoria" : " categorias");
     elCats.replaceChildren(...cats.map((c, i) => {
       const li = document.createElement("li");
@@ -779,12 +905,10 @@ function render() {
     }));
   }
 
-  elSeg.hidden = !has || editing;
-  for (const b of elSeg.children)
-    b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+  btnBack.hidden = !inFill;
 
-  elFill.hidden = !showFill;
-  if (showFill) renderFill();
+  elFill.hidden = !inFill;
+  if (inFill) renderFill();
 
   elPicker.hidden = !editing;
   if (editing) {
@@ -793,27 +917,29 @@ function render() {
     elCount.textContent = draft.length + (draft.length === 1 ? " escolhida" : " escolhidas");
   }
 
-  btnEdit.hidden  = editing;
+  elActions.hidden = !editing;
   btnApply.hidden = !editing;
   btnApply.disabled = draft.length < 2;
   btnApply.classList.toggle("btn-primary", draft.length >= 2);
   btnApply.classList.toggle("btn-ghost", draft.length < 2);
-  btnCopy.hidden  = editing || !has;
-  btnPrint.hidden = editing;
+  btnPrint.hidden = editing || !inCats;
   btnPrint.disabled = !has;
+
+  elCta.hidden = !inCats;
+  elOrDivider.hidden = !inCats;
 
   if (editing) {
     elHowto.hidden = has;
-    elHowto.textContent = has ? "" :
+    elHowtoText.textContent = has ? "" :
       "Monte a cartela pelas categorias abaixo — ou volte pra Adedonha no KIT e deixe o aparelho sortear.";
-  } else if (showFill) {
+  } else if (inFill) {
     elHowto.hidden = false;
-    elHowto.textContent =
-      "O KIT sorteia a letra; anote aqui uma resposta por categoria antes do STOP. Depois toque em CONTABILIZAR PONTOS pra fechar a rodada. Fica salvo só neste celular.";
+    elHowtoText.textContent =
+      "O KIT sorteia a letra; digite ela primeiro, depois uma resposta por categoria antes do STOP. No fim da rodada, toque em CONFERIR RODADA. Fica salvo só neste celular.";
   } else {
     elHowto.hidden = false;
-    elHowto.textContent =
-      "Imprima uma folha por pessoa e jogue de caneta — ou toque em PREENCHER pra anotar aqui no celular. O KIT sorteia a letra; todos preenchem uma coluna até dar STOP.";
+    elHowtoText.textContent =
+      "Imprima uma folha por pessoa e jogue de caneta. O KIT sorteia a letra; todos preenchem uma coluna até dar STOP.";
   }
 }
 
@@ -823,7 +949,7 @@ function renderFill() {
 
   fill.rounds.forEach((r, ri) => {
     const card = document.createElement("div");
-    card.className = "round";
+    card.className = "round" + (r.l ? "" : " no-letter");
 
     const hd = document.createElement("div");
     hd.className = "round-hd";
@@ -831,25 +957,6 @@ function renderFill() {
     const rn = document.createElement("span");
     rn.className = "rn";
     rn.textContent = "Rodada " + (ri + 1);
-
-    const rlWrap = document.createElement("div");
-    rlWrap.className = "rl-wrap";
-    const rlCap = document.createElement("span");
-    rlCap.textContent = "Letra";
-    const rl = document.createElement("input");
-    rl.className = "rl";
-    rl.type = "text";
-    rl.maxLength = 1;
-    rl.value = r.l;
-    rl.placeholder = "?";
-    rl.setAttribute("aria-label", "Letra da rodada " + (ri + 1));
-    rl.autocapitalize = "characters";
-    rl.addEventListener("input", () => {
-      r.l = rl.value.toUpperCase();
-      rl.value = r.l;
-      saveFill();
-    });
-    rlWrap.append(rlCap, rl);
 
     const rx = document.createElement("button");
     rx.className = "rx";
@@ -863,22 +970,54 @@ function renderFill() {
       render();
     });
 
-    hd.append(rn, rlWrap, rx);
+    hd.append(rn, rx);
     card.appendChild(hd);
+
+    // Letra primeiro: protagonista do card, categorias só liberam com ela.
+    const lb = document.createElement("div");
+    lb.className = "round-letter";
+    const lcap = document.createElement("span");
+    lcap.className = "rl-cap";
+    lcap.textContent = "Letra";
+    const rl = document.createElement("input");
+    rl.className = "rl";
+    rl.type = "text";
+    rl.maxLength = 1;
+    rl.value = r.l;
+    rl.placeholder = "?";
+    rl.setAttribute("aria-label", "Letra da rodada " + (ri + 1));
+    rl.autocapitalize = "characters";
+    rl.autocomplete = "off";
+    const hint = document.createElement("span");
+    hint.className = "rl-hint";
+    hint.textContent = "Digite a letra pra liberar as categorias.";
+    hint.hidden = !!r.l;
+    rl.addEventListener("input", () => {
+      r.l = rl.value.toUpperCase();
+      rl.value = r.l;
+      saveFill();
+      const on = !!r.l;
+      card.classList.toggle("no-letter", !on);
+      hint.hidden = on;
+      card.querySelectorAll(".frow input").forEach((i) => { i.disabled = !on; });
+    });
+    lb.append(lcap, rl, hint);
+    card.appendChild(lb);
 
     // Declarados antes do loop de categorias pra syncFoot() poder ser
     // chamada a cada resposta digitada, sem precisar de um render() inteiro
     // (que tiraria o foco do campo em que a pessoa está digitando).
     let scoreBtn, totalEl;
     function syncFoot() {
-      // Cada toque em "contabilizar" pergunta TODAS as categorias respondidas
-      // de novo, do início — não retoma de onde parou. O rótulo só avisa que
-      // já existe alguma pontuação registrada (então tocar de novo reconta).
       const answered = answeredCats(r);
-      scoreBtn.disabled = answered.length === 0;
-      scoreBtn.textContent = answered.length === 0
-        ? "Sem respostas"
-        : (answered.every((ci) => r.s[ci] === null) ? "Contabilizar pontos" : "Recontar pontos");
+      if (answered.length === 0) {
+        scoreBtn.disabled = true;
+        scoreBtn.textContent = "CONFERIR RODADA";
+      } else {
+        scoreBtn.disabled = false;
+        const anyScored = answered.some((ci) => r.s[ci] !== null);
+        scoreBtn.textContent = anyScored ? "REVISAR PONTOS" : "CONFERIR RODADA";
+      }
       totalEl.textContent = "Pontos: " + roundTotal(r);
     }
 
@@ -894,6 +1033,7 @@ function renderFill() {
       inp.type = "text";
       inp.value = r.a[ci] || "";
       inp.autocomplete = "off";
+      inp.disabled = !r.l;
       inp.addEventListener("input", () => {
         r.a[ci] = inp.value;
         r.s[ci] = null;   // resposta mudou — a contagem antiga não vale mais
@@ -910,8 +1050,8 @@ function renderFill() {
 
     scoreBtn = document.createElement("button");
     scoreBtn.type = "button";
-    scoreBtn.className = "btn btn-ghost";
-    scoreBtn.addEventListener("click", () => startScoring(ri));
+    scoreBtn.className = "btn btn-primary";
+    scoreBtn.addEventListener("click", () => openScore(ri));
 
     totalEl = document.createElement("div");
     totalEl.className = "round-total";
@@ -924,7 +1064,7 @@ function renderFill() {
   });
 
   const add = document.createElement("button");
-  add.className = "btn btn-ghost";
+  add.className = "btn btn-primary";
   add.type = "button";
   add.textContent = "+ NOVA RODADA";
   add.addEventListener("click", () => {
@@ -950,72 +1090,156 @@ function updateTotal() {
   el.textContent = "Total: " + sum;
 }
 
-/* --- Contabilizar pontos: diálogo passo a passo, uma categoria por vez --
-   Pergunta só as categorias respondidas (em branco já vale 0 sem perguntar)
-   e some tudo em roundTotal(). Cada toque no botão pergunta TODAS de novo,
-   do início — não existe "retomar de onde parou". Cancelar no meio mantém
-   as respostas já tocadas até ali (a rodada fica com pontuação parcial) e
-   o próximo toque no botão reconta tudo de novo. */
+/* --- Conferir pontos: árvore guiada de sim/não, uma categoria por vez --
+   1. A resposta foi aceita?          não -> 0
+   2. Alguém escreveu a mesma coisa?   sim -> 5
+   3. Mais alguém respondeu (diferente)? sim -> 10 ; não -> 15
+   Ordem pensada pro caso mais comum (resposta repetida) resolver em só 2
+   toques; o caso raro (ninguém mais respondeu) é o único que gasta 3.
+   Categoria em branco vale 0 e nunca é perguntada. Primeira passada anda
+   pelas categorias ainda sem nota; depois disso o botão vira REVISAR PONTOS
+   e abre a lista-resumo, de onde dá pra reabrir a árvore de uma categoria
+   só (sem repetir as demais). */
 let scoreCtx = null;
 
-const scorebox       = document.getElementById("scorebox");
+const scorebox        = document.getElementById("scorebox");
+const revisebox       = document.getElementById("revisebox");
 const elScoreProgress = document.getElementById("scoreProgress");
 const elScoreCat      = document.getElementById("scoreCat");
 const elScoreAnswer   = document.getElementById("scoreAnswer");
+const elScoreAsk      = document.getElementById("scoreAsk");
+const elScoreQ        = document.getElementById("scoreQ");
+const elScoreDone     = document.getElementById("scoreDone");
+const elScoreResult   = document.getElementById("scoreResult");
+const btnScoreNext    = document.getElementById("scoreNext");
+const elReviseList    = document.getElementById("reviseList");
+const elReviseTotal   = document.getElementById("reviseTotal");
 
-function startScoring(ri) {
+const QUESTIONS = {
+  valid:  "A resposta foi aceita?",
+  same:   "Alguém escreveu a mesma palavra que você?",
+  others: "Mais alguém respondeu essa categoria (com outra palavra)?",
+};
+const RESULT = {
+  0:  "0 pts · não valeu",
+  5:  "5 pts · repetida",
+  10: "10 pts · resposta única",
+  15: "15 pts · só você lembrou",
+};
+
+function openScore(ri) {
   const r = fill.rounds[ri];
-  const list = answeredCats(r);
-  if (!list.length) return;
-  scoreCtx = { ri, list, pos: 0 };
+  const answered = answeredCats(r);
+  if (!answered.length) return;
+  const anyScored = answered.some((ci) => r.s[ci] !== null);
+  if (anyScored) openRevise(ri); else startWalk(ri);
+}
+
+function startWalk(ri) {
+  const list = answeredCats(fill.rounds[ri]);
+  scoreCtx = { ri, list, pos: 0, mode: "walk", step: "valid" };
   renderScoreStep();
-  if (typeof scorebox.showModal === "function") scorebox.showModal();
+  showDlg(scorebox);
 }
 
 function renderScoreStep() {
-  const { ri, list, pos } = scoreCtx;
+  const { ri, list, pos, step } = scoreCtx;
   const ci = list[pos];
   const r = fill.rounds[ri];
-  elScoreProgress.textContent =
-    "Rodada " + (ri + 1) + " · " + (pos + 1) + " de " + list.length;
+  elScoreProgress.textContent = "Categoria " + (pos + 1) + " de " + list.length;
   elScoreCat.textContent = cats[ci];
   elScoreAnswer.textContent = r.a[ci];
+  elScoreQ.textContent = QUESTIONS[step];
+  elScoreAsk.hidden = false;
+  elScoreDone.hidden = true;
 }
 
-function answerScore(val) {
-  const { ri, list, pos } = scoreCtx;
+function answerYN(yes) {
+  const { step } = scoreCtx;
+  if (step === "valid")  return yes ? askStep("same") : finishCat(0);
+  if (step === "same")   return yes ? finishCat(5) : askStep("others");
+  if (step === "others") return finishCat(yes ? 10 : 15);
+}
+
+function askStep(step) {
+  scoreCtx.step = step;
+  renderScoreStep();
+}
+
+function finishCat(val) {
+  const { ri, list, pos, mode } = scoreCtx;
   fill.rounds[ri].s[list[pos]] = val;
   saveFill();
+  elScoreResult.textContent = RESULT[val];
+  btnScoreNext.textContent = mode === "single"
+    ? "VOLTAR À LISTA"
+    : (pos + 1 < list.length ? "PRÓXIMA CATEGORIA" : "CONCLUIR RODADA");
+  elScoreAsk.hidden = true;
+  elScoreDone.hidden = false;
+}
+
+for (const b of scorebox.querySelectorAll("[data-yn]"))
+  b.addEventListener("click", () => answerYN(b.dataset.yn === "yes"));
+
+btnScoreNext.addEventListener("click", () => {
+  const { ri, list, pos, mode } = scoreCtx;
+  if (mode === "single") {
+    closeDlg(scorebox);
+    openRevise(ri);
+    return;
+  }
   if (pos + 1 < list.length) {
     scoreCtx.pos++;
+    scoreCtx.step = "valid";
     renderScoreStep();
   } else {
-    scoreCtx = null;
-    scorebox.close();
+    closeDlg(scorebox);
   }
-}
-
-for (const b of document.querySelectorAll(".score-opt"))
-  b.addEventListener("click", () => answerScore(parseInt(b.dataset.val, 10)));
-
-document.getElementById("scoreCancel").addEventListener("click", () => {
-  scoreCtx = null;
-  scorebox.close();
 });
 
-scorebox.addEventListener("close", () => render());
+document.getElementById("scoreCancel").addEventListener("click", () => closeDlg(scorebox));
+scorebox.addEventListener("close", () => { scoreCtx = null; render(); });
 
-/* --- Ações ------------------------------------------------------ */
-for (const b of elSeg.children) {
-  b.addEventListener("click", () => {
-    if (mode === b.dataset.mode) return;
-    mode = b.dataset.mode;
-    try { localStorage.setItem("kit.adedonha.mode", mode); } catch (e) { /* ok */ }
-    render();
-  });
+/* --- Revisar pontos: lista-resumo; tocar numa linha refaz a árvore só
+   daquela categoria e volta pra lista (não repete as outras). */
+function openRevise(ri) {
+  const r = fill.rounds[ri];
+  const list = answeredCats(r);
+  elReviseTotal.textContent = "Pontos da rodada: " + roundTotal(r);
+  elReviseList.replaceChildren(...list.map((ci) => {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.type = "button";
+    const cat = document.createElement("span"); cat.className = "rv-cat"; cat.textContent = cats[ci];
+    const ans = document.createElement("span"); ans.className = "rv-ans"; ans.textContent = r.a[ci];
+    const pts = document.createElement("span"); pts.className = "rv-pts";
+    pts.textContent = (r.s[ci] === null ? "?" : r.s[ci]) + " pts";
+    b.append(cat, ans, pts);
+    b.addEventListener("click", () => {
+      closeDlg(revisebox);
+      scoreCtx = { ri, list: [ci], pos: 0, mode: "single", step: "valid" };
+      renderScoreStep();
+      showDlg(scorebox);
+    });
+    li.appendChild(b);
+    return li;
+  }));
+  showDlg(revisebox);
 }
 
-btnEdit.addEventListener("click", () => { draft = cats.slice(); editing = true; render(); });
+document.getElementById("reviseClose").addEventListener("click", () => closeDlg(revisebox));
+revisebox.addEventListener("close", () => render());
+
+/* --- Ações ------------------------------------------------------ */
+function setMode(m) {
+  if (mode === m) return;
+  mode = m;
+  try { localStorage.setItem("kit.adedonha.mode", mode); } catch (e) { /* ok */ }
+  render();
+  window.scrollTo(0, 0);
+}
+btnGoFill.addEventListener("click", () => setMode("fill"));
+btnBack.addEventListener("click", () => setMode("cats"));
 
 btnApply.addEventListener("click", () => {
   if (draft.length < 2) return;
@@ -1028,18 +1252,6 @@ btnApply.addEventListener("click", () => {
   render();
 });
 
-btnCopy.addEventListener("click", async () => {
-  const u = new URL(location.href);
-  u.search = "?c=" + catsToParam(cats);
-  try {
-    await navigator.clipboard.writeText(u.toString());
-    btnCopy.textContent = "LINK COPIADO";
-    setTimeout(() => (btnCopy.textContent = "COPIAR LINK DA CARTELA"), 1600);
-  } catch (e) {
-    prompt("Copie o link da cartela:", u.toString());
-  }
-});
-
 /* --- Impressão -------------------------------------------------- */
 const sheet    = document.getElementById("sheet");
 const printbox = document.getElementById("printbox");
@@ -1048,16 +1260,15 @@ const elRounds  = document.getElementById("rounds");
 
 btnPrint.addEventListener("click", () => {
   if (!cats.length) return;
-  if (typeof printbox.showModal === "function") printbox.showModal();
-  else runPrint(4, 12);
+  showDlg(printbox);
 });
 
-document.getElementById("dlgcancel").addEventListener("click", () => printbox.close("cancel"));
+document.getElementById("dlgcancel").addEventListener("click", () => closeDlg(printbox));
 
-printbox.addEventListener("close", () => {
-  if (printbox.returnValue !== "ok") return;
+document.getElementById("dlgprint").addEventListener("click", () => {
   const p = clamp(parseInt(elPlayers.value, 10), 1, 12, 4);
   const r = clamp(parseInt(elRounds.value, 10), 1, 24, 12);
+  closeDlg(printbox);
   runPrint(p, r);
 });
 
@@ -1143,10 +1354,14 @@ function runPrint(players, rounds) {
     page.appendChild(buildSheet(rounds));
     sheet.appendChild(page);
   }
-  window.print();
+  // Dois rAF pra garantir que o DOM injetado entrou no layout antes do
+  // snapshot de impressão — em vários browsers mobile, print() logo após
+  // montar o DOM sai com a folha vazia. A .sheet fica montada depois
+  // (display:none na tela) e é substituída na próxima impressão; não some
+  // no afterprint porque alguns browsers mobile disparam esse evento antes
+  // da pessoa terminar de salvar o PDF, o que também gerava folha vazia.
+  requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
 }
-
-window.addEventListener("afterprint", () => sheet.replaceChildren());
 
 try {
   const m = localStorage.getItem("kit.adedonha.mode");
