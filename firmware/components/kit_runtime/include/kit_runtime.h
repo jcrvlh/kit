@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 13
+#define KIT_VERSION_MINOR 14
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -61,7 +61,13 @@ extern "C" {
 // 0.13.0: alinha com firmware/version.txt (card de Instagram no fim da grade
 //        "VER TODOS" + duas otimizações de bateria com a tela apagada —
 //        nenhuma superfície nova pras Tools)
-#define KIT_VERSION_STRING "0.13.0"
+// 0.14.0: alinha com firmware/version.txt (fluidez do swipe/scroll da Home:
+//        buffer de flush do LVGL 16->24 linhas, cache de CASET/RASET no
+//        driver CO5300, ícones de Tool viram bitmap A8 único recolorível no
+//        lugar de 2-5 lv_obj compostos, e as caixas semi-transparentes atrás
+//        dos ícones saem da grade "VER TODOS" e dos slides de recentes —
+//        nenhuma superfície nova pras Tools)
+#define KIT_VERSION_STRING "0.14.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

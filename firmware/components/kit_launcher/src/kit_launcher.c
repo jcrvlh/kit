@@ -68,6 +68,31 @@ static lv_obj_t *s_feedback_screen = NULL;
 
 extern const lv_image_dsc_t kit_icon_triangle_a8;
 
+// KIT: ícones de Tool como bitmap A8 único (recolorível), em vez da
+// composição de 2-5 lv_obj por ícone — ver kit_icon_assets.c (gerado por
+// scratchpad/gen_icons.py) e a conversa sobre o custo de render do swipe
+// horizontal da Home. TRIANGLE e o glifo de FIRST continuam como fonte
+// (kit_mono_26), já eram baratos (1 objeto).
+extern const lv_image_dsc_t kit_icon_dice_a8;
+extern const lv_image_dsc_t kit_icon_spin_a8;
+extern const lv_image_dsc_t kit_icon_coin_a8;
+extern const lv_image_dsc_t kit_icon_bingo_a8;
+extern const lv_image_dsc_t kit_icon_order_a8;
+extern const lv_image_dsc_t kit_icon_timer_a8;
+extern const lv_image_dsc_t kit_icon_teams_a8;
+extern const lv_image_dsc_t kit_icon_ask_a8;
+extern const lv_image_dsc_t kit_icon_pavio_a8;
+extern const lv_image_dsc_t kit_icon_adedonha_a8;
+extern const lv_image_dsc_t kit_icon_placar_a8;
+extern const lv_image_dsc_t kit_icon_veto_a8;
+extern const lv_image_dsc_t kit_icon_mimica_a8;
+extern const lv_image_dsc_t kit_icon_testa_a8;
+extern const lv_image_dsc_t kit_icon_phone_a8;
+extern const lv_image_dsc_t kit_icon_estouro_a8;
+extern const lv_image_dsc_t kit_icon_dial_a8;
+extern const lv_image_dsc_t kit_icon_soundbox_a8;
+extern const lv_image_dsc_t kit_icon_external_a8;
+
 static lv_obj_t *s_brightness_val_lbl = NULL;
 static lv_obj_t *s_volume_val_lbl = NULL;
 static lv_obj_t *s_sound_val_lbl = NULL;
@@ -799,180 +824,70 @@ static lv_obj_t *icon_shape(lv_obj_t *p, int w, int h, uint32_t color,
     return o;
 }
 
-static void make_tool_icon(lv_obj_t *badge, tool_icon_t kind, uint32_t color)
+// Ícone posicionado pelo centro (cx, cy) relativo à área de conteúdo do pai —
+// onde ficava o centro da caixa semi-transparente antiga, removida (era 1
+// objeto + 1 blend alpha a mais por tile, dispensável já que o ícone hoje é
+// um bitmap único e legível sem fundo). `zoom` é a escala do bitmap
+// (LV_SCALE_NONE = 256 = tamanho nativo; usado pra ampliar nos slides
+// individuais dos "últimos acessados", onde há mais espaço).
+static void make_tool_icon(lv_obj_t *parent, tool_icon_t kind, uint32_t color,
+                           int cx, int cy, int zoom)
 {
-    lv_obj_t *ic = lv_obj_create(badge);
-    lv_obj_remove_style_all(ic);
-    lv_obj_set_size(ic, 24, 24);
-    lv_obj_clear_flag(ic, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(ic, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
-    lv_obj_center(ic);
+    // TRIANGLE e FIRST usam glifo da fonte (kit_mono_26) — já eram baratos
+    // (1-2 objetos), sem ganho em virar bitmap. Mantidos na composição antiga
+    // (sem zoom — só os ícones em bitmap ampliam por ora).
+    if (kind == TOOL_ICON_TRIANGLE || kind == TOOL_ICON_FIRST) {
+        lv_obj_t *ic = lv_obj_create(parent);
+        lv_obj_remove_style_all(ic);
+        lv_obj_set_size(ic, 24, 24);
+        lv_obj_clear_flag(ic, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_flag(ic, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+        lv_obj_align(ic, LV_ALIGN_TOP_LEFT, cx - 12, cy - 12);
 
+        if (kind == TOOL_ICON_TRIANGLE) {
+            lv_obj_t *tr = add_label(ic, KIT_ICON_TRIANGLE, color, &kit_mono_26, 0);
+            lv_obj_center(tr);
+        } else {
+            // seta apontando para a pessoa escolhida
+            lv_obj_t *car = add_label(ic, KIT_ICON_CHEVRON, color, &kit_mono_26, 0);
+            lv_obj_align(car, LV_ALIGN_LEFT_MID, -2, 0);
+            lv_obj_align(icon_shape(ic, 13, 13, color, LV_RADIUS_CIRCLE, 0),
+                         LV_ALIGN_RIGHT_MID, 0, 0);
+        }
+        return;
+    }
+
+    // Demais ícones: bitmap A8 único (recolorido em runtime), em vez de
+    // compor 2-5 lv_obj — ver kit_icon_assets.c.
+    const lv_image_dsc_t *dsc;
     switch (kind) {
-    case TOOL_ICON_DICE: {
-        lv_obj_t *sq = icon_shape(ic, 20, 20, color, 5, 3);
-        lv_obj_center(sq);
-        lv_obj_align(icon_shape(ic, 4, 4, color, 2, 0), LV_ALIGN_CENTER, -4, -4);
-        lv_obj_align(icon_shape(ic, 4, 4, color, 2, 0), LV_ALIGN_CENTER,  4,  4);
-        break;
+    case TOOL_ICON_DICE:     dsc = &kit_icon_dice_a8;     break;
+    case TOOL_ICON_SPIN:     dsc = &kit_icon_spin_a8;     break;
+    case TOOL_ICON_COIN:     dsc = &kit_icon_coin_a8;     break;
+    case TOOL_ICON_BINGO:    dsc = &kit_icon_bingo_a8;    break;
+    case TOOL_ICON_ORDER:    dsc = &kit_icon_order_a8;    break;
+    case TOOL_ICON_TIMER:    dsc = &kit_icon_timer_a8;    break;
+    case TOOL_ICON_TEAMS:    dsc = &kit_icon_teams_a8;    break;
+    case TOOL_ICON_ASK:      dsc = &kit_icon_ask_a8;      break;
+    case TOOL_ICON_PAVIO:    dsc = &kit_icon_pavio_a8;    break;
+    case TOOL_ICON_ADEDONHA: dsc = &kit_icon_adedonha_a8; break;
+    case TOOL_ICON_PLACAR:   dsc = &kit_icon_placar_a8;   break;
+    case TOOL_ICON_VETO:     dsc = &kit_icon_veto_a8;     break;
+    case TOOL_ICON_MIMICA:   dsc = &kit_icon_mimica_a8;   break;
+    case TOOL_ICON_TESTA:    dsc = &kit_icon_testa_a8;    break;
+    case TOOL_ICON_PHONE:    dsc = &kit_icon_phone_a8;    break;
+    case TOOL_ICON_ESTOURO:  dsc = &kit_icon_estouro_a8;  break;
+    case TOOL_ICON_DIAL:     dsc = &kit_icon_dial_a8;     break;
+    case TOOL_ICON_SOUNDBOX: dsc = &kit_icon_soundbox_a8; break;
+    default:                 dsc = &kit_icon_external_a8; break;
     }
-    case TOOL_ICON_SPIN: {
-        lv_obj_t *ring = icon_shape(ic, 20, 20, color, LV_RADIUS_CIRCLE, 3);
-        lv_obj_center(ring);
-        lv_obj_align(icon_shape(ic, 3, 8, color, 2, 0), LV_ALIGN_CENTER, 0, -4);
-        lv_obj_align(icon_shape(ic, 5, 5, color, 3, 0), LV_ALIGN_CENTER, 0, 0);
-        break;
-    }
-    case TOOL_ICON_COIN: {
-        lv_obj_t *disc = icon_shape(ic, 20, 20, color, LV_RADIUS_CIRCLE, 3);
-        lv_obj_center(disc);
-        lv_obj_align(icon_shape(ic, 3, 22, color, 1, 0), LV_ALIGN_CENTER, 0, 0);
-        break;
-    }
-    case TOOL_ICON_TRIANGLE: {
-        lv_obj_t *tr = add_label(ic, KIT_ICON_TRIANGLE, color, &kit_mono_26, 0);
-        lv_obj_center(tr);
-        break;
-    }
-    case TOOL_ICON_BINGO: {
-        lv_obj_align(icon_shape(ic, 7, 7, color, 4, 0), LV_ALIGN_CENTER, -5, -5);
-        lv_obj_align(icon_shape(ic, 7, 7, color, 4, 0), LV_ALIGN_CENTER,  5, -5);
-        lv_obj_align(icon_shape(ic, 7, 7, color, 4, 0), LV_ALIGN_CENTER, -5,  5);
-        lv_obj_align(icon_shape(ic, 7, 7, color, 4, 0), LV_ALIGN_CENTER,  5,  5);
-        break;
-    }
-    case TOOL_ICON_ORDER: {
-        lv_obj_align(icon_shape(ic, 24, 4, color, 2, 0), LV_ALIGN_TOP_LEFT, 0, 3);
-        lv_obj_align(icon_shape(ic, 16, 4, color, 2, 0), LV_ALIGN_TOP_LEFT, 0, 11);
-        lv_obj_align(icon_shape(ic,  9, 4, color, 2, 0), LV_ALIGN_TOP_LEFT, 0, 19);
-        break;
-    }
-    case TOOL_ICON_TIMER: {
-        lv_obj_t *ring = icon_shape(ic, 20, 20, color, LV_RADIUS_CIRCLE, 3);
-        lv_obj_align(ring, LV_ALIGN_CENTER, 0, 2);
-        lv_obj_align(icon_shape(ic, 6, 3, color, 1, 0), LV_ALIGN_CENTER, 0, -10);
-        lv_obj_align(icon_shape(ic, 2, 7, color, 1, 0), LV_ALIGN_CENTER, 0, -1);
-        lv_obj_align(icon_shape(ic, 6, 2, color, 1, 0), LV_ALIGN_CENTER, 3, 3);
-        break;
-    }
-    case TOOL_ICON_FIRST: {
-        // seta apontando para a pessoa escolhida
-        lv_obj_t *car = add_label(ic, KIT_ICON_CHEVRON, color, &kit_mono_26, 0);
-        lv_obj_align(car, LV_ALIGN_LEFT_MID, -2, 0);
-        lv_obj_align(icon_shape(ic, 13, 13, color, LV_RADIUS_CIRCLE, 0),
-                     LV_ALIGN_RIGHT_MID, 0, 0);
-        break;
-    }
-    case TOOL_ICON_TEAMS: {
-        // quadrado dividido em dois — dois times
-        lv_obj_align(icon_shape(ic, 10, 22, color, 3, 0), LV_ALIGN_CENTER, -6, 0);
-        lv_obj_align(icon_shape(ic, 10, 22, color, 3, 3), LV_ALIGN_CENTER,  6, 0);
-        break;
-    }
-    case TOOL_ICON_ASK: {
-        // balão de fala com reticências — conversa
-        lv_obj_align(icon_shape(ic, 24, 16, color, 6, 3), LV_ALIGN_TOP_MID, 0, 0);
-        lv_obj_align(icon_shape(ic, 6, 6, color, 1, 0), LV_ALIGN_BOTTOM_LEFT, 3, 0);
-        lv_obj_align(icon_shape(ic, 3, 3, color, 2, 0), LV_ALIGN_TOP_MID, -6, 6);
-        lv_obj_align(icon_shape(ic, 3, 3, color, 2, 0), LV_ALIGN_TOP_MID,  0, 6);
-        lv_obj_align(icon_shape(ic, 3, 3, color, 2, 0), LV_ALIGN_TOP_MID,  6, 6);
-        break;
-    }
-    case TOOL_ICON_PAVIO: {
-        // bomba: corpo redondo + pavio curto no topo com uma faísca
-        lv_obj_t *body = icon_shape(ic, 18, 18, color, LV_RADIUS_CIRCLE, 0);
-        lv_obj_align(body, LV_ALIGN_CENTER, 0, 3);
-        lv_obj_align(icon_shape(ic, 3, 6, color, 1, 0), LV_ALIGN_CENTER, 3, -7);
-        lv_obj_align(icon_shape(ic, 5, 5, color, 2, 0), LV_ALIGN_CENTER, 6, -10);
-        break;
-    }
-    case TOOL_ICON_ADEDONHA: {
-        // folha de cartela: moldura + três linhas (as colunas a preencher)
-        lv_obj_t *sheet = icon_shape(ic, 20, 24, color, 4, 3);
-        lv_obj_center(sheet);
-        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, 0, -6);
-        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, 0,  0);
-        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, 0,  6);
-        break;
-    }
-    case TOOL_ICON_PLACAR: {
-        // três colunas de placar em alturas diferentes (pódio / barras)
-        lv_obj_align(icon_shape(ic, 6, 12, color, 1, 0), LV_ALIGN_BOTTOM_LEFT,  1, 0);
-        lv_obj_align(icon_shape(ic, 6, 22, color, 1, 0), LV_ALIGN_BOTTOM_MID,   0, 0);
-        lv_obj_align(icon_shape(ic, 6, 16, color, 1, 0), LV_ALIGN_BOTTOM_RIGHT, -1, 0);
-        break;
-    }
-    case TOOL_ICON_VETO: {
-        // carta: a palavra-alvo (barra grossa no topo) e as proibidas abaixo,
-        // cada uma com um ponto (o marcador quadrado da lista)
-        lv_obj_t *card = icon_shape(ic, 22, 24, color, 4, 3);
-        lv_obj_center(card);
-        lv_obj_align(icon_shape(ic, 13, 5, color, 1, 0), LV_ALIGN_CENTER, 0, -6);
-        lv_obj_align(icon_shape(ic, 3, 3, color, 1, 0), LV_ALIGN_CENTER, -5, 2);
-        lv_obj_align(icon_shape(ic, 8, 2, color, 1, 0), LV_ALIGN_CENTER,  2, 2);
-        lv_obj_align(icon_shape(ic, 3, 3, color, 1, 0), LV_ALIGN_CENTER, -5, 8);
-        lv_obj_align(icon_shape(ic, 8, 2, color, 1, 0), LV_ALIGN_CENTER,  2, 8);
-        break;
-    }
-    case TOOL_ICON_MIMICA: {
-        // figura gesticulando: cabeça + tronco + braços erguidos
-        lv_obj_align(icon_shape(ic, 9, 9, color, LV_RADIUS_CIRCLE, 0), LV_ALIGN_TOP_MID, 0, 0);
-        lv_obj_align(icon_shape(ic, 4, 12, color, 2, 0), LV_ALIGN_CENTER, 0, 4);
-        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER, -6, 0);
-        lv_obj_align(icon_shape(ic, 11, 3, color, 1, 0), LV_ALIGN_CENTER,  6, 0);
-        break;
-    }
-    case TOOL_ICON_TESTA: {
-        // cabeça + aparelho encostado na testa + setas de inclinar (↑/↓)
-        lv_obj_align(icon_shape(ic, 13, 13, color, LV_RADIUS_CIRCLE, 0), LV_ALIGN_LEFT_MID, 0, 0);
-        lv_obj_align(icon_shape(ic, 10, 18, color, 2, 2), LV_ALIGN_CENTER, 4, 0);
-        lv_obj_align(icon_shape(ic, 8, 3, color, 1, 0), LV_ALIGN_CENTER, 12, -7);
-        lv_obj_align(icon_shape(ic, 8, 3, color, 1, 0), LV_ALIGN_CENTER, 12,  7);
-        break;
-    }
-    case TOOL_ICON_PHONE: {
-        // celular: corpo (contorno arredondado) + alto-falante em cima + botão embaixo
-        lv_obj_t *body = icon_shape(ic, 14, 22, color, 5, 3);
-        lv_obj_center(body);
-        lv_obj_align(icon_shape(ic, 6, 2, color, 1, 0), LV_ALIGN_CENTER, 0, -8);
-        lv_obj_align(icon_shape(ic, 4, 4, color, LV_RADIUS_CIRCLE, 0), LV_ALIGN_CENTER, 0, 8);
-        break;
-    }
-    case TOOL_ICON_ESTOURO: {
-        // balão: corpo redondo + nó embaixo + barbante curto
-        lv_obj_t *body = icon_shape(ic, 19, 21, color, LV_RADIUS_CIRCLE, 0);
-        lv_obj_align(body, LV_ALIGN_CENTER, 0, -4);
-        lv_obj_align(icon_shape(ic, 4, 4, color, 1, 0), LV_ALIGN_CENTER, 0, 8);
-        lv_obj_align(icon_shape(ic, 2, 7, color, 1, 0), LV_ALIGN_CENTER, 0, 14);
-        break;
-    }
-    case TOOL_ICON_DIAL: {
-        // mostrador giratório: anel + ponteiro apontando pro alvo + pivô central
-        lv_obj_t *ring = icon_shape(ic, 22, 22, color, LV_RADIUS_CIRCLE, 3);
-        lv_obj_center(ring);
-        lv_obj_align(icon_shape(ic, 3, 9, color, 1, 0), LV_ALIGN_CENTER, 6, -6);
-        lv_obj_align(icon_shape(ic, 6, 6, color, LV_RADIUS_CIRCLE, 0), LV_ALIGN_CENTER, 0, 0);
-        break;
-    }
-    case TOOL_ICON_SOUNDBOX: {
-        // grade 3x3 de pads
-        for (int r = -1; r <= 1; r++)
-            for (int c = -1; c <= 1; c++)
-                lv_obj_align(icon_shape(ic, 6, 6, color, 2, 0),
-                             LV_ALIGN_CENTER, c * 9, r * 9);
-        break;
-    }
-    case TOOL_ICON_EXTERNAL: {
-        // cartão (Tool vinda do microSD): moldura com 3 pinos — sem glifo
-        // dedicado por Tool ainda (o manifest não traz ícone próprio).
-        lv_obj_t *card = icon_shape(ic, 20, 20, color, 4, 3);
-        lv_obj_center(card);
-        lv_obj_align(icon_shape(ic, 3, 8, color, 1, 0), LV_ALIGN_CENTER, -5, 0);
-        lv_obj_align(icon_shape(ic, 3, 8, color, 1, 0), LV_ALIGN_CENTER,  0, 0);
-        lv_obj_align(icon_shape(ic, 3, 8, color, 1, 0), LV_ALIGN_CENTER,  5, 0);
-        break;
-    }
-    }
+
+    lv_obj_t *img = lv_image_create(parent);
+    lv_image_set_src(img, dsc);
+    lv_obj_set_style_image_recolor_opa(img, LV_OPA_COVER, 0);
+    lv_obj_set_style_image_recolor(img, lv_color_hex(color), 0);
+    if (zoom != LV_SCALE_NONE) lv_image_set_scale(img, zoom);
+    lv_obj_align(img, LV_ALIGN_TOP_LEFT, cx - 16, cy - 16);
 }
 
 static void make_tool_tile(lv_obj_t *grid, int index)
@@ -994,22 +909,12 @@ static void make_tool_tile(lv_obj_t *grid, int index)
     lv_obj_add_event_cb(tile, home_tile_cb, LV_EVENT_CLICKED, (void *)(intptr_t)index);
     lv_obj_add_event_cb(tile, home_tool_longpress_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)index);
 
-    lv_obj_t *badge = lv_obj_create(tile);
-    lv_obj_set_size(badge, 42, 42);
-    lv_obj_set_style_bg_color(badge, lv_color_hex(ink), 0);
-    lv_obj_set_style_bg_opa(badge, on ? LV_OPA_20 : LV_OPA_30, 0);
-    lv_obj_set_style_border_width(badge, 0, 0);
-    lv_obj_set_style_radius(badge, 12, 0);
-    lv_obj_set_style_pad_all(badge, 0, 0);
-    lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(badge, LV_ALIGN_TOP_LEFT, 14, 14);
-    make_tool_icon(badge, tool->icon, ink);
+    // 35,35: centro da antiga caixa de 42x42 em TOP_LEFT(14,14).
+    make_tool_icon(tile, tool->icon, ink, 35, 35, LV_SCALE_NONE);
 
-    char num[8];
-    snprintf(num, sizeof(num), "%02d", (index + 1) % 100);
-    lv_obj_t *n = add_label(tile, num, ink, &kit_mono_26, 1);
-    lv_obj_set_style_text_opa(n, LV_OPA_40, 0);
-    lv_obj_align(n, LV_ALIGN_TOP_RIGHT, -14, 16);
+    // KIT: número decorativo do tile removido pra teste de custo de render
+    // do swipe horizontal da Home (1 objeto + 1 draw de texto com alpha a
+    // menos por tile) — ver conversa sobre o travamento do tileview.
 
     lv_obj_t *lbl = add_label(tile, tool->label, ink, &kit_sans_22, 0);
     lv_obj_align(lbl, LV_ALIGN_BOTTOM_LEFT, 14, -14);
@@ -1212,16 +1117,10 @@ static void make_tool_slide(lv_obj_t *tile, int index, int slot)
     lv_obj_add_event_cb(card, home_tile_cb, LV_EVENT_CLICKED, (void *)(intptr_t)index);
     lv_obj_add_event_cb(card, home_tool_longpress_cb, LV_EVENT_LONG_PRESSED, (void *)(intptr_t)index);
 
-    lv_obj_t *badge = lv_obj_create(card);
-    lv_obj_set_size(badge, 52, 52);
-    lv_obj_set_style_bg_color(badge, lv_color_hex(ink), 0);
-    lv_obj_set_style_bg_opa(badge, on ? LV_OPA_20 : LV_OPA_30, 0);
-    lv_obj_set_style_border_width(badge, 0, 0);
-    lv_obj_set_style_radius(badge, 15, 0);
-    lv_obj_set_style_pad_all(badge, 0, 0);
-    lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(badge, LV_ALIGN_TOP_LEFT, 0, 0);
-    make_tool_icon(badge, tool->icon, ink);
+    // 26,26: centro da antiga caixa de 52x52 em TOP_LEFT(0,0). Zoom 1.3x —
+    // aqui o card tem bem mais espaço que o tile da grade, ícone maior fica
+    // melhor sem a caixa de fundo.
+    make_tool_icon(card, tool->icon, ink, 26, 26, 333);
 
     char num[8];
     snprintf(num, sizeof(num), "%02d", (slot + 1) % 100);
@@ -1529,7 +1428,7 @@ static void onb_tool_reel(lv_obj_t *parent)
         lv_obj_set_style_radius(badge, 14, 0);
         lv_obj_set_style_pad_all(badge, 0, 0);
         lv_obj_clear_flag(badge, LV_OBJ_FLAG_SCROLLABLE);
-        make_tool_icon(badge, HOME_TOOLS_BUILTIN[i].icon, HOME_TOOLS_BUILTIN[i].color);
+        make_tool_icon(badge, HOME_TOOLS_BUILTIN[i].icon, HOME_TOOLS_BUILTIN[i].color, 23, 23, LV_SCALE_NONE);
     }
 }
 
