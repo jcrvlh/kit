@@ -426,14 +426,14 @@ function noPuzzle() {
 
 /* ---- IMPRIMIR ----------------------------------------------------------- */
 function viewPrint() {
-  if (!P) return noPuzzle() + `<button type="button" class="btn btn-primary" data-a="printhow">IMPRIMIR COMO JOGAR</button>`;
+  if (!P) return noPuzzle() + `<button type="button" class="btn btn-primary" data-a="printhow">IMPRIMIR COMO JOGAR</button>${IOS_HINT}`;
   const total = copies + (withHow ? 1 : 0);
   return `
     <p class="note">Uma folha de jogo por pessoa, todas do mesmo puzzle. Quem abrir com <b>menos rodadas</b> vence.</p>
     <div class="row">FOLHAS DE JOGO<div class="stepper"><button type="button" data-a="minus" aria-label="menos">−</button><output>${copies}</output><button type="button" data-a="plus" aria-label="mais">+</button></div></div>
     <div class="row"><span>COMO JOGAR<small>1 folha a mais, pra explicar na mesa</small></span>
       <span class="tg"><button type="button" data-a="how" data-v="0" aria-pressed="${!withHow}">NÃO</button><button type="button" data-a="how" data-v="1" aria-pressed="${withHow}">SIM</button></span></div>
-    <button type="button" class="btn btn-primary" data-a="print">IMPRIMIR ${total} FOLHA${total > 1 ? "S" : ""}</button>`;
+    <button type="button" class="btn btn-primary" data-a="print">IMPRIMIR ${total} FOLHA${total > 1 ? "S" : ""}</button>${IOS_HINT}`;
 }
 
 /* ---- COMO JOGAR (tela e papel usam o mesmo conteúdo) -------------------- */
@@ -464,7 +464,7 @@ function viewHow() {
     <div class="kick">Arriscar</div>
     <p>Quando souber o código, ARRISCAR no KIT. Um palpite só: errou, acabou. Vence quem abrir com menos rodadas; no empate, menos testes.</p>
     <div class="gold"><b>A PISTA DE OURO</b>Nenhum verificador sobra e a solução é uma só. Se uma regra parece não servir pra nada, ela não é a regra certa.</div>
-    <button type="button" class="btn btn-primary" data-a="printhow">IMPRIMIR COMO JOGAR</button>
+    <button type="button" class="btn btn-primary" data-a="printhow">IMPRIMIR COMO JOGAR</button>${IOS_HINT}
   </div>`;
 }
 
@@ -507,14 +507,23 @@ function howSheet() {
     <div class="pfoot"><b>NO KIT</b> · Deslize entre CÓDIGO (os discos e ARRISCAR) e TESTES (os verificadores). O código trava no 1º teste da rodada. NOVA RODADA libera o código de novo.</div>
   </div>`;
 }
+// iPadOS se apresenta como Mac; o toque denuncia
+const IOS = /iP(hone|od|ad)/.test(navigator.userAgent) ||
+  (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+// plano B do iPhone: navegador embutido de app ignora print()
+const IOS_HINT = IOS ? `<p class="note">Se a janela de impressão não abrir, abra esta página no <b>navegador do celular</b>: o navegador de dentro de app de mensagem ou rede social não imprime.</p>` : "";
 function runPrint(games, how) {
   const sheet = document.getElementById("sheet");
   let html = "";
   for (let i = 0; i < games; i++) html += gameSheet();
   if (how) html += howSheet();
   sheet.innerHTML = html;
-  // dois rAF: o DOM injetado entra no layout antes do snapshot de impressão
-  // (em vários browsers mobile, print() logo após montar sai em branco — ver Adedonha)
+  // No iOS (todo navegador lá usa o mesmo motor) o print() só abre a janela se
+  // vier direto do toque: dentro de um rAF o gesto já se perdeu e nada acontece.
+  // Lá a folha entra no layout na marra (offsetHeight) e o print() sai na hora.
+  if (IOS) { void sheet.offsetHeight; window.print(); return; }
+  // nos outros, dois rAF: o DOM injetado entra no layout antes do snapshot de
+  // impressão (em vários browsers mobile, print() logo após montar sai em branco — ver Adedonha)
   requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
 }
 
