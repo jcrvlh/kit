@@ -1346,6 +1346,16 @@ function th(text, cls) {
   return el;
 }
 
+// iPadOS se apresenta como Mac; o toque denuncia
+const IOS = /iP(hone|od|ad)/.test(navigator.userAgent) ||
+  (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+// plano B do iPhone: navegador embutido de app ignora print()
+if (IOS) {
+  const hint = document.createElement("p");
+  hint.textContent = "Se a janela de impressão não abrir, abra esta página no navegador do celular: o navegador de dentro de app de mensagem ou rede social não imprime.";
+  printbox.querySelector(".dlg-row").before(hint);
+}
+
 function runPrint(players, rounds) {
   sheet.replaceChildren();
   for (let i = 0; i < players; i++) {
@@ -1354,7 +1364,12 @@ function runPrint(players, rounds) {
     page.appendChild(buildSheet(rounds));
     sheet.appendChild(page);
   }
-  // Dois rAF pra garantir que o DOM injetado entrou no layout antes do
+  // No iOS (todo navegador lá usa o mesmo motor) o print() só abre a janela
+  // se vier direto do toque: dentro de um rAF o gesto já se perdeu e nada
+  // acontece. Lá a folha entra no layout na marra (offsetHeight) e o print()
+  // sai na hora.
+  if (IOS) { void sheet.offsetHeight; window.print(); return; }
+  // Nos outros, dois rAF pra garantir que o DOM injetado entrou no layout antes do
   // snapshot de impressão — em vários browsers mobile, print() logo após
   // montar o DOM sai com a folha vazia. A .sheet fica montada depois
   // (display:none na tela) e é substituída na próxima impressão; não some
