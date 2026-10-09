@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Folha do Gazua</title>
+<link rel="icon" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&family=Archivo+Black&family=Space+Mono:wght@400;700&display=swap">
+<style>
+/* --------------------------------------------------------------------------
+   Folha do Gazua — companheira da Tool Gazua (io.github.jcrvlh.gazua).
+   No modo COM FOLHA o KIT é só a máquina: testa os verificadores e recebe o
+   palpite. A dedução vai pro papel ou pro celular, nesta página, aberta pelo
+   QR do KIT.
+
+   A URL leva SÓ quais cartas saíram e o número do puzzle:
+     gazua.html?v=2,4,8,12&d=282&n=0
+       v  índices das 4 cartas em GZ_CARDS (gazua_game.c), na ordem dos
+          verificadores — a tabela CARDS abaixo espelha a do firmware e a
+          ORDEM É CONTRATO: mudar uma muda a outra;
+       d  número do dia (0 = puzzle livre);
+       n  dificuldade (0 fácil, 1 difícil), só pro cabeçalho.
+   A regra secreta e o código nunca vêm na URL: a página não tem como
+   resolver nada, só anotar.
+
+   Três abas: PREENCHER (anotar no celular, salvo em localStorage por
+   puzzle), IMPRIMIR (N folhas de jogo + a folha COMO JOGAR, opcional) e
+   COMO JOGAR (explicação curta, imprimível sozinha). Sem a URL do QR, só o
+   COMO JOGAR funciona.
+
+   Linguagem "Brutalist Bauhaus" (docs/design/design-language.md): preto
+   AMOLED, mono em caixa alta, uma superfície colorida por vez. Amarelo = a
+   Tool Gazua. Tudo roda no navegador; nada é enviado a lugar nenhum.
+   -------------------------------------------------------------------------- */
+
+:root {
+  --bg:          #000000;
+  --surface:     #171719;
+  --surface-alt: #222226;
+  --line:        #2C2C2E;
+  --paper:       #EFEADD;
+  --muted:       #8E8B83;
+
+  --red:    #C6472F;
+  --blue:   #2C3CC4;
+  --yellow: #E9B23C;
+  --green:  #45A05B;
+
+  --mono: "Space Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --disp: "Archivo Black", "Arial Black", system-ui, sans-serif;
+  --body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+[hidden] { display: none !important; }
+
+html, body { background: var(--bg); }
+
+body {
+  font-family: var(--body);
+  color: var(--paper);
+  line-height: 1.5;
+  min-height: 100dvh;
+  touch-action: manipulation;
+  padding: max(18px, env(safe-area-inset-top)) 16px
+           calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+
+.wrap { width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 18px; }
+#view { display: flex; flex-direction: column; gap: 14px; }
+
+/* ---- Masthead (igual à Adedonha) --------------------------------------- */
+
+.mast {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.primitives { display: flex; align-items: center; gap: 7px; }
+.primitives i { display: block; width: 13px; height: 13px; }
+.primitives .sq { background: var(--red); }
+.primitives .ci { background: var(--blue); border-radius: 50%; }
+.primitives .tr {
+  width: 0; height: 0; background: none;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 13px solid var(--yellow);
+}
+.wordmark {
+  font-family: var(--mono); font-weight: 700; font-size: 17px;
+  letter-spacing: 0.32em; text-indent: 0.32em; text-align: center; white-space: nowrap;
+}
+.tag {
+  font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); text-align: center;
+}
+
+/* ---- Abas -------------------------------------------------------------- */
+
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+       background: var(--surface); border-radius: 999px; padding: 5px; }
+.seg button {
+  font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.04em;
+  border: 0; border-radius: 999px; padding: 14px 0; background: transparent;
+}
+.seg button[aria-pressed="true"] { background: var(--yellow); color: #000; }
+
+.kick {
+  font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--yellow); margin: 6px 0 -4px;
+}
+
+/* formas (SVG) alinhadas ao texto */
+.sh { display: inline-block; vertical-align: -0.12em; flex: none; }
+
+/* ---- PREENCHER --------------------------------------------------------- */
+
+.vcards { display: grid; gap: 10px; }
+.vc { background: var(--surface); border-radius: 18px; padding: 12px 12px 10px; }
+.vc .face { font-weight: 700; font-size: 22px; line-height: 1.1;
+            display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.vc .face .n { font-family: var(--mono); font-size: 12px; color: var(--muted);
+               letter-spacing: 0.08em; margin-left: auto; }
+.rules { display: flex; flex-wrap: wrap; gap: 6px; }
+.rule {
+  display: flex; align-items: center; gap: 6px; min-height: 46px; padding: 0 12px;
+  border-radius: 12px; border: 2px solid var(--line); background: var(--surface-alt);
+  font-weight: 600; font-size: 17px;
+}
+.rule.x { background: transparent; color: var(--muted); border-style: dashed; }
+.rule.x .rl { text-decoration: line-through; text-decoration-thickness: 2px; }
+
+.tbl { border-collapse: separate; border-spacing: 4px; width: 100%; table-layout: fixed; }
+.tbl th { font-family: var(--mono); font-weight: 700; font-size: 11px; color: var(--muted);
+          letter-spacing: 0.06em; padding: 2px 0 4px; text-align: center; vertical-align: bottom; }
+.tbl th .fs { display: block; font-family: var(--body); font-size: 12px; color: var(--paper);
+              letter-spacing: 0; line-height: 1.2; }
+.tbl td { padding: 0; }
+.cell {
+  width: 100%; height: 46px; border-radius: 10px; border: 0; background: var(--surface);
+  font-family: var(--mono); font-weight: 700; font-size: 20px;
+  display: grid; place-items: center; padding: 0;
+}
+.cell.code { background: var(--surface-alt); }
+.cell.yes { background: var(--green); color: #fff; }
+.cell.no { background: var(--red); color: #fff; }
+.rn { font-family: var(--mono); font-weight: 700; font-size: 12px; color: var(--muted); text-align: center; }
+.addrow {
+  font-family: var(--mono); font-weight: 700; font-size: 14px; letter-spacing: 0.08em;
+  width: 100%; background: transparent; border: 2px dashed var(--line); border-radius: 12px; height: 50px;
+}
+.grid3 { display: grid; grid-template-columns: 32px repeat(5, 1fr); gap: 6px; align-items: center; }
+.gcell {
+  height: 50px; border-radius: 12px; border: 0; background: var(--surface);
+  font-family: var(--mono); font-weight: 700; font-size: 22px; position: relative;
+}
+.gcell.c1 { background: transparent; color: var(--muted); outline: 2px solid var(--line); outline-offset: -2px; }
+.gcell.c1::after { content: ""; position: absolute; left: 10px; right: 10px; top: 50%;
+                   height: 3px; background: var(--red); transform: rotate(-28deg); }
+.gcell.c2 { box-shadow: inset 0 0 0 4px var(--green); }
+.legend { font-family: var(--mono); font-size: 12px; line-height: 1.4; color: var(--muted); }
+
+/* ---- botões ------------------------------------------------------------ */
+
+.btn {
+  width: 100%; min-height: 54px; border-radius: 14px; border: 0;
+  font-family: var(--mono); font-weight: 700; font-size: 14px; letter-spacing: 0.08em;
+  background: var(--surface);
+}
+.btn-primary { background: var(--yellow); color: #000; }
+.btn-danger { background: var(--red); color: #fff; }
+
+/* ---- IMPRIMIR ---------------------------------------------------------- */
+
+.row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--surface); border-radius: 14px; padding: 10px 12px;
+  font-family: var(--mono); font-weight: 700; font-size: 14px; letter-spacing: 0.06em;
+}
+.row small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); letter-spacing: 0; margin-top: 3px; }
+.stepper { display: flex; align-items: center; gap: 6px; }
+.stepper button { width: 46px; height: 46px; border-radius: 12px; border: 0; background: var(--surface-alt);
+                  font-family: var(--mono); font-weight: 700; font-size: 20px; }
+.stepper output { min-width: 28px; text-align: center; font-size: 20px; }
+.tg { display: flex; gap: 4px; background: var(--surface-alt); border-radius: 999px; padding: 4px; }
+.tg button { border: 0; border-radius: 999px; padding: 11px 14px; background: transparent;
+             font-family: var(--mono); font-weight: 700; font-size: 13px; }
+.tg button[aria-pressed="true"] { background: var(--yellow); color: #000; }
+.note { font-size: 15px; color: var(--paper); }
+.note b { color: var(--yellow); }
+
+/* ---- COMO JOGAR -------------------------------------------------------- */
+
+.how { display: grid; gap: 14px; }
+.how p, .how li { font-size: 17px; line-height: 1.45; }
+.how ol { padding-left: 22px; display: grid; gap: 6px; }
+.box { background: var(--surface); border-radius: 16px; padding: 12px 14px; display: grid; gap: 10px; }
+.ex .q { font-weight: 700; font-size: 18px; line-height: 1.45; }
+.ex .ans { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+           background: var(--green); color: #fff; font-family: var(--mono); font-weight: 700; font-size: 17px; }
+.ex .r { display: flex; flex-wrap: wrap; gap: 6px; }
+.ex .r span { display: flex; align-items: center; gap: 5px; padding: 7px 10px; border-radius: 10px;
+              background: var(--surface-alt); font-weight: 600; font-size: 16px; }
+.ex .r span.x { background: transparent; border: 2px dashed var(--line); color: var(--muted); text-decoration: line-through; }
+.ex .r span.ok { outline: 2px solid var(--green); }
+.gold { border: 2px solid var(--yellow); border-radius: 16px; padding: 12px 14px; font-size: 17px; line-height: 1.45; }
+.gold b { display: block; color: var(--yellow); font-family: var(--mono); font-size: 13px; letter-spacing: 0.12em; margin-bottom: 6px; }
+
+.empty { border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 10px; font-size: 16px; }
+.empty b { color: var(--yellow); }
+
+footer {
+  margin-top: 4px; font-family: var(--mono); font-weight: 700; font-size: 12px;
+  letter-spacing: 0.3em; text-indent: 0.3em; text-transform: uppercase; color: var(--muted); text-align: center;
+}
+
+.sheet { display: none; }
+
+/* ---- Impressão --------------------------------------------------------
+   Só as folhas vão pro papel: A4 retrato, uma folha por página. As formas
+   saem na cor (print-color-adjust), mas a forma basta: funciona em preto e
+   branco. A tela (.wrap) some. */
+
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  /* color-scheme: dark faz o Chromium pintar a margem da página de cinza-escuro */
+  :root { color-scheme: light; }
+  html, body { background: #fff; }
+  body { padding: 0; display: block; color: #000; }
+  .wrap { display: none !important; }
+  .sheet { display: block; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ppage { break-after: page; height: 272mm; display: flex; flex-direction: column; gap: 4.5mm; overflow: hidden; }
+  .ppage:last-child { break-after: auto; }
+
+  .phead { display: flex; align-items: flex-end; justify-content: space-between;
+           border-bottom: 1.5pt solid #000; padding-bottom: 2.5mm; }
+  .phead h1 { font-family: var(--disp); font-weight: 400; font-size: 26pt; line-height: 1; }
+  .phead .meta { font-family: var(--mono); font-weight: 700; font-size: 8pt; letter-spacing: 0.1em; text-align: right; line-height: 1.5; }
+  .pname { font-family: var(--mono); font-weight: 700; font-size: 8.5pt; letter-spacing: 0.08em;
+           display: flex; gap: 3mm; align-items: flex-end; }
+  .pname span { flex: 1; border-bottom: 0.75pt solid #000; height: 4mm; }
+  .pname span.s { flex: 0 0 16mm; }
+  .psec { font-family: var(--mono); font-weight: 700; font-size: 7.5pt; letter-spacing: 0.16em; color: #444; margin-bottom: -2mm; }
+
+  .pcards { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
+  .pc { border: 1.2pt solid #000; border-radius: 2.5mm; padding: 2.5mm 3mm; }
+  .pc .face { font-weight: 700; font-size: 13pt; display: flex; align-items: center; gap: 1.8mm; margin-bottom: 2mm; }
+  .pc .face .n { margin-left: auto; font-family: var(--mono); font-size: 7pt; color: #555; }
+  .pc ul { list-style: none; padding: 0; display: grid; gap: 1.6mm; }
+  .pc li { display: flex; align-items: center; gap: 2.4mm; font-weight: 600; font-size: 11pt; }
+  .ck { width: 4mm; height: 4mm; border: 1pt solid #000; border-radius: 0.8mm; flex: none; }
+
+  table.pt { border-collapse: collapse; width: 100%; table-layout: fixed; }
+  .pt th { font-family: var(--mono); font-weight: 700; font-size: 7pt; padding: 1.2mm 0.5mm;
+           border: 0.9pt solid #000; background: #EFEFEF; }
+  .pt th .fs { display: flex; align-items: center; justify-content: center; gap: 1mm;
+               font-family: var(--body); font-size: 8.5pt; letter-spacing: 0; flex-wrap: wrap; }
+  .pt td { border: 0.9pt solid #000; height: 8.2mm; }
+  .pt td.rn { font-family: var(--mono); font-weight: 700; font-size: 7pt; color: #555; text-align: center; }
+  .pt col.c-n { width: 8mm; }
+  .pt col.c-code { width: 11mm; }
+
+  .pbottom { display: grid; grid-template-columns: 1.3fr 1fr; gap: 5mm; }
+  .pg { display: grid; grid-template-columns: 6mm repeat(5, 1fr); gap: 1.4mm; align-items: center; margin-top: 3mm; }
+  .pg div { height: 8mm; border: 1pt solid #000; border-radius: 1.3mm; display: grid; place-items: center;
+            font-family: var(--mono); font-weight: 700; font-size: 10pt; }
+  .pfinal { display: flex; gap: 3mm; margin-top: 3mm; }
+  .pfinal div { width: 16mm; height: 16mm; border: 1.5pt solid #000; border-radius: 2mm; display: grid; place-items: center; }
+  .pfoot { margin-top: auto; border-top: 0.75pt solid #999; padding-top: 2.5mm; font-size: 9pt; line-height: 1.45; color: #222; }
+  .pfoot b { font-family: var(--mono); font-size: 7pt; letter-spacing: 0.12em; }
+
+  /* folha COMO JOGAR */
+  .hw { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm 7mm; }
+  .hw section { display: grid; gap: 1.8mm; align-content: start; }
+  .hw h2 { font-family: var(--mono); font-weight: 700; font-size: 9pt; letter-spacing: 0.16em;
+           padding-bottom: 1.2mm; border-bottom: 1.2pt solid #000; }
+  .hw p, .hw li { font-size: 12pt; line-height: 1.45; }
+  .hw ol { padding-left: 5mm; display: grid; gap: 1mm; }
+  .hw .wide { grid-column: 1 / -1; }
+  .pex { border: 1.2pt solid #000; border-radius: 2.5mm; padding: 3mm 3.5mm; display: grid; gap: 2.5mm; }
+  .pex .q { font-weight: 700; font-size: 12.5pt; line-height: 1.45; }
+  .pex .r { display: flex; gap: 2.5mm; flex-wrap: wrap; }
+  .pex .r span { display: flex; align-items: center; gap: 1.5mm; border: 0.9pt solid #000; border-radius: 1.8mm;
+                 padding: 1.8mm 3mm; font-weight: 600; font-size: 12pt; }
+  .pex .r span.x { border-style: dashed; color: #666; text-decoration: line-through; }
+  .pex .r span.ok { border-width: 2pt; }
+  .pgold { border: 2pt solid #000; border-radius: 2.5mm; padding: 3.5mm 4mm; font-size: 12.5pt; line-height: 1.45; }
+  .pgold b { display: block; font-family: var(--mono); font-size: 8.5pt; letter-spacing: 0.14em; margin-bottom: 1.5mm; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div class="primitives" aria-hidden="true"><i class="sq"></i><i class="ci"></i><i class="tr"></i></div>
+    <div class="wordmark">GAZUA</div>
+    <div></div>
+  </header>
+  <div class="tag" id="tag"></div>
+
+  <div class="seg" role="group" aria-label="Modo">
+    <button type="button" data-tab="fill">PREENCHER</button>
+    <button type="button" data-tab="print">IMPRIMIR</button>
+    <button type="button" data-tab="how">COMO JOGAR</button>
+  </div>
+
+  <main id="view"></main>
+
+  <footer>KIT</footer>
+</div>
+
+<div class="sheet" id="sheet" aria-hidden="true"></div>
+
+<script>
+"use strict";
+
+/* ---- formas ------------------------------------------------------------ */
+const COL = ["#E9B23C", "#C6472F", "#2C3CC4"];   // triângulo, quadrado, círculo
+function shp(i, s) {
+  const c = COL[i];
+  const b = i === 0 ? `<polygon points="10,1.5 19,18 1,18" fill="${c}"/>`
+          : i === 1 ? `<rect x="1.5" y="1.5" width="17" height="17" fill="${c}"/>`
+          : `<circle cx="10" cy="10" r="8.6" fill="${c}"/>`;
+  return `<svg class="sh" width="${s}" height="${s}" viewBox="0 0 20 20" aria-hidden="true">${b}</svg>`;
+}
+// "#0", "#1", "#2" nos rótulos viram as formas (mesma convenção do firmware)
+const tok = (t, s) => t.replace(/#([0-2])/g, (_, i) => shp(+i, s));
+const NAMES = ["triângulo", "quadrado", "círculo"];
+
+/* ---- cartas: espelho de GZ_CARDS (gazua_game.c). A ORDEM É CONTRATO. ---- */
+const CARDS = [];
+function vs(a, b) {
+  return { face: `#${a} vs ${b}`,
+           opts: b === 1 ? [`#${a} = 1`, `#${a} &gt; 1`] : [`#${a} &lt; ${b}`, `#${a} = ${b}`, `#${a} &gt; ${b}`] };
+}
+for (let a = 0; a < 3; a++) {
+  CARDS.push(vs(a, 1), vs(a, 3), vs(a, 4), { face: `#${a} par?`, opts: [`#${a} é par`, `#${a} é ímpar`] });
+}
+for (const [a, b] of [[0, 1], [0, 2], [1, 2]])
+  CARDS.push({ face: `#${a} vs #${b}`, opts: [`#${a} &lt; #${b}`, `#${a} = #${b}`, `#${a} &gt; #${b}`] });
+for (const d of [1, 3, 4]) CARDS.push({ face: `quantos ${d}`, opts: [`nenhum ${d}`, `um ${d}`, `dois ${d}`] });
+CARDS.push({ face: "pares", opts: ["nenhum par", "um par", "dois pares", "três pares"] });
+CARDS.push({ face: "o menor", opts: ["#0 é o menor", "#1 é o menor", "#2 é o menor"] });
+CARDS.push({ face: "o maior", opts: ["#0 é o maior", "#1 é o maior", "#2 é o maior"] });
+CARDS.push({ face: "soma", opts: ["soma par", "soma ímpar"] });
+CARDS.push({ face: "#0+#1 vs 6", opts: ["#0+#1 &lt; 6", "#0+#1 = 6", "#0+#1 &gt; 6"] });
+CARDS.push({ face: "repete?", opts: ["nada repete", "dois iguais", "três iguais"] });
+CARDS.push({ face: "ordem", opts: ["crescente", "decrescente", "sem ordem"] });
+
+/* ---- puzzle da URL ------------------------------------------------------ */
+function readPuzzle() {
+  const q = new URLSearchParams(location.search);
+  const v = (q.get("v") || "").split(",").map(x => parseInt(x, 10));
+  if (v.length !== 4 || v.some(x => !(x >= 0 && x < CARDS.length)) || new Set(v).size !== 4) return null;
+  const d = Math.max(0, parseInt(q.get("d") || "0", 10) || 0);
+  const n = q.get("n") === "1" ? 1 : 0;
+  return { v, d, n };
+}
+const P = readPuzzle();
+const headText = () => P ? (P.d ? `PUZZLE DO DIA #${P.d}` : "PUZZLE LIVRE") + " · " + (P.n ? "DIFÍCIL" : "FÁCIL") : "";
+
+/* ---- estado (por puzzle, só neste navegador) ---------------------------- */
+let tab = "fill", copies = 2, withHow = true, clearArmed = false;
+const KEY = P ? "kit.gazua.folha." + P.v.join("-") + "." + P.d : "";
+const fresh = () => ({ strike: [[], [], [], []], rows: [{ code: [0, 0, 0], res: [0, 0, 0, 0] }],
+                       grid: [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]] });
+let F = fresh();
+function load() {
+  if (!P) return;
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && Array.isArray(s.rows) && Array.isArray(s.strike) && Array.isArray(s.grid)) F = s;
+  } catch (e) { /* ok */ }
+}
+function save() { if (P) { try { localStorage.setItem(KEY, JSON.stringify(F)); } catch (e) { /* ok */ } } }
+
+/* ---- PREENCHER ---------------------------------------------------------- */
+function viewFill() {
+  if (!P) return noPuzzle();
+  const cards = P.v.map((ci, k) => {
+    const c = CARDS[ci];
+    return `<div class="vc"><p class="face">${tok(c.face, 20)}<span class="n">V${k + 1}</span></p>
+      <div class="rules">${c.opts.map((o, i) => {
+        const x = F.strike[k].includes(i);
+        return `<button type="button" class="rule ${x ? "x" : ""}" data-a="strike" data-k="${k}" data-o="${i}" aria-pressed="${x}"><span class="rl">${tok(o, 16)}</span></button>`;
+      }).join("")}</div></div>`;
+  }).join("");
+  const th = P.v.map(ci => `<th><span class="fs">${tok(CARDS[ci].face, 12)}</span></th>`).join("");
+  const rows = F.rows.map((r, ri) => `<tr><td class="rn">${ri + 1}</td>
+    ${[0, 1, 2].map(i => `<td><button type="button" class="cell code" data-a="code" data-r="${ri}" data-i="${i}" aria-label="${NAMES[i]}">${shp(i, 14)}${r.code[i] || ""}</button></td>`).join("")}
+    ${[0, 1, 2, 3].map(k => { const v = r.res[k];
+      return `<td><button type="button" class="cell ${v === 1 ? "yes" : v === 2 ? "no" : ""}" data-a="res" data-r="${ri}" data-k="${k}" aria-label="resposta V${k + 1}">${v === 1 ? "✓" : v === 2 ? "✕" : ""}</button></td>`; }).join("")}</tr>`).join("");
+  const grid = [0, 1, 2].map(i => `<span>${shp(i, 22)}</span>${[1, 2, 3, 4, 5].map(d =>
+    `<button type="button" class="gcell c${F.grid[i][d - 1]}" data-a="grid" data-i="${i}" data-d="${d}">${d}</button>`).join("")}`).join("");
+  return `
+    <div class="kick">Verificadores</div>
+    <div class="vcards">${cards}</div>
+    <div class="kick">Testes</div>
+    <table class="tbl"><colgroup><col style="width:22px"><col span="3"><col span="4" style="width:15%"></colgroup>
+      <tr><th>#</th><th colspan="3">CÓDIGO</th>${th}</tr>${rows}</table>
+    <button type="button" class="addrow" data-a="addrow">+ RODADA</button>
+    <div class="kick">Números</div>
+    <div class="grid3">${grid}</div>
+    <p class="legend">Toque nos números: risca → certo → limpa. Na resposta do KIT: vazio → ✓ → ✕.</p>
+    <button type="button" class="btn ${clearArmed ? "btn-danger" : ""}" data-a="clear">${clearArmed ? "TOQUE DE NOVO PRA LIMPAR" : "LIMPAR FOLHA"}</button>`;
+}
+
+function noPuzzle() {
+  return `<div class="empty"><p>Esta folha vem do <b>QR do KIT</b>. Abra a Tool Gazua, escolha <b>COM FOLHA</b> ao começar um puzzle e aponte a câmera para o QR.</p>
+    <p>Enquanto isso, a aba COMO JOGAR explica o jogo e pode ser impressa.</p></div>`;
+}
+
+/* ---- IMPRIMIR ----------------------------------------------------------- */
+function viewPrint() {
+  if (!P) return noPuzzle() + `<button type="button" class="btn btn-primary" data-a="printhow">IMPRIMIR COMO JOGAR</button>`;
+  const total = copies + (withHow ? 1 : 0);
+  return `
+    <p class="note">Uma folha de jogo por pessoa, todas do mesmo puzzle. Quem abrir com <b>menos rodadas</b> vence.</p>
+    <div class="row">FOLHAS DE JOGO<div class="stepper"><button type="button" data-a="minus" aria-label="menos">−</button><output>${copies}</output><button type="button" data-a="plus" aria-label="mais">+</button></div></div>
+    <div class="row"><span>COMO JOGAR<small>1 folha a mais, pra explicar na mesa</small></span>
+      <span class="tg"><button type="button" data-a="how" data-v="0" aria-pressed="${!withHow}">NÃO</button><button type="button" data-a="how" data-v="1" aria-pressed="${withHow}">SIM</button></span></div>
+    <button type="button" class="btn btn-primary" data-a="print">IMPRIMIR ${total} FOLHA${total > 1 ? "S" : ""}</button>`;
+}
+
+/* ---- COMO JOGAR (tela e papel usam o mesmo conteúdo) -------------------- */
+function example(paper) {
+  const s = paper ? 15 : 18, so = paper ? 14 : 15;
+  const code = [2, 4, 3].map((v, i) => `${shp(i, s)}${v}`).join(" ");
+  const opts = [["#0 &lt; 4", "ok"], ["#0 = 4", "x"], ["#0 &gt; 4", "x"]];
+  return `<div class="${paper ? "pex" : "box ex"}">
+    <p class="q">Você testa ${code} no verificador ${tok("#0 vs 4", s)} e o KIT responde ${paper ? "✓ SIM" : '<span class="ans">✓</span>'}</p>
+    <div class="r">${opts.map(([o, c]) => `<span class="${c}">${tok(o, so)}</span>`).join("")}</div>
+    <p>Com ${shp(0, so)}2 a regra é verdadeira, então só pode ser ${tok("#0 &lt; 4", so)}. As outras duas caem.</p>
+  </div>`;
+}
+function viewHow() {
+  return `<div class="how">
+    <div class="kick">O objetivo</div>
+    <p>Descobrir um código de 3 números, de 1 a 5, um em cada forma: ${shp(0, 18)} ${shp(1, 18)} ${shp(2, 18)}</p>
+    <div class="kick">Os verificadores</div>
+    <p>São 4. Cada um tem <b>uma regra secreta</b>, tirada da lista dele. Você não sabe qual é. Ele só responde ✓ (a regra vale para o código testado) ou ✕ (não vale).</p>
+    <div class="kick">Uma rodada</div>
+    <div class="box"><ol>
+      <li>No KIT, em CÓDIGO, monte um código nos 3 discos.</li>
+      <li>Em TESTES, teste até 3 verificadores.</li>
+      <li>Anote cada ✓ ou ✕ e risque as regras que caíram.</li>
+    </ol></div>
+    <div class="kick">Exemplo</div>
+    ${example(false)}
+    <div class="kick">Arriscar</div>
+    <p>Quando souber o código, ARRISCAR no KIT. Um palpite só: errou, acabou. Vence quem abrir com menos rodadas; no empate, menos testes.</p>
+    <div class="gold"><b>A PISTA DE OURO</b>Nenhum verificador sobra e a solução é uma só. Se uma regra parece não servir pra nada, ela não é a regra certa.</div>
+    <button type="button" class="btn btn-primary" data-a="printhow">IMPRIMIR COMO JOGAR</button>
+  </div>`;
+}
+
+/* ---- folhas impressas --------------------------------------------------- */
+function gameSheet() {
+  const cards = P.v.map((ci, k) => { const c = CARDS[ci];
+    return `<div class="pc"><div class="face">${tok(c.face, 15)}<span class="n">V${k + 1}</span></div>
+      <ul>${c.opts.map(o => `<li><span class="ck"></span>${tok(o, 12)}</li>`).join("")}</ul></div>`; }).join("");
+  const th = P.v.map(ci => `<th><span class="fs">${tok(CARDS[ci].face, 10)}</span></th>`).join("");
+  const rows = Array.from({ length: 10 }, (_, i) =>
+    `<tr><td class="rn">${i + 1}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`).join("");
+  const g = [0, 1, 2].map(i => `<span>${shp(i, 15)}</span>${[1, 2, 3, 4, 5].map(d => `<div>${d}</div>`).join("")}`).join("");
+  return `<div class="ppage">
+    <div class="phead"><h1>GAZUA</h1><div class="meta">${headText()}<br>4 VERIFICADORES · CÓDIGO DE 3</div></div>
+    <div class="pname">NOME<span></span>RODADAS<span class="s"></span>TESTES<span class="s"></span></div>
+    <div class="psec">VERIFICADORES · RISQUE AS REGRAS QUE CAÍREM</div>
+    <div class="pcards">${cards}</div>
+    <div class="psec">TESTES · UMA LINHA POR RODADA · ✓ OU ✕ DO KIT</div>
+    <table class="pt"><colgroup><col class="c-n"><col class="c-code"><col class="c-code"><col class="c-code"><col><col><col><col></colgroup>
+      <tr><th>#</th><th>${shp(0, 11)}</th><th>${shp(1, 11)}</th><th>${shp(2, 11)}</th>${th}</tr>${rows}</table>
+    <div class="pbottom">
+      <div><div class="psec">NÚMEROS · RISQUE OU CIRCULE</div><div class="pg">${g}</div></div>
+      <div><div class="psec">PALPITE FINAL · NO KIT</div><div class="pfinal"><div>${shp(0, 20)}</div><div>${shp(1, 20)}</div><div>${shp(2, 20)}</div></div></div>
+    </div>
+    <div class="pfoot"><b>COMO JOGA</b> · O código são 3 números de 1 a 5, um por forma. Cada verificador tem UMA regra secreta da lista dele e responde só ✓ ou ✕. Por rodada: um código, até 3 testes no KIT. Arrisque no KIT, um palpite só. Nenhum verificador sobra: se uma regra parece inútil, não é ela.</div>
+  </div>`;
+}
+function howSheet() {
+  return `<div class="ppage">
+    <div class="phead"><h1>GAZUA</h1><div class="meta">COMO JOGAR<br>1 KIT · 1 OU MAIS JOGADORES</div></div>
+    <div class="hw">
+      <section><h2>O OBJETIVO</h2><p>Descobrir um código de 3 números, de 1 a 5, um em cada forma: ${shp(0, 14)} triângulo, ${shp(1, 14)} quadrado e ${shp(2, 14)} círculo.</p></section>
+      <section><h2>OS VERIFICADORES</h2><p>São 4. Cada um tem <b>uma regra secreta</b>, tirada da lista dele, e só responde ✓ (a regra vale para o código testado) ou ✕ (não vale).</p></section>
+      <section><h2>UMA RODADA</h2><ol><li>No KIT, em CÓDIGO, monte um código.</li><li>Em TESTES, teste até 3 verificadores.</li><li>Anote cada resposta e risque as regras que caíram.</li></ol></section>
+      <section><h2>ARRISCAR</h2><p>Quando souber, ARRISCAR no KIT. Um palpite só: errou, acabou. Vence quem abrir com menos rodadas; no empate, menos testes.</p></section>
+      <section class="wide"><h2>EXEMPLO</h2>${example(true)}</section>
+      <section class="wide"><h2>NA FOLHA DE JOGO</h2><p>Risque nas cartas as regras que caírem. Na tabela, anote o código de cada rodada e o ✓ ou ✕ de cada verificador testado. Na grade de números, risque o que não pode ser e circule o que tem certeza.</p></section>
+      <section class="wide"><div class="pgold"><b>A PISTA DE OURO</b>Nenhum verificador sobra e a solução é uma só. Se uma regra parece não servir pra nada, ela não é a regra certa.</div></section>
+    </div>
+    <div class="pfoot"><b>NO KIT</b> · Deslize entre CÓDIGO (os discos e ARRISCAR) e TESTES (os verificadores). O código trava no 1º teste da rodada. NOVA RODADA libera o código de novo.</div>
+  </div>`;
+}
+function runPrint(games, how) {
+  const sheet = document.getElementById("sheet");
+  let html = "";
+  for (let i = 0; i < games; i++) html += gameSheet();
+  if (how) html += howSheet();
+  sheet.innerHTML = html;
+  // dois rAF: o DOM injetado entra no layout antes do snapshot de impressão
+  // (em vários browsers mobile, print() logo após montar sai em branco — ver Adedonha)
+  requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+}
+
+/* ---- render e eventos --------------------------------------------------- */
+function render() {
+  document.getElementById("tag").textContent = headText();
+  document.querySelectorAll("[data-tab]").forEach(b => b.setAttribute("aria-pressed", b.dataset.tab === tab));
+  document.getElementById("view").innerHTML = tab === "fill" ? viewFill() : tab === "print" ? viewPrint() : viewHow();
+}
+
+document.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => {
+  tab = b.dataset.tab; clearArmed = false;
+  try { localStorage.setItem("kit.gazua.tab", tab); } catch (e) { /* ok */ }
+  render();
+}));
+
+document.getElementById("view").addEventListener("click", e => {
+  const b = e.target.closest("[data-a]");
+  if (!b) return;
+  const d = b.dataset, a = d.a;
+  if (a !== "clear") clearArmed = false;
+  if (a === "strike") { const s = F.strike[+d.k], o = +d.o, i = s.indexOf(o); if (i >= 0) s.splice(i, 1); else s.push(o); }
+  else if (a === "code") { const r = F.rows[+d.r]; r.code[+d.i] = (r.code[+d.i] + 1) % 6; }
+  else if (a === "res") { const r = F.rows[+d.r]; r.res[+d.k] = (r.res[+d.k] + 1) % 3; }
+  else if (a === "addrow") { const last = F.rows[F.rows.length - 1]; F.rows.push({ code: last.code.slice(), res: [0, 0, 0, 0] }); }
+  else if (a === "grid") { F.grid[+d.i][+d.d - 1] = (F.grid[+d.i][+d.d - 1] + 1) % 3; }
+  else if (a === "clear") { if (!clearArmed) clearArmed = true; else { clearArmed = false; F = fresh(); } }
+  else if (a === "minus") copies = Math.max(1, copies - 1);
+  else if (a === "plus") copies = Math.min(12, copies + 1);
+  else if (a === "how") withHow = d.v === "1";
+  else if (a === "print") { runPrint(copies, withHow); return; }
+  else if (a === "printhow") { runPrint(0, true); return; }
+  save();
+  render();
+});
+
+try {
+  const t = localStorage.getItem("kit.gazua.tab");
+  if (t === "fill" || t === "print" || t === "how") tab = t;
+} catch (e) { /* ok */ }
+if (!P) tab = "how";
+load();
+render();
+</script>
+</body>
+</html>
