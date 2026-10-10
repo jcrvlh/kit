@@ -20,6 +20,9 @@ kit_err_t kit_input_init(void);
  * Registra um callback para eventos brutos de entrada do touch.
  */
 kit_err_t kit_input_register_callback_impl(kit_input_callback_t cb, void *user_data);
+// Esquece o callback da Tool. Chamado pelo Tool Manager ANTES do dlclose: um
+// callback esquecido apontaria pra código desmapeado no próximo toque.
+void      kit_input_clear_callback(void);
 
 /**
  * Habilita/desabilita o processamento de toque no LVGL (usado quando a tela

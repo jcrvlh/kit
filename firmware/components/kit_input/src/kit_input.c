@@ -129,6 +129,12 @@ kit_err_t kit_input_register_callback_impl(kit_input_callback_t cb, void *user_d
     return KIT_OK;
 }
 
+void kit_input_clear_callback(void)
+{
+    s_user_cb = NULL;
+    s_user_data = NULL;
+}
+
 kit_err_t kit_input_set_enabled_impl(bool enabled)
 {
     if (s_indev) {

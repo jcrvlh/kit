@@ -338,6 +338,17 @@ static void do_install(const char *id)
         return;
     }
 
+    // Tool com internet só pelo cartão por enquanto: sem assinatura dos
+    // pacotes (Ed25519, ADR-0012), um índice adulterado poderia instalar algo
+    // que manda dados pra fora. Desfaz a instalação.
+    if (kit_tool_manager_wants_network(e.id)) {
+        ESP_LOGW(TAG, "'%s' pede rede — recusada pelo Catálogo (só pelo cartão)", id);
+        kit_tool_manager_uninstall(e.id);
+        cross_reference();
+        fail(KIT_CAT_WORK_ERR, "Tool com internet: instale pelo cartão");
+        return;
+    }
+
     cross_reference();
     s_err[0] = '\0';
     ESP_LOGI(TAG, "'%s' instalada (v%s)", e.name, e.version);

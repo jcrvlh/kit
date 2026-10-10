@@ -1,0 +1,27 @@
+{
+  "manifest_version": 1,
+  "id": "com.kit.hellonet",
+  "name": "Olá Rede",
+  "version": "1.0.0",
+  "version_code": 1,
+  "min_runtime": "0.16.0",
+  "max_runtime": "1.0.0",
+  "author": "KIT Core Team",
+  "description": "Exemplo da API de rede: busca o manifesto de firmware do KIT por HTTPS.",
+  "icon": "icon.bin",
+  "accent": "#4C6EF5",
+  "home_icon": "card",
+  "entry_point": "tool.so",
+  "arch": "xtensa-esp32s3",
+  "permissions": [
+    "display",
+    "input",
+    "time",
+    "network"
+  ],
+  "network_domains": [
+    "jcrvlh.github.io"
+  ],
+  "api_level": 1,
+  "assets": []
+}

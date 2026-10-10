@@ -53,7 +53,7 @@ Toda Tool para o KIT deve possuir um arquivo `manifest.json` na raiz do seu proj
 
 ## Permissões (Permissions)
 
-O Runtime do KIT fornece os ponteiros de API no contexto da Tool **apenas se a permissão foi declarada**. Se você tentar acessar `ctx->api->audio` sem ter `"audio"` nas `permissions`, o ponteiro será `NULL` e sua Tool sofrerá uma exceção de *null pointer dereference*.
+Declare em `permissions` tudo o que a Tool usa. Hoje o firmware só **aplica** a permissão `"network"` (sem ela, `ctx->api->net` é `NULL`); as demais ainda são declarativas e o ponteiro vem preenchido mesmo sem declarar. Declare assim mesmo: o KIT vai passar a exigir todas, e quem acessar um ponteiro `NULL` derruba a Tool.
 
 Valores suportados em `permissions`:
 
@@ -66,7 +66,13 @@ Valores suportados em `permissions`:
 - `"power"`: Acesso ao controle de bateria, sleep e wake locks.
 - `"system"`: Acesso a informações de versão e solicitação de saída da Tool.
 - `"imu"`: Acesso ao acelerômetro e callback de detecção de gestos como chacoalhar (*shake*).
-- `"network"`: (Futuro) Acesso ao rádio Wi-Fi / BLE.
+- `"network"` (runtime ≥ 0.16.0): HTTPS GET pelo `ctx->api->net`, só para os hosts listados em `network_domains`. Sem essa lista, a permissão não vale.
+
+### `network_domains`
+
+Lista de 1 a 4 hosts, exatamente como aparecem na URL (subdomínio não vale): `"network_domains": ["api.exemplo.com"]`. O KIT recusa pedidos para qualquer outro host, segue sem redirect automático e só aceita `https://`.
+
+Tools com `"network"` ainda **não são instaladas pelo Catálogo do aparelho**, só pelo cartão (Modo pen drive), até os pacotes serem assinados.
 
 ## Pacote Final (`.kit`)
 

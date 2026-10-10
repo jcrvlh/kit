@@ -9,6 +9,17 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.16.0] — 2026-10-10
+
+### Adicionado
+- **Internet para as Tools.** Quem desenvolve Tools agora pode buscar dados
+  na internet por HTTPS, só nos endereços que a Tool declara. Por enquanto,
+  essas Tools são instaladas só pelo cartão de memória, não pelo Catálogo.
+
+### Corrigido
+- **Sair de uma Tool não trava mais o KIT** quando a Tool esquecia de
+  desligar o próprio controle de toque.
+
 ## [0.15.0] — 2026-10-10
 
 ### Adicionado

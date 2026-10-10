@@ -117,3 +117,34 @@ if (api->imu->accel_tilt(&tx, &ty)) {
 - `system->get_info(&info)`: Pega versão do OS, bateria atual e memória RAM livre.
 - `system->exit()`: Encerra a Tool proativamente, devolvendo o controle para a Home.
 - `power->keep_awake(true)`: Impede que o KIT entre em Deep Sleep por inatividade (cuidado com bateria).
+
+---
+
+## 8. Net API (`ctx->api->net`)
+**Permissão necessária:** `"network"` **e** a lista `"network_domains"` no manifest (runtime ≥ 0.16.0). Sem as duas, `ctx->api->net` é `NULL`.
+
+- `bool is_online()`: o Wi-Fi está conectado agora?
+- `kit_err_t http_get(const char *url, kit_net_callback_t cb, void *user_data)`: dispara um GET assíncrono. Devolve `KIT_OK` se aceitou o pedido; `KIT_ERR_PERMISSION_DENIED` se o host não está em `network_domains` ou a URL não é `https://`; `KIT_ERR_NOT_SUPPORTED` sem Wi-Fi; `KIT_FAIL` se há um pedido em andamento ou faz menos de 1 s do anterior.
+- `void cancel()`: descarta o pedido em andamento; o callback dele não é mais chamado.
+
+O callback `void cb(kit_err_t result, int http_status, const char *body, size_t len, void *user_data)` roda no contexto do LVGL, então pode atualizar a tela direto. `body` termina em `'\0'` e **só vale durante a chamada**: copie o que precisar. `result` é `KIT_OK` quando veio uma resposta HTTP (confira `http_status`), `KIT_ERR_TIMEOUT`, `KIT_ERR_NO_MEM` (resposta acima de 16 KB) ou `KIT_FAIL` (conexão/TLS).
+
+Limites: só HTTPS GET, sem corpo nem header customizado, sem redirect automático (um 301/302 chega como status), um pedido por vez, timeout de 10 s. Ao sair da Tool, o pedido pendente é descartado.
+
+Tools com `"network"` ainda não são instaladas pelo Catálogo do aparelho, só pelo cartão (Modo pen drive), até os pacotes serem assinados.
+
+Exemplo completo: [`tools-sdk/examples/hello_net`](../examples/hello_net/).
+
+```c
+static void on_resp(kit_err_t r, int status, const char *body, size_t len, void *ud)
+{
+    if (r == KIT_OK && status == 200) {
+        /* parse de body[0..len) aqui */
+    }
+}
+
+if (api->net && api->net->is_online()) {
+    api->net->http_get("https://api.exemplo.com/dados.json", on_resp, NULL);
+}
+```
+

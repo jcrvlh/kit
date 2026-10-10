@@ -7,6 +7,9 @@ import re
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+# Host de "network_domains": rótulos DNS separados por ponto, sem esquema/porta/caminho.
+DOMAIN_REGEX = re.compile(r"^(?=.{1,63}$)([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$")
+
 VALID_PERMISSIONS = {
     "display",
     "input",
@@ -88,6 +91,24 @@ def validate_manifest_dict(data: dict) -> Tuple[bool, List[str]]:
         for perm in data["permissions"]:
             if perm not in VALID_PERMISSIONS:
                 errors.append(f"Permissão desconhecida ou inválida: '{perm}'. Válidas: {sorted(VALID_PERMISSIONS)}")
+
+    # Rede (runtime >= 0.16.0): "network" só vale com a lista de domínios.
+    doms = data.get("network_domains")
+    wants_net = isinstance(data.get("permissions"), list) and "network" in data["permissions"]
+    if doms is not None:
+        if not isinstance(doms, list) or not doms or len(doms) > 4:
+            errors.append("'network_domains' deve ser uma lista de 1 a 4 domínios.")
+        else:
+            for d in doms:
+                if not isinstance(d, str) or not DOMAIN_REGEX.match(d):
+                    errors.append(
+                        f"Domínio inválido em 'network_domains': {d!r} — só o host, "
+                        "ex.: 'api.exemplo.com' (sem https://, porta ou caminho)."
+                    )
+        if not wants_net:
+            errors.append("'network_domains' sem a permissão 'network'.")
+    elif wants_net:
+        errors.append("A permissão 'network' exige 'network_domains' (os hosts que a Tool acessa).")
 
     # Validação do api_level (opcional mas recomendado)
     if "api_level" in data:
