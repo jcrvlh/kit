@@ -134,6 +134,7 @@ typedef enum {
     KIT_SFX_TELEFONEMA_MISS,  // Telefonema: errou (cedo, trote ou não atendeu) — buzina curta descendo
     KIT_SFX_ESTOURO_POP,      // Estouro: estalo agudo + fuga de ar curtíssima (~0,1 s, sem cascata)
     KIT_SFX_ESTOURO_SHAKE,    // Estouro: "thump" curto e forte a cada chacoalhada registrada
+    KIT_SFX_TAP,              // toque de botão sutil: "tic" de madeira (>= runtime 0.15.0)
 } kit_sfx_t;
 
 typedef struct {
@@ -201,6 +202,19 @@ typedef struct {
                       int32_t *roll_cdeg, int32_t *rate_cdps);
     // Desliga o giroscópio (economia de energia).
     void (*gyro_stop)(void);
+
+    // --- Acelerômetro (>= runtime 0.15.0) -----------------------------------
+    // Eixos da TELA: x pra direita, y pra baixo, z saindo da tela — já com a
+    // rotação do Modo canhoto. Parado, o vetor aponta pra cima (deitado de
+    // tela pra cima: z ~ +1000). Sempre ligado com a tela acesa; false no
+    // repouso ou se o I2C falhou. Inteiros pra não expor float ao .so.
+
+    // Aceleração em mili-g (qualquer ponteiro pode ser NULL).
+    bool (*accel_poll)(int32_t *x_mg, int32_t *y_mg, int32_t *z_mg);
+    // Inclinação absoluta pela gravidade: ângulo dos eixos x/y da tela acima
+    // do horizontal, centigraus (-9000..9000). x > 0 = borda direita mais
+    // alta; y > 0 = borda de baixo mais alta. Sem drift, sem calibrar.
+    bool (*accel_tilt)(int32_t *x_cdeg, int32_t *y_cdeg);
 } kit_imu_api_t;
 
 // Export Table Consolidada

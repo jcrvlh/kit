@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 14
+#define KIT_VERSION_MINOR 15
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -67,7 +67,13 @@ extern "C" {
 //        lugar de 2-5 lv_obj compostos, e as caixas semi-transparentes atrás
 //        dos ícones saem da grade "VER TODOS" e dos slides de recentes —
 //        nenhuma superfície nova pras Tools)
-#define KIT_VERSION_STRING "0.14.0"
+// 0.15.0: kit_imu_api_t ganha accel_poll (mili-g) e accel_tilt (inclinação
+//        absoluta pela gravidade, centigraus), nos eixos da tela e já com a
+//        rotação do Modo canhoto; kit_sfx_t ganha KIT_SFX_TAP (toque de
+//        botão sem estalo). O elf_loader para de exportar lwip_* e
+//        pthread_* (rede/thread crua, nenhuma Tool usava). Superfície nova pras
+//        Tools -> bump obrigatório.
+#define KIT_VERSION_STRING "0.15.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

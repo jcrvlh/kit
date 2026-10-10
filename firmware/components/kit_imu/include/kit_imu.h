@@ -130,6 +130,23 @@ bool kit_imu_gyro_poll_centi(int32_t *yaw_cdeg, int32_t *pitch_cdeg,
 /** Desliga o giroscópio (economia de energia). */
 void kit_imu_gyro_stop(void);
 
+/**
+ * Lê o acelerômetro em mili-g nos eixos da TELA (x pra direita, y pra baixo,
+ * z saindo da tela), já com a rotação de 180° do Modo canhoto aplicada.
+ * Parado, o vetor aponta pra cima (deitado de tela pra cima: z ≈ +1000).
+ * Exposto às Tools via kit_api_table_t.imu->accel_poll (runtime >= 0.15.0).
+ * false se o acelerômetro estiver desligado (repouso) ou o I2C falhar.
+ */
+bool kit_imu_accel_poll_mg(int32_t *x_mg, int32_t *y_mg, int32_t *z_mg);
+
+/**
+ * Inclinação absoluta a partir da gravidade: ângulo dos eixos x e y da tela
+ * acima do horizontal, em centigraus (-9000..9000). Positivo em x = borda
+ * direita mais alta; positivo em y = borda de baixo mais alta. Exposto via
+ * kit_api_table_t.imu->accel_tilt (runtime >= 0.15.0).
+ */
+bool kit_imu_accel_tilt_cdeg(int32_t *x_cdeg, int32_t *y_cdeg);
+
 #ifdef __cplusplus
 }
 #endif

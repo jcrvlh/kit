@@ -367,6 +367,22 @@ static void stub_imu_gyro_stop(void)
     printf("[STUB IMU] giroscópio desligado (stub).\n");
 }
 
+/* Acelerômetro: aparelho deitado na mesa, tela pra cima, parado. */
+static bool stub_imu_accel_poll(int32_t *x_mg, int32_t *y_mg, int32_t *z_mg)
+{
+    if (x_mg) *x_mg = 0;
+    if (y_mg) *y_mg = 0;
+    if (z_mg) *z_mg = 1000;
+    return true;
+}
+
+static bool stub_imu_accel_tilt(int32_t *x_cdeg, int32_t *y_cdeg)
+{
+    if (x_cdeg) *x_cdeg = 0;
+    if (y_cdeg) *y_cdeg = 0;
+    return true;
+}
+
 /* -----------------------------------------------------------------------
  * Montagem das Tabelas de API (Stubs)
  * ----------------------------------------------------------------------- */
@@ -428,6 +444,8 @@ static const kit_imu_api_t s_stub_imu = {
     .gyro_rezero = stub_imu_gyro_rezero,
     .gyro_poll   = stub_imu_gyro_poll,
     .gyro_stop   = stub_imu_gyro_stop,
+    .accel_poll  = stub_imu_accel_poll,
+    .accel_tilt  = stub_imu_accel_tilt,
 };
 
 static const kit_api_table_t s_stub_api_table = {

@@ -1,5 +1,6 @@
 #include "kit_imu.h"
 #include "kit_power.h"          // kit_i2c_read_reg / _read_bytes / _write_reg
+#include "kit_display.h"        // kit_display_rotation (eixos do acelerômetro na tela)
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -421,5 +422,51 @@ bool kit_imu_gyro_poll_centi(int32_t *yaw_cdeg, int32_t *pitch_cdeg,
     if (pitch_cdeg) *pitch_cdeg = (int32_t)lroundf(pitch * 100.0f);
     if (roll_cdeg)  *roll_cdeg  = (int32_t)lroundf(roll  * 100.0f);
     if (rate_cdps)  *rate_cdps  = (int32_t)lroundf(rate  * 100.0f);
+    return true;
+}
+
+// Acelerômetro pras Tools do catálogo (kit_api_table_t.imu->accel_*, runtime
+// >= 0.15.0). Eixos da TELA como o LVGL desenha — x pra direita, y pra baixo,
+// z saindo da tela pro rosto — já contando a rotação de 180° (Modo canhoto),
+// pra Tool não precisar saber da pegada. Mede a reação à gravidade: parado, o
+// vetor aponta pra CIMA (deitado de tela pra cima, z = +1 g).
+// Dos eixos crus do QMI8658 (gx = altura, gy = largura, gz = normal; sinais
+// de ORIENT_GH_UP_POS / ORIENT_GW_LEFT_POS / TILT_DOWN_IS_POSITIVE):
+// x = +gy, y = -gx, z = -gz.
+static bool accel_screen_g(float *sx, float *sy, float *sz)
+{
+    if (!s_ready || !s_enabled) return false;
+
+    float gx, gy, gz;
+    if (!read_accel_g(&gx, &gy, &gz)) return false;
+
+    float x = gy, y = -gx;
+    if (kit_display_rotation() == 180) { x = -x; y = -y; }
+    *sx = x;
+    *sy = y;
+    *sz = -gz;
+    return true;
+}
+
+bool kit_imu_accel_poll_mg(int32_t *x_mg, int32_t *y_mg, int32_t *z_mg)
+{
+    float x, y, z;
+    if (!accel_screen_g(&x, &y, &z)) return false;
+    if (x_mg) *x_mg = (int32_t)lroundf(x * 1000.0f);
+    if (y_mg) *y_mg = (int32_t)lroundf(y * 1000.0f);
+    if (z_mg) *z_mg = (int32_t)lroundf(z * 1000.0f);
+    return true;
+}
+
+// Ângulo de cada eixo da tela acima do plano horizontal, em centigraus
+// (-9000..9000): asin(componente / |a|), via atan2 pra não estourar com |a|
+// longe de 1 g. Vale em qualquer pegada — deitado na mesa ou em pé na mão.
+bool kit_imu_accel_tilt_cdeg(int32_t *x_cdeg, int32_t *y_cdeg)
+{
+    float x, y, z;
+    if (!accel_screen_g(&x, &y, &z)) return false;
+    const float k = 18000.0f / (float)M_PI;
+    if (x_cdeg) *x_cdeg = (int32_t)lroundf(atan2f(x, sqrtf(y * y + z * z)) * k);
+    if (y_cdeg) *y_cdeg = (int32_t)lroundf(atan2f(y, sqrtf(x * x + z * z)) * k);
     return true;
 }

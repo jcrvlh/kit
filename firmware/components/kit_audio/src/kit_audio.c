@@ -82,6 +82,12 @@ static volatile uint8_t s_fuse_tension = 0;
 #define FUSE_AMP_BASE       11800.0f // alto, mas ainda com folga pro fundo de escala (32767)
 #define FUSE_AMP_SPAN        2700.0f // (o silêncio ativo entre os tiques é que tira o estouro)
 
+// Envelope de cada tom: rampa de subida e de descida, em amostras. 0 = a rampa
+// linear de ~2 ms dos efeitos prontos (render_sfx), que dependem desse ataque
+// seco (catracas, tiques). Os bipes avulsos das Tools usam a curva macia.
+static uint32_t s_tone_attack  = 0;
+static uint32_t s_tone_release = 0;
+
 static void render_tone(uint16_t freq_hz, uint16_t duration_ms, float amp)
 {
     if (!s_speaker || duration_ms == 0) return;
@@ -98,12 +104,24 @@ static void render_tone(uint16_t freq_hz, uint16_t duration_ms, float amp)
         uint32_t remaining = total_samples - sent;
         int chunk = remaining < AUDIO_FRAME_COUNT ? (int)remaining : AUDIO_FRAME_COUNT;
         for (int i = 0; i < chunk; i++) {
-            // Envelope curto nas pontas (~2 ms) para não estalar o alto-falante.
             float env = 1.0f;
             uint32_t idx = sent + (uint32_t)i;
-            const uint32_t ramp = AUDIO_SAMPLE_RATE / 500; // ~2 ms
-            if (idx < ramp)                      env = (float)idx / (float)ramp;
-            else if (idx > total_samples - ramp) env = (float)(total_samples - idx) / (float)ramp;
+            if (s_tone_attack == 0) {
+                // Envelope curto nas pontas (~2 ms) para não estalar o alto-falante.
+                const uint32_t ramp = AUDIO_SAMPLE_RATE / 500; // ~2 ms
+                if (idx < ramp)                      env = (float)idx / (float)ramp;
+                else if (idx > total_samples - ramp) env = (float)(total_samples - idx) / (float)ramp;
+            } else {
+                // Meio cosseno nas duas pontas: sem quina no começo nem no fim,
+                // que é o que "estourava" nos bipes curtos e graves.
+                uint32_t att = s_tone_attack, rel = s_tone_release;
+                if (att > total_samples / 4) att = total_samples / 4;
+                if (rel > total_samples / 2) rel = total_samples / 2;
+                if (att && idx < att)
+                    env = 0.5f - 0.5f * cosf(AUDIO_TWO_PI * 0.5f * (float)idx / (float)att);
+                else if (rel && idx >= total_samples - rel)
+                    env = 0.5f - 0.5f * cosf(AUDIO_TWO_PI * 0.5f * (float)(total_samples - idx) / (float)rel);
+            }
             samples[i] = (int16_t)(sinf(phase) * amp * env);
             phase += step;
             if (phase >= AUDIO_TWO_PI) {
@@ -169,6 +187,37 @@ static void render_fuse_tick(void)
 }
 
 static inline uint32_t rnd(uint32_t n) { return esp_random() % n; }
+
+// Nota "pinçada": ataque em meio cosseno (~3 ms) e decaimento exponencial —
+// soa como um toque em madeira, sem a quina do bipe de envelope plano.
+static void render_pluck(uint16_t freq_hz, uint16_t duration_ms, float amp, float decay_ms)
+{
+    if (!s_speaker || duration_ms == 0) return;
+
+    int16_t samples[AUDIO_FRAME_COUNT];
+    float phase = 0.0f;
+    float step = AUDIO_TWO_PI * (float)freq_hz / (float)AUDIO_SAMPLE_RATE;
+    const uint32_t total = (AUDIO_SAMPLE_RATE * (uint32_t)duration_ms) / 1000;
+    const uint32_t att = AUDIO_SAMPLE_RATE * 3 / 1000;
+    const float k = expf(-1.0f / (decay_ms * (float)AUDIO_SAMPLE_RATE / 1000.0f));
+    float dec = 1.0f;
+    uint32_t sent = 0;
+    while (sent < total) {
+        uint32_t remaining = total - sent;
+        int chunk = remaining < AUDIO_FRAME_COUNT ? (int)remaining : AUDIO_FRAME_COUNT;
+        for (int i = 0; i < chunk; i++) {
+            uint32_t idx = sent + (uint32_t)i;
+            float env = dec;
+            if (idx < att) env *= 0.5f - 0.5f * cosf(AUDIO_TWO_PI * 0.5f * (float)idx / (float)att);
+            else           dec *= k;
+            samples[i] = (int16_t)(sinf(phase) * amp * env);
+            phase += step;
+            if (phase >= AUDIO_TWO_PI) phase -= AUDIO_TWO_PI;
+        }
+        esp_codec_dev_write(s_speaker, samples, (size_t)chunk * sizeof(int16_t));
+        sent += (uint32_t)chunk;
+    }
+}
 
 static void render_sfx(kit_sfx_t sfx)
 {
@@ -556,6 +605,13 @@ static void render_sfx(kit_sfx_t sfx)
         render_tone(340, 20, 13500.0f);
         break;
 
+    case KIT_SFX_TAP:
+        // Toque de botão das Tools. Médio-agudo (o alto-falante pequeno
+        // distorce nos graves, era o "estourado" do beep(415, 24) do Tarot),
+        // baixo e pinçado: some em ~40 ms sem cauda.
+        render_pluck(1175, 40, 5200.0f, 9.0f);   // D6
+        break;
+
     default:
         break;
     }
@@ -740,9 +796,15 @@ static void audio_task(void *arg)
                 // Bipes muito curtos (<= 14 ms) são "ticks" de textura — saem
                 // mais baixos pra não estourar quando disparados em rajada
                 // (catraca da Garrafa, animação de sorteio).
+                // Toques curtos (<= 60 ms, o "toquezinho" de botão das Tools)
+                // a ~60%: na cheia o alto-falante distorce nos graves.
                 float amp = (req.duration_ms <= 14) ? AUDIO_AMP_FULL * 0.34f
+                          : (req.duration_ms <= 60) ? AUDIO_AMP_FULL * 0.60f
                                                     : AUDIO_AMP_FULL;
+                s_tone_attack  = AUDIO_SAMPLE_RATE * 4 / 1000;    // 4 ms
+                s_tone_release = AUDIO_SAMPLE_RATE * 10 / 1000;   // até 10 ms
                 render_tone(req.freq_hz, req.duration_ms, amp);
+                s_tone_attack = s_tone_release = 0;
             } else if (req.sfx == -3) {
                 render_wav(req.path);
             } else {
