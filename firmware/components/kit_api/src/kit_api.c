@@ -43,6 +43,8 @@ extern kit_err_t kit_imu_gyro_rezero(void);
 extern bool      kit_imu_gyro_poll_centi(int32_t *yaw_cdeg, int32_t *pitch_cdeg,
                                          int32_t *roll_cdeg, int32_t *rate_cdps);
 extern void      kit_imu_gyro_stop(void);
+extern bool      kit_imu_accel_poll_mg(int32_t *x_mg, int32_t *y_mg, int32_t *z_mg);
+extern bool      kit_imu_accel_tilt_cdeg(int32_t *x_cdeg, int32_t *y_cdeg);
 
 // Definição das tabelas estáticas de APIs
 static const kit_display_api_t s_display_api = {
@@ -102,6 +104,8 @@ static const kit_imu_api_t s_imu_api = {
     .gyro_rezero  = kit_imu_gyro_rezero,
     .gyro_poll    = kit_imu_gyro_poll_centi,
     .gyro_stop    = kit_imu_gyro_stop,
+    .accel_poll   = kit_imu_accel_poll_mg,
+    .accel_tilt   = kit_imu_accel_tilt_cdeg,
 };
 
 static const kit_api_table_t s_master_api_table = {

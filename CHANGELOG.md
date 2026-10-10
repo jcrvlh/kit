@@ -9,6 +9,26 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.15.0] — 2026-10-10
+
+### Adicionado
+- **Acelerômetro aberto para as Tools do catálogo.** Quem desenvolve Tools
+  agora pode ler a aceleração do KIT e a inclinação absoluta do aparelho
+  (sem calibrar e sem desvio com o tempo), nos eixos da tela e já
+  respeitando o Modo canhoto. Abre caminho para jogos de inclinar, como
+  labirinto de bolinha ou nível de bolha.
+- **Som de toque novo para as Tools.** Um "tic" curto e suave para botões,
+  pensado para o alto-falante do KIT.
+
+### Alterado
+- **Bipes curtos das Tools sem estalo.** O som entra e sai de forma mais
+  suave e os toques curtos ficaram um pouco mais baixos, sem distorcer.
+
+### Segurança
+- **Tools do catálogo não acessam mais a rede nem criam processos paralelos
+  por conta própria.** O carregador de Tools deixava esses recursos abertos
+  sem que a Tool precisasse declará-los. Nenhuma Tool publicada os usava.
+
 ## [0.14.0] — 2026-09-12
 
 ### Alterado

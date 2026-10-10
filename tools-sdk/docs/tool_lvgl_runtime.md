@@ -44,7 +44,7 @@ dimensiona a grade pela altura resolvida do tile) · `lv_obj_align` ·
 **Flex:** `lv_obj_set_flex_flow` · `lv_obj_set_flex_align` · `lv_obj_set_flex_grow`
 **Scroll:** `lv_obj_set_scroll_dir` · `lv_obj_set_scrollbar_mode`
 **Estilos locais:** `lv_obj_set_style_bg_color` · `…_bg_opa` · `…_border_width` ·
-`…_border_color` · `…_border_opa` · `…_shadow_width` · `…_radius` · `…_opa` · `…_translate_x` · `…_translate_y` · `…_min_width` ·
+`…_border_color` · `…_border_opa` · `…_border_side` (runtime ≥ 0.4.0) · `…_shadow_width` · `…_radius` · `…_opa` · `…_translate_x` · `…_translate_y` · `…_min_width` ·
 `…_pad_top/bottom/left/right/row/column`
 (`…_pad_all/hor/ver/gap` são `static inline` no 9.5 → expandem para essas) ·
 `…_text_color` · `…_text_font` · `…_text_align` · `…_text_letter_space` ·
@@ -71,11 +71,16 @@ troca de página é `LV_EVENT_VALUE_CHANGED` no objeto do tileview.
 **Cor:** `lv_color_hex`
 **Fontes (dados):** `kit_mono_16/20/26` · `kit_sans_22/28` · `kit_display_44/72/120`
 **libc:** `snprintf` · `strcpy` · `strncpy` · `strlcpy` · `strcat` (runtime ≥
-0.3.1 — o GCC sintetiza `strcpy` a partir de `snprintf(d,n,"%s",lit)` e afins). O
+0.3.1 — o GCC sintetiza `strcpy` a partir de `snprintf(d,n,"%s",lit)` e afins) ·
+`memmove` (o GCC gera a partir de laços que deslocam arrays; o Quique troca em
+cadeia pra não depender dele). O
 `elf_loader` já traz `printf` · `puts` · `memcpy` · `memset` · `strlen` ·
 `strcmp` · `strchr` · `malloc` · …).
 
-`rand`/`srand` **não** são exportados — use `ctx->api->random`. A UI de toque
+`rand`/`srand` **não** são exportados — use `ctx->api->random`. Também **não**
+há socket (`lwip_*`) nem thread (`pthread_*`): o override do `elf_loader` tira
+esses símbolos da tabela original (runtime ≥ 0.15.0 — ver
+`firmware/components/espressif__elf_loader/README.KIT.md`). A UI de toque
 e o resto do hardware vêm pela `kit_api_table_t`
 (`ctx->api->input->register_callback`, etc.), não pelo LVGL direto.
 

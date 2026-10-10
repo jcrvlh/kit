@@ -1,9 +1,9 @@
 # espressif/elf_loader — override do KIT
 
 Cópia do componente `espressif/elf_loader` **v1.3.3** do registro da ESP-IDF com
-**uma** mudança em relação ao original.
+**duas** mudanças em relação ao original.
 
-## A mudança
+## Mudança 1: `.text` alinhado na IRAM
 
 `src/esp_elf.c`, em `esp_elf_load_section()` (caminho
 `CONFIG_ELF_LOADER_BUS_ADDRESS_MIRROR`, usado no ESP32-S3):
@@ -37,11 +37,30 @@ para decidir se um endereço cai em `.text` ou em `.rodata` (que são adjacentes
 no espaço de vaddr da Tool). Arredondá-lo faria a primeira string de `.rodata`
 ser classificada como `.text` e reintroduziria o crash noutro ponto.
 
+## Mudança 2: sem rede nem threads pras Tools
+
+`src/esp_elf_symbol.c`: saem da tabela de símbolos os `lwip_*` (`socket`,
+`connect`, `send`, `recv`, `bind`, `listen`, `accept`, `setsockopt`, `sendto`,
+`recvfrom`, `htons`, `htonl`), `ipaddr_addr`, `ip4addr_ntoa` e os `pthread_*`.
+
+O original exporta isso por padrão. Com o Wi-Fi conectado, qualquer Tool do
+catálogo conseguiria abrir um socket TCP/UDP e mandar dados pra fora (inclusive
+o que lê do cartão com `fopen`/`opendir`) sem declarar nada no manifest. Uma
+thread criada pela Tool sobreviveria ao `tool_destroy()` rodando código de um
+`.so` já descarregado. Nenhuma Tool usava esses símbolos (conferido no código
+de todas as branches do `kit-tools` e com `nm -D` nos `tool.so`). Uma Tool que
+tente usar falha no `dlopen` com símbolo indefinido.
+
+Rede para Tools, se vier, entra pela `kit_api_table_t` com permissão e lista de
+domínios no manifest, não por socket cru.
+
 ## Manutenção
 
 Ao subir a versão do `elf_loader`: recopie o componente do registro por cima
-(`idf.py add-dependency` / cache em `managed_components/`) e reaplique a mudança
-em `src/esp_elf.c` (procure o comentário `KIT:` perto do `memcpy` do `.text`).
+(`idf.py add-dependency` / cache em `managed_components/`) e reaplique as duas
+mudanças: em `src/esp_elf.c` (comentário `KIT:` perto do `memcpy` do `.text`) e
+em `src/esp_elf_symbol.c` (comentários `KIT:` onde ficavam os `pthread_*` e os
+`lwip_*`).
 
 Um componente com o mesmo nome em `components/` substitui o de
 `managed_components/` — o `main/idf_component.yml` continua listando

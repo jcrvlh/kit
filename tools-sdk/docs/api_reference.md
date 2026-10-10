@@ -72,7 +72,7 @@ Alto-falante embutido (codec ES8311). Todas as chamadas são não bloqueantes
 
 - `kit_err_t beep(uint16_t freq_hz, uint16_t duration_ms)`: Tom senoidal (ex: 1500 Hz por 50 ms).
 - `kit_err_t set_volume(uint8_t percentage)`: Volume do alto-falante (0–100).
-- `kit_err_t sfx(kit_sfx_t sfx)`: Toca um efeito sonoro pronto do KIT (ver `kit_sfx_t`).
+- `kit_err_t sfx(kit_sfx_t sfx)`: Toca um efeito sonoro pronto do KIT (ver `kit_sfx_t`). Para o toque de botão, use `KIT_SFX_TAP` (runtime ≥ 0.15.0): um "tic" médio-agudo e curto. Um `beep()` curto e grave (abaixo de ~600 Hz) distorce no alto-falante do KIT.
 - `kit_err_t fuse(int16_t tension)`: "Pavio queimando" — tique metronômico gerado na task de áudio; `tension` 0–255 acelera, `< 0` apaga.
 - `kit_err_t play_sample(const char *path)`: Toca um `.wav` do cartão microSD. **Requer `min_runtime` `0.7.0`.** `path` absoluto sob `/sdcard/` — em geral `"<ctx->data_path>/assets/<nome>.wav"` (asset embutido no `.kit`) ou `"/sdcard/soundbox/<banco>/<nome>.wav"`. Formato: **WAV PCM 16-bit mono, 16 kHz** (8 kHz também; estéreo é rebaixado). Um som novo corta o anterior (retrigger, sem polifonia).
 - `kit_err_t stop_sample(void)`: Corta o sample em reprodução.
@@ -82,9 +82,32 @@ Alto-falante embutido (codec ES8311). Todas as chamadas são não bloqueantes
 ## 6. IMU API (`ctx->api->imu`)
 **Permissão necessária:** `"imu"`
 
-Acesso ao módulo inercial 6-DOF (QMI8658). Atualmente expõe exclusivamente detecção avançada de "chacoalhar".
+Acesso ao módulo inercial 6-DOF (QMI8658). Tudo em inteiros: o loader das Tools não resolve float.
 
 - `kit_err_t register_shake_callback(kit_shake_callback_t cb, void *user_data)`: Registra uma função que é invocada sempre que o KIT for fortemente chacoalhado. O Runtime lida com os cálculos vetoriais e debounce (0.7s) internamente.
+- `kit_err_t register_tilt_callback(kit_tilt_callback_t cb, void *user_data)` (runtime ≥ 0.2.0): gesto discreto de virar a tela pro chão (`KIT_TILT_DOWN`) ou pro teto (`KIT_TILT_UP`), uma vez por inclinada.
+- `gyro_start()` · `gyro_rezero()` · `gyro_poll(&yaw, &pitch, &roll, &rate)` · `gyro_stop()` (runtime ≥ 0.4.0): giroscópio sob demanda, ângulo **relativo** ao último zero, em centigraus.
+- `bool accel_poll(int32_t *x_mg, int32_t *y_mg, int32_t *z_mg)` (runtime ≥ 0.15.0): aceleração em mili-g.
+- `bool accel_tilt(int32_t *x_cdeg, int32_t *y_cdeg)` (runtime ≥ 0.15.0): inclinação **absoluta** pela gravidade, em centigraus (-9000..9000), sem calibrar e sem drift.
+
+**Eixos do acelerômetro** — os da tela, como o LVGL desenha, já com a rotação do Modo canhoto:
+
+| Eixo | Sentido | `accel_tilt` positivo |
+| :--- | :--- | :--- |
+| `x` | pra direita | borda direita mais alta |
+| `y` | pra baixo | borda de baixo mais alta |
+| `z` | saindo da tela, pro rosto | — |
+
+Parado, o vetor aponta pra cima: deitado de tela pra cima dá `(0, 0, +1000)`; em pé na mão, tela pro rosto, `(0, -1000, 0)`. Em movimento soma-se a aceleração da mão. O acelerômetro fica ligado sempre que a tela está acesa (sem start/stop); com a tela em repouso as duas funções devolvem `false`.
+
+```c
+/* Bolinha que rola pro lado mais baixo da tela. */
+int32_t tx, ty;
+if (api->imu->accel_tilt(&tx, &ty)) {
+    s_vx -= tx / 100;   /* centigraus -> graus */
+    s_vy -= ty / 100;
+}
+```
 
 ---
 

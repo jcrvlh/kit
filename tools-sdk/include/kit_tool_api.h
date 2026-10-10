@@ -398,6 +398,7 @@ typedef enum {
     KIT_SFX_TELEFONEMA_MISS,   /**< Telefonema: errou (cedo, trote ou não atendeu) — buzina curta descendo */
     KIT_SFX_ESTOURO_POP,       /**< Estouro: estalo agudo + fuga de ar curtíssima (~0,1 s, sem cascata) */
     KIT_SFX_ESTOURO_SHAKE,     /**< Estouro: "thump" curto e forte a cada chacoalhada registrada */
+    KIT_SFX_TAP,               /**< toque de botão sutil — "tic" de madeira, sem estalo (runtime >= 0.15.0) */
 } kit_sfx_t;
 
 /**
@@ -574,6 +575,46 @@ typedef struct {
 
     /** Desliga o giroscópio (economia de energia). */
     void (*gyro_stop)(void);
+
+    /* --- Acelerômetro (requer `min_runtime` >= "0.15.0") ------------------
+     *
+     * Eixos da TELA, como o LVGL desenha: **x** pra direita, **y** pra baixo,
+     * **z** saindo da tela (pro rosto de quem olha). O Runtime já aplica a
+     * rotação de 180° do Modo canhoto — a Tool não precisa saber da pegada.
+     *
+     * Mede a reação à gravidade: parado, o vetor aponta pra CIMA.
+     *  - deitado na mesa, tela pra cima:  ( 0,     0, +1000) mg
+     *  - em pé na mão, tela pro rosto:    ( 0, -1000,     0) mg
+     *  - borda direita levantada:         x > 0
+     * Em movimento soma-se a aceleração da mão (|a| sai de ~1000 mg).
+     *
+     * O acelerômetro fica sempre ligado com a tela acesa — não há start/stop.
+     * Inteiros pela mesma razão do giroscópio (o loader não resolve float).
+     */
+
+    /**
+     * Lê a aceleração atual em mili-g (1000 = 1 g).
+     * @param x_mg Eixo x da tela (pode ser NULL).
+     * @param y_mg Eixo y da tela (pode ser NULL).
+     * @param z_mg Eixo z da tela (pode ser NULL).
+     * @return false se o acelerômetro estiver desligado (tela em repouso) ou
+     *         a leitura I2C falhou — os ponteiros não são tocados.
+     */
+    bool (*accel_poll)(int32_t *x_mg, int32_t *y_mg, int32_t *z_mg);
+
+    /**
+     * Inclinação **absoluta** pela gravidade: o ângulo de cada eixo da tela
+     * acima do plano horizontal, em centigraus (-9000..9000). Funciona em
+     * qualquer pegada (deitado na mesa ou em pé na mão), sem calibrar e sem
+     * drift — ao contrário do giroscópio, que é relativo ao zero.
+     * @param x_cdeg > 0 = borda direita mais alta (pode ser NULL).
+     * @param y_cdeg > 0 = borda de baixo mais alta (pode ser NULL).
+     * @return false nas mesmas condições de `accel_poll`.
+     *
+     * Ex.: bolinha num labirinto — a bola corre pro lado mais baixo, então
+     * `vx -= x_cdeg; vy -= y_cdeg;` (escalados) a cada quadro.
+     */
+    bool (*accel_tilt)(int32_t *x_cdeg, int32_t *y_cdeg);
 } kit_imu_api_t;
 
 /* -----------------------------------------------------------------------

@@ -112,14 +112,8 @@ static const struct esp_elfsym g_esp_libc_elfsyms[] = {
     ESP_ELFSYM_EXPORT(clock_gettime),
     ESP_ELFSYM_EXPORT(strftime),
 
-    /* pthread.h */
-
-    ESP_ELFSYM_EXPORT(pthread_create),
-    ESP_ELFSYM_EXPORT(pthread_attr_init),
-    ESP_ELFSYM_EXPORT(pthread_attr_setstacksize),
-    ESP_ELFSYM_EXPORT(pthread_detach),
-    ESP_ELFSYM_EXPORT(pthread_join),
-    ESP_ELFSYM_EXPORT(pthread_exit),
+    /* KIT: pthread_* removidos — nenhuma Tool usa, e uma thread solta da Tool
+     * sobreviveria ao tool_destroy() (ver README.KIT.md). */
 
     /* libc (newlib / picolibc) */
 #if CONFIG_LIBC_PICOLIBC
@@ -164,25 +158,8 @@ static const struct esp_elfsym g_esp_libc_elfsyms[] = {
 
 static const struct esp_elfsym g_esp_espidf_elfsyms[] = {
 
-    /* sys/socket.h */
-
-    ESP_ELFSYM_EXPORT(lwip_bind),
-    ESP_ELFSYM_EXPORT(lwip_setsockopt),
-    ESP_ELFSYM_EXPORT(lwip_socket),
-    ESP_ELFSYM_EXPORT(lwip_listen),
-    ESP_ELFSYM_EXPORT(lwip_accept),
-    ESP_ELFSYM_EXPORT(lwip_recv),
-    ESP_ELFSYM_EXPORT(lwip_recvfrom),
-    ESP_ELFSYM_EXPORT(lwip_send),
-    ESP_ELFSYM_EXPORT(lwip_sendto),
-    ESP_ELFSYM_EXPORT(lwip_connect),
-
-    /* arpa/inet.h */
-
-    ESP_ELFSYM_EXPORT(ipaddr_addr),
-    ESP_ELFSYM_EXPORT(lwip_htons),
-    ESP_ELFSYM_EXPORT(lwip_htonl),
-    ESP_ELFSYM_EXPORT(ip4addr_ntoa),
+    /* KIT: sys/socket.h e arpa/inet.h (lwip_*) removidos — rede crua sem
+     * permissão no manifest. Ver README.KIT.md. */
 
     /* ROM functions */
 
