@@ -18,6 +18,7 @@
 #include "kit_tool_manager.h"
 #include "kit_tool_loader.h"
 #include "kit_network.h"
+#include "kit_net_tool.h"
 #include "kit_catalog.h"
 #include "kit_ota.h"
 #include "kit_launcher.h"
@@ -425,6 +426,10 @@ void kit_runtime_run(void)
         // Incrementa o tempo do LVGL e processa tarefas gráficas
         uint32_t delay_ms = kit_display_process();
 
+        // Resposta de rede da Tool aberta (kit_api_table_t.net): entrega no
+        // contexto do LVGL, logo depois de processar a tela.
+        kit_net_tool_poll();
+
         int64_t now = esp_timer_get_time();
 
         // Religação automática do Wi-Fi às redes salvas — adiada ~3 s para o
@@ -535,6 +540,7 @@ void kit_runtime_set_in_tool(bool in_tool)
         s_tool_shake_enabled = true;
         kit_imu_clear_shake_callback();   // não deixa callback órfão de Tool externa
         kit_imu_clear_tilt_callback();
+        kit_net_tool_end();               // descarta pedido de rede pendente
     }
 }
 

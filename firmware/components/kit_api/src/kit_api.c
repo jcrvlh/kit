@@ -108,6 +108,16 @@ static const kit_imu_api_t s_imu_api = {
     .accel_tilt   = kit_imu_accel_tilt_cdeg,
 };
 
+extern bool      kit_net_tool_is_online(void);
+extern kit_err_t kit_net_tool_http_get(const char *url, kit_net_callback_t cb, void *user_data);
+extern void      kit_net_tool_cancel(void);
+
+static const kit_net_api_t s_net_api = {
+    .is_online = kit_net_tool_is_online,
+    .http_get  = kit_net_tool_http_get,
+    .cancel    = kit_net_tool_cancel,
+};
+
 static const kit_api_table_t s_master_api_table = {
     .display = &s_display_api,
     .input   = &s_input_api,
@@ -118,9 +128,30 @@ static const kit_api_table_t s_master_api_table = {
     .power   = &s_power_api,
     .system  = &s_system_api,
     .imu     = &s_imu_api,
+    .net     = NULL,
+};
+
+// Igual à mestra, com a rede. Só vai pra Tool que declarou "network" e
+// "network_domains" no manifest (kit_tool_manager).
+static const kit_api_table_t s_net_api_table = {
+    .display = &s_display_api,
+    .input   = &s_input_api,
+    .storage = &s_storage_api,
+    .random  = &s_random_api,
+    .time    = &s_time_api,
+    .audio   = &s_audio_api,
+    .power   = &s_power_api,
+    .system  = &s_system_api,
+    .imu     = &s_imu_api,
+    .net     = &s_net_api,
 };
 
 const kit_api_table_t *kit_api_get_table(void)
 {
     return &s_master_api_table;
+}
+
+const kit_api_table_t *kit_api_get_table_for(bool with_network)
+{
+    return with_network ? &s_net_api_table : &s_master_api_table;
 }

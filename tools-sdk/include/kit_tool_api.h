@@ -617,6 +617,60 @@ typedef struct {
     bool (*accel_tilt)(int32_t *x_cdeg, int32_t *y_cdeg);
 } kit_imu_api_t;
 
+/**
+ * @brief Callback de um pedido de rede (ver @ref kit_net_api_t).
+ *
+ * Roda no contexto da task LVGL — pode mexer na UI aqui dentro.
+ *
+ * @param result      KIT_OK se veio uma resposta HTTP (confira `http_status`);
+ *                    KIT_ERR_TIMEOUT; KIT_ERR_NO_MEM se a resposta passou de
+ *                    16 KB; KIT_FAIL para falha de conexão/TLS.
+ * @param http_status Código HTTP (200, 404...). 0 se não houve resposta.
+ * @param body        Corpo da resposta, terminado em '\0'. **Só vale durante a
+ *                    chamada** — copie o que precisar. NULL se result != KIT_OK.
+ * @param len         Bytes em `body` (sem o '\0').
+ * @param user_data   Ponteiro opaco passado em `http_get`.
+ */
+typedef void (*kit_net_callback_t)(kit_err_t result, int http_status,
+                                   const char *body, size_t len, void *user_data);
+
+/**
+ * @brief API de Rede (HTTPS GET), requer `min_runtime` >= "0.16.0".
+ *
+ * Requer a permissão `"network"` **e** a lista `"network_domains"` no
+ * manifest — sem as duas, `ctx->api->net` é NULL. O KIT só faz pedidos para
+ * esses domínios, exatamente como escritos (subdomínio não vale).
+ *
+ * Regras:
+ *  - só `https://`, só GET, sem corpo nem header customizado;
+ *  - sem redirect automático: um 301/302 chega no callback como status;
+ *  - um pedido por vez, no máximo um por segundo;
+ *  - resposta de até 16 KB, timeout de 10 s;
+ *  - só com a Tool aberta: ao sair, o pedido pendente é descartado.
+ *
+ * Tools com rede ainda não são instaladas pelo Catálogo do aparelho, só
+ * copiadas pelo cartão (Modo pen drive).
+ */
+typedef struct {
+    /** @return true se o Wi-Fi está conectado agora. */
+    bool      (*is_online)(void);
+
+    /**
+     * Dispara um GET assíncrono. O resultado chega em `cb`.
+     * @return KIT_OK se o pedido foi aceito;
+     *         KIT_ERR_PERMISSION_DENIED se o domínio não está no manifest ou
+     *         a URL não é `https://`;
+     *         KIT_ERR_NOT_SUPPORTED se não há Wi-Fi;
+     *         KIT_FAIL se já há um pedido em andamento ou faz menos de 1 s do
+     *         anterior;
+     *         KIT_ERR_INVALID_ARG se `url`/`cb` são inválidos (URL até 255).
+     */
+    kit_err_t (*http_get)(const char *url, kit_net_callback_t cb, void *user_data);
+
+    /** Descarta o pedido em andamento: o callback dele não é mais chamado. */
+    void      (*cancel)(void);
+} kit_net_api_t;
+
 /* -----------------------------------------------------------------------
  * Tabela Consolidada de Export do KIT Runtime
  * ----------------------------------------------------------------------- */
@@ -643,6 +697,7 @@ typedef struct {
     const kit_power_api_t   *power;    /**< API de Energia (requer "power"). */
     const kit_system_api_t  *system;   /**< API do Sistema (sempre disponível). */
     const kit_imu_api_t     *imu;      /**< API do IMU/Shake (requer "imu"). */
+    const kit_net_api_t     *net;      /**< API de Rede (requer "network" + "network_domains", runtime >= 0.16.0). */
 } kit_api_table_t;
 
 /* -----------------------------------------------------------------------

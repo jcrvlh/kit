@@ -384,6 +384,29 @@ static bool stub_imu_accel_tilt(int32_t *x_cdeg, int32_t *y_cdeg)
 }
 
 /* -----------------------------------------------------------------------
+ * Net API Stubs
+ * ----------------------------------------------------------------------- */
+
+/* Rede: no desktop o stub fica sempre offline — exercita o caminho "sem
+ * Wi-Fi" da Tool. A resposta de verdade só no KIT. */
+static bool stub_net_is_online(void)
+{
+    return false;
+}
+
+static kit_err_t stub_net_http_get(const char *url, kit_net_callback_t cb, void *user_data)
+{
+    (void)cb;
+    (void)user_data;
+    printf("[STUB NET] GET %s -> offline (stub).\n", url ? url : "(null)");
+    return KIT_ERR_NOT_SUPPORTED;
+}
+
+static void stub_net_cancel(void)
+{
+}
+
+/* -----------------------------------------------------------------------
  * Montagem das Tabelas de API (Stubs)
  * ----------------------------------------------------------------------- */
 
@@ -448,6 +471,12 @@ static const kit_imu_api_t s_stub_imu = {
     .accel_tilt  = stub_imu_accel_tilt,
 };
 
+static const kit_net_api_t s_stub_net = {
+    .is_online = stub_net_is_online,
+    .http_get  = stub_net_http_get,
+    .cancel    = stub_net_cancel,
+};
+
 static const kit_api_table_t s_stub_api_table = {
     .display = &s_stub_display,
     .input   = &s_stub_input,
@@ -458,6 +487,7 @@ static const kit_api_table_t s_stub_api_table = {
     .power   = &s_stub_power,
     .system  = &s_stub_system,
     .imu     = &s_stub_imu,
+    .net     = &s_stub_net,
 };
 
 /* -----------------------------------------------------------------------

@@ -44,6 +44,8 @@ kit_err_t kit_tool_manager_install(const char *kit_path, const char *tool_id);
 // Remove `/sdcard/tools/<tool_id>` e recarrega o catálogo. Recusa se a Tool
 // estiver rodando.
 kit_err_t kit_tool_manager_uninstall(const char *tool_id);
+// true se a Tool instalada declara "network" no manifest.
+bool      kit_tool_manager_wants_network(const char *tool_id);
 void      kit_tool_manager_reload_catalog(void);
 void      kit_tool_manager_set_catalog_changed_cb(kit_tool_catalog_changed_cb_t cb);
 

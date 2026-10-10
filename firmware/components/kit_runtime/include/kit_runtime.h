@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 15
+#define KIT_VERSION_MINOR 16
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -73,7 +73,13 @@ extern "C" {
 //        botão sem estalo). O elf_loader para de exportar lwip_* e
 //        pthread_* (rede/thread crua, nenhuma Tool usava). Superfície nova pras
 //        Tools -> bump obrigatório.
-#define KIT_VERSION_STRING "0.15.0"
+// 0.16.0: kit_api_table_t ganha net (kit_net_api_t: is_online/http_get/cancel)
+//        — HTTPS GET pros hosts de "network_domains", um pedido por vez, sem
+//        redirect, até 16 KB. Primeira permissão aplicada de verdade: sem
+//        "network" + "network_domains", net = NULL. O Catálogo recusa instalar
+//        Tool com rede (só pelo cartão até a assinatura Ed25519). Superfície
+//        nova pras Tools -> bump obrigatório.
+#define KIT_VERSION_STRING "0.16.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

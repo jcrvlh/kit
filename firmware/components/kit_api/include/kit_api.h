@@ -217,6 +217,27 @@ typedef struct {
     bool (*accel_tilt)(int32_t *x_cdeg, int32_t *y_cdeg);
 } kit_imu_api_t;
 
+// --- Rede (>= runtime 0.16.0) ----------------------------------------------
+// Só HTTPS GET, um pedido por vez (no máximo 1/s), para os domínios listados em
+// "network_domains" no manifest, sem redirect automático, resposta até 16 KB.
+// O callback roda no contexto do LVGL; body (terminado em '\0') só vale
+// durante a chamada. result: KIT_OK (veio resposta HTTP — confira o status),
+// KIT_ERR_TIMEOUT, KIT_ERR_NO_MEM (resposta > 16 KB) ou KIT_FAIL (conexão/TLS).
+typedef void (*kit_net_callback_t)(kit_err_t result, int http_status,
+                                   const char *body, size_t len, void *user_data);
+
+typedef struct {
+    // Wi-Fi conectado agora?
+    bool      (*is_online)(void);
+    // Dispara o GET. KIT_OK = enfileirado (o callback vem depois);
+    // KIT_ERR_PERMISSION_DENIED = domínio fora do manifest ou não é https://;
+    // KIT_ERR_NOT_SUPPORTED = sem Wi-Fi; KIT_FAIL = ocupado (pedido em
+    // andamento ou < 1 s do anterior); KIT_ERR_INVALID_ARG = url/cb inválidos.
+    kit_err_t (*http_get)(const char *url, kit_net_callback_t cb, void *user_data);
+    // Descarta o pedido em andamento: o callback não é mais chamado.
+    void      (*cancel)(void);
+} kit_net_api_t;
+
 // Export Table Consolidada
 typedef struct {
     const kit_display_api_t *display;
@@ -228,6 +249,8 @@ typedef struct {
     const kit_power_api_t   *power;
     const kit_system_api_t  *system;
     const kit_imu_api_t     *imu;
+    // >= runtime 0.16.0. NULL se a Tool não declarou "network" + "network_domains".
+    const kit_net_api_t     *net;
 } kit_api_table_t;
 
 // Contexto passado para cada Tool em tool_init
@@ -241,8 +264,10 @@ typedef struct {
 typedef kit_err_t (*kit_tool_init_fn)(kit_tool_ctx_t *ctx);
 typedef void (*kit_tool_destroy_fn)(void);
 
-// Obtenção da Export Table no Runtime
+// Obtenção da Export Table no Runtime. kit_api_get_table() não tem rede (net =
+// NULL); kit_api_get_table_for(true) é a mesma tabela com a rede ligada.
 const kit_api_table_t *kit_api_get_table(void);
+const kit_api_table_t *kit_api_get_table_for(bool with_network);
 
 #ifdef __cplusplus
 }

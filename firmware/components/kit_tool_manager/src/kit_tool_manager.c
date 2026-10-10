@@ -15,6 +15,8 @@
 #include "kit_tool_loader.h"
 #include "kit_pkg.h"
 #include "kit_network.h"
+#include "kit_net_tool.h"
+#include "kit_input.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
@@ -27,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
+#include <ctype.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -625,6 +628,61 @@ static kit_err_t ext_tool_start_with_reclaim(const char *so_path,
     return err;
 }
 
+// Relê o manifest da Tool e copia "network_domains" (só hosts, minúsculos,
+// sem esquema/porta/caminho). Devolve quantos domínios valem; 0 = sem rede.
+// Fica fora do catálogo em RAM de propósito: só a Tool aberta precisa disso.
+static int load_network_domains(const kit_tool_catalog_entry_t *e,
+                                char out[][KIT_NET_TOOL_DOMAIN_LEN])
+{
+    char path[160];
+    const char *slash = strrchr(e->entry_rel, '/');
+    int dir_len = slash ? (int)(slash - e->entry_rel) : 0;
+    snprintf(path, sizeof(path), "/sdcard/%.*s/manifest.json", dir_len, e->entry_rel);
+
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (size <= 0 || size > 8192) { fclose(f); return 0; }
+    char *buf = malloc((size_t)size + 1);
+    if (!buf) { fclose(f); return 0; }
+    size_t rn = fread(buf, 1, (size_t)size, f);
+    fclose(f);
+    buf[rn] = '\0';
+    cJSON *root = cJSON_Parse(buf);
+    free(buf);
+    if (!root) return 0;
+
+    int n = 0;
+    cJSON *doms = cJSON_GetObjectItemCaseSensitive(root, "network_domains");
+    cJSON *d;
+    if (cJSON_IsArray(doms)) {
+        cJSON_ArrayForEach(d, doms) {
+            if (n >= KIT_NET_TOOL_MAX_DOMAINS) break;
+            if (!cJSON_IsString(d)) continue;
+            const char *v = d->valuestring;
+            size_t len = strlen(v);
+            if (len == 0 || len >= KIT_NET_TOOL_DOMAIN_LEN || strpbrk(v, ":/?#@ *")) {
+                ESP_LOGW(TAG, "Tool '%s': domínio inválido em network_domains: '%s'", e->id, v);
+                continue;
+            }
+            for (size_t i = 0; i <= len; i++) out[n][i] = (char)tolower((unsigned char)v[i]);
+            n++;
+        }
+    }
+    cJSON_Delete(root);
+    return n;
+}
+
+bool kit_tool_manager_wants_network(const char *tool_id)
+{
+    for (uint32_t i = 0; i < s_catalog_n; i++) {
+        if (strcmp(s_catalog[i].id, tool_id) == 0) return s_catalog[i].wants_network;
+    }
+    return false;
+}
+
 kit_err_t kit_tool_manager_start(const char *tool_id)
 {
     ESP_LOGI(TAG, "Iniciando Tool '%s'...", tool_id);
@@ -672,10 +730,19 @@ kit_err_t kit_tool_manager_start(const char *tool_id)
         static char data_buf[80];
         snprintf(id_buf, sizeof(id_buf), "%s", tool_id);
         snprintf(data_buf, sizeof(data_buf), "/sdcard/tools/%s", tool_id);
+        // Rede só com "network" + "network_domains" no manifest: senão a
+        // Tool recebe a tabela com net = NULL.
+        static char doms[KIT_NET_TOOL_MAX_DOMAINS][KIT_NET_TOOL_DOMAIN_LEN];
+        int n_doms = (found && found->wants_network) ? load_network_domains(found, doms) : 0;
+        if (found && found->wants_network && n_doms == 0) {
+            ESP_LOGW(TAG, "Tool '%s' pede rede sem network_domains — sem rede", tool_id);
+        }
+        kit_net_tool_begin((const char (*)[KIT_NET_TOOL_DOMAIN_LEN])doms, n_doms);
+
         static kit_tool_ctx_t ext_ctx;
         ext_ctx.tool_id   = id_buf;
         ext_ctx.data_path = data_buf;
-        ext_ctx.api       = kit_api_get_table();
+        ext_ctx.api       = kit_api_get_table_for(n_doms > 0);
 
         char so_path[96];
         if (found) {
@@ -708,6 +775,11 @@ void kit_tool_manager_stop_current(void)
 {
     ESP_LOGI(TAG, "Finalizando Tool ativa ('%s').", s_current_tool[0] ? s_current_tool : "-");
     kit_runtime_set_tool_primary_action(NULL);
+    // Antes do dlclose: nenhum callback (rede, toque) pode sobrar apontando pro
+    // código da Tool. Tool que esquecia o register_callback(NULL) travava o KIT
+    // no primeiro toque depois de sair.
+    kit_net_tool_end();
+    kit_input_clear_callback();
 
     if (strcmp(s_current_tool, "com.kit.dice") == 0) {
         kit_dice_destroy();
