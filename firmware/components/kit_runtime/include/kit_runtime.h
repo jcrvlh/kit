@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 16
+#define KIT_VERSION_MINOR 17
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -79,7 +79,9 @@ extern "C" {
 //        "network" + "network_domains", net = NULL. O Catálogo recusa instalar
 //        Tool com rede (só pelo cartão até a assinatura Ed25519). Superfície
 //        nova pras Tools -> bump obrigatório.
-#define KIT_VERSION_STRING "0.16.0"
+// 0.17.0: alinha com firmware/version.txt (nenhuma superfície nova) —
+//        Ajustes > Tools pelo Wi-Fi (kit_upload) instala/remove .kit pelo navegador
+#define KIT_VERSION_STRING "0.17.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

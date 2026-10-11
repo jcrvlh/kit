@@ -8,6 +8,7 @@
 #include "kit_theme.h"
 #include "kit_storage.h"
 #include "kit_usb_msc.h"
+#include "kit_upload.h"
 #include "kit_network.h"
 #include "kit_catalog.h"
 #include "kit_ota.h"
@@ -48,6 +49,7 @@ static lv_obj_t *s_storage_screen = NULL;       // Ajustes > Armazenamento
 static lv_obj_t *s_sd_format_screen = NULL;     // confirmação de formatar o cartão
 static lv_obj_t *s_factory_reset_screen = NULL; // confirmação de restaurar padrão de fábrica
 static lv_obj_t *s_usbmsc_screen = NULL;        // Ajustes > Modo pen drive (USB MSC)
+static lv_obj_t *s_upload_screen = NULL;        // Ajustes > Tools pelo Wi-Fi
 static lv_obj_t *s_wifi_screen = NULL;          // Ajustes > Wi-Fi
 static lv_obj_t *s_wifi_portal_screen = NULL;   // Wi-Fi > Configurar rede (portal)
 static lv_obj_t *s_catalog_screen = NULL;       // Catálogo de Tools
@@ -385,6 +387,8 @@ static void close_factory_reset_cb(lv_event_t *e);
 static void do_factory_reset_cb(lv_event_t *e);
 static void open_usbmsc_cb(lv_event_t *e);
 static void close_usbmsc_cb(lv_event_t *e);
+static void open_upload_cb(lv_event_t *e);
+static void close_upload_cb(lv_event_t *e);
 static void open_wifi_cb(lv_event_t *e);
 static void close_wifi_cb(lv_event_t *e);
 static void open_catalog_cb(lv_event_t *e);
@@ -1327,7 +1331,7 @@ static bool home_is_covered(void)
     return s_settings_screen || s_display_screen || s_brightness_screen || s_volume_screen ||
            s_sleep_screen || s_battery_screen || s_poweroff_screen || s_about_screen ||
            s_storage_screen || s_sd_format_screen || s_factory_reset_screen ||
-           s_usbmsc_screen ||
+           s_usbmsc_screen || s_upload_screen ||
            s_wifi_screen || s_wifi_portal_screen || s_catalog_screen ||
            s_catalog_detail_screen || s_catalog_busy_screen ||
            s_catalog_confirm_screen || s_toolmgr_screen || s_toolmgr_confirm_screen ||
@@ -1647,6 +1651,7 @@ static void open_settings_cb(lv_event_t *e)
     make_row(body, NULL, 0, "Wi-Fi",            false, open_wifi_cb,      NULL);
     make_row(body, NULL, 0, "Armazenamento",    false, open_storage_cb,   NULL);
     make_row(body, NULL, 0, "Modo pen drive",   false, open_usbmsc_cb,    NULL);
+    make_row(body, NULL, 0, "Tools pelo Wi-Fi", false, open_upload_cb, NULL);
     make_row(body, NULL, 0, "Atualizar firmware", false, open_fwupdate_cb, NULL);
     make_row(body, NULL, 0, "Bateria",          false, open_battery_cb,   NULL);
     make_row(body, NULL, 0, "Repetir introdu\xC3\xA7\xC3\xA3o", false, repeat_onboarding_cb, NULL);
@@ -1661,6 +1666,14 @@ static void close_settings_cb(lv_event_t *e)
     if (s_settings_screen) {
         lv_obj_delete(s_settings_screen);
         s_settings_screen = NULL;
+    }
+    // Tools pelo Wi-Fi / Armazenamento mexem no catálogo com os Ajustes por
+    // cima; o deck ficou pendente (launcher_catalog_changed_impl). Sem isso a
+    // Tool instalada/removida só aparecia depois de reiniciar.
+    if (s_home_deck_dirty && !home_is_covered()) {
+        s_home_deck_dirty = false;
+        home_clear_deck();
+        home_build_deck();
     }
 }
 
@@ -2513,6 +2526,157 @@ static void usbmsc_exit_cb(lv_event_t *e)
 
     lv_obj_t *no = make_button(s_usbmsc_screen, "AINDA N\xC3\x83O", usbmsc_confirm_back_cb, false);
     lv_obj_align(no, LV_ALIGN_BOTTOM_MID, 0, -14);
+}
+
+// ---------------------------------------------------------------------------
+// Tools pelo Wi-Fi  (Ajustes > Tools pelo Wi-Fi)
+// ---------------------------------------------------------------------------
+// Sobe o kit_upload enquanto a tela está aberta: o navegador manda o .kit e o
+// PIN mostrado aqui. A tela segura o repouso (com o painel apagado o rádio cai,
+// ver kit_network_suspend) e fecha sozinha depois de UPLOAD_IDLE_TICKS sem uso.
+
+#define UPLOAD_IDLE_TICKS 1200   // x 500 ms = 10 min
+
+static lv_obj_t   *s_upload_ip_lbl = NULL;
+static lv_obj_t   *s_upload_status_lbl = NULL;
+static lv_timer_t *s_upload_poll = NULL;
+static uint32_t    s_upload_last_act = 0;
+static int         s_upload_idle = 0;
+static int         s_upload_last_state = -1;
+
+static void upload_teardown(void)
+{
+    if (s_upload_poll) { lv_timer_delete(s_upload_poll); s_upload_poll = NULL; }
+    if (kit_upload_is_active()) {
+        kit_upload_stop();
+        kit_power_keep_awake_impl(false);
+    }
+    if (s_upload_screen) { lv_obj_delete(s_upload_screen); s_upload_screen = NULL; }
+    s_upload_ip_lbl = NULL;
+    s_upload_status_lbl = NULL;
+}
+
+static void upload_poll_cb(lv_timer_t *t)
+{
+    (void)t;
+    if (!s_upload_screen || !s_upload_status_lbl) return;
+
+    char ip[20] = "";
+    bool online = kit_network_is_connected() && kit_network_get_ip(ip, sizeof(ip)) == KIT_OK;
+    lv_label_set_text(s_upload_ip_lbl, online ? ip : "sem rede");
+    lv_obj_set_style_text_color(s_upload_ip_lbl,
+        lv_color_hex(online ? KIT_COLOR_YELLOW : KIT_COLOR_TEXT_MUTED), 0);
+
+    kit_upload_state_t st = kit_upload_get_state();
+    uint32_t color = KIT_COLOR_TEXT_MUTED;
+    switch (st) {
+    case KIT_UP_RECEIVING:
+        lv_label_set_text_fmt(s_upload_status_lbl, "Recebendo... %d%%", kit_upload_progress());
+        break;
+    case KIT_UP_INSTALLING:
+        lv_label_set_text(s_upload_status_lbl, "Instalando...");
+        break;
+    case KIT_UP_DONE:
+        lv_label_set_text_fmt(s_upload_status_lbl, "Instalada: %s", kit_upload_message());
+        color = KIT_COLOR_GREEN;
+        break;
+    case KIT_UP_ERROR:
+        lv_label_set_text(s_upload_status_lbl, kit_upload_message());
+        color = KIT_COLOR_RED;
+        break;
+    case KIT_UP_REMOVED:
+        lv_label_set_text_fmt(s_upload_status_lbl, "Removida: %s", kit_upload_message());
+        color = KIT_COLOR_TEXT;
+        break;
+    case KIT_UP_LOCKED:
+        lv_label_set_text(s_upload_status_lbl,
+            "PIN errado 5 vezes. Volte e abra de novo pra gerar outro.");
+        color = KIT_COLOR_RED;
+        break;
+    default:
+        lv_label_set_text(s_upload_status_lbl,
+            online ? "Esperando arquivo..." : "Conectando ao Wi-Fi...");
+        break;
+    }
+    lv_obj_set_style_text_color(s_upload_status_lbl, lv_color_hex(color), 0);
+
+    if ((int)st != s_upload_last_state) {
+        if (st == KIT_UP_DONE) kit_audio_sfx_impl(KIT_SFX_CATALOG_DONE);
+        else if (st == KIT_UP_REMOVED) kit_audio_sfx_impl(KIT_SFX_CONFIRM);
+        else if (st == KIT_UP_ERROR || st == KIT_UP_LOCKED) kit_audio_beep_impl(400, 60);
+        s_upload_last_state = (int)st;
+    }
+
+    uint32_t act = kit_upload_activity();
+    if (act != s_upload_last_act || st == KIT_UP_RECEIVING || st == KIT_UP_INSTALLING) {
+        s_upload_last_act = act;
+        s_upload_idle = 0;
+    } else if (++s_upload_idle > UPLOAD_IDLE_TICKS) {
+        upload_teardown();
+    }
+}
+
+static void upload_goto_wifi_cb(lv_event_t *e)
+{
+    (void)e;
+    upload_teardown();
+    open_wifi_cb(NULL);
+}
+
+static void open_upload_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_CLICK);
+    if (s_upload_screen) return;
+
+    s_upload_screen = make_overlay(KIT_COLOR_BG);
+    make_titlebar(s_upload_screen, "TOOLS", close_upload_cb);
+
+    kit_upload_set_removed_cb(tool_forget_flags);   // NVS: seguro fora da task LVGL
+    if (kit_network_get_state() == KIT_NET_OFF || kit_upload_start() != KIT_OK) {
+        lv_obj_t *body = make_scroll_body(s_upload_screen, KIT_BTN_H + 28);
+        lv_obj_t *tx = add_label(body,
+            "Ligue o Wi-Fi do KIT pra mandar Tools pelo navegador do computador "
+            "ou do celular.",
+            KIT_COLOR_TEXT, &kit_sans_22, 0);
+        lv_label_set_long_mode(tx, LV_LABEL_LONG_WRAP);
+        lv_obj_set_width(tx, KIT_CONTENT);
+        lv_obj_t *btn = make_button(s_upload_screen, "WI-FI", upload_goto_wifi_cb, true);
+        lv_obj_align(btn, LV_ALIGN_BOTTOM_MID, 0, -14);
+        return;
+    }
+    kit_power_keep_awake_impl(true);
+
+    lv_obj_t *body = make_scroll_body(s_upload_screen, 0);
+    lv_obj_t *tx = add_label(body,
+        "No computador ou celular, na mesma rede, abra no navegador:",
+        KIT_COLOR_TEXT, &kit_sans_22, 0);
+    lv_label_set_long_mode(tx, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(tx, KIT_CONTENT);
+
+    s_upload_ip_lbl = add_label(body, "", KIT_COLOR_YELLOW, &kit_sans_28, 1);
+    lv_obj_set_style_pad_bottom(s_upload_ip_lbl, 6, 0);
+
+    add_label(body, "PIN", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 3);
+    add_label(body, kit_upload_pin(), KIT_COLOR_TEXT, &kit_display_72, 6);
+
+    s_upload_status_lbl = add_label(body, "", KIT_COLOR_TEXT_MUTED, &kit_mono_16, 1);
+    lv_label_set_long_mode(s_upload_status_lbl, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s_upload_status_lbl, KIT_CONTENT);
+    lv_obj_set_style_pad_top(s_upload_status_lbl, 6, 0);
+
+    s_upload_last_act = kit_upload_activity();
+    s_upload_idle = 0;
+    s_upload_last_state = (int)kit_upload_get_state();
+    s_upload_poll = lv_timer_create(upload_poll_cb, 500, NULL);
+    upload_poll_cb(NULL);
+}
+
+static void close_upload_cb(lv_event_t *e)
+{
+    (void)e;
+    kit_audio_sfx_impl(KIT_SFX_BACK);
+    upload_teardown();
 }
 
 // ---------------------------------------------------------------------------
@@ -4113,6 +4277,7 @@ void kit_launcher_go_home(void)
                             kit_power_keep_awake_impl(false); }
     if (s_fwupdate_screen)        { lv_obj_delete(s_fwupdate_screen);        s_fwupdate_screen = NULL; }
     if (s_usbmsc_screen)     { lv_obj_delete(s_usbmsc_screen);     s_usbmsc_screen = NULL; }
+    upload_teardown();
     if (s_about_screen)      { lv_obj_delete(s_about_screen);      s_about_screen = NULL; }
     if (s_sd_format_screen)  { lv_obj_delete(s_sd_format_screen);  s_sd_format_screen = NULL; }
     if (s_factory_reset_screen) { lv_obj_delete(s_factory_reset_screen); s_factory_reset_screen = NULL; }
