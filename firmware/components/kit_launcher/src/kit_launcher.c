@@ -49,7 +49,7 @@ static lv_obj_t *s_storage_screen = NULL;       // Ajustes > Armazenamento
 static lv_obj_t *s_sd_format_screen = NULL;     // confirmação de formatar o cartão
 static lv_obj_t *s_factory_reset_screen = NULL; // confirmação de restaurar padrão de fábrica
 static lv_obj_t *s_usbmsc_screen = NULL;        // Ajustes > Modo pen drive (USB MSC)
-static lv_obj_t *s_upload_screen = NULL;        // Ajustes > Instalar pelo Wi-Fi
+static lv_obj_t *s_upload_screen = NULL;        // Ajustes > Tools pelo Wi-Fi
 static lv_obj_t *s_wifi_screen = NULL;          // Ajustes > Wi-Fi
 static lv_obj_t *s_wifi_portal_screen = NULL;   // Wi-Fi > Configurar rede (portal)
 static lv_obj_t *s_catalog_screen = NULL;       // Catálogo de Tools
@@ -1651,7 +1651,7 @@ static void open_settings_cb(lv_event_t *e)
     make_row(body, NULL, 0, "Wi-Fi",            false, open_wifi_cb,      NULL);
     make_row(body, NULL, 0, "Armazenamento",    false, open_storage_cb,   NULL);
     make_row(body, NULL, 0, "Modo pen drive",   false, open_usbmsc_cb,    NULL);
-    make_row(body, NULL, 0, "Instalar pelo Wi-Fi", false, open_upload_cb, NULL);
+    make_row(body, NULL, 0, "Tools pelo Wi-Fi", false, open_upload_cb, NULL);
     make_row(body, NULL, 0, "Atualizar firmware", false, open_fwupdate_cb, NULL);
     make_row(body, NULL, 0, "Bateria",          false, open_battery_cb,   NULL);
     make_row(body, NULL, 0, "Repetir introdu\xC3\xA7\xC3\xA3o", false, repeat_onboarding_cb, NULL);
@@ -1666,6 +1666,14 @@ static void close_settings_cb(lv_event_t *e)
     if (s_settings_screen) {
         lv_obj_delete(s_settings_screen);
         s_settings_screen = NULL;
+    }
+    // Tools pelo Wi-Fi / Armazenamento mexem no catálogo com os Ajustes por
+    // cima; o deck ficou pendente (launcher_catalog_changed_impl). Sem isso a
+    // Tool instalada/removida só aparecia depois de reiniciar.
+    if (s_home_deck_dirty && !home_is_covered()) {
+        s_home_deck_dirty = false;
+        home_clear_deck();
+        home_build_deck();
     }
 }
 
@@ -2521,7 +2529,7 @@ static void usbmsc_exit_cb(lv_event_t *e)
 }
 
 // ---------------------------------------------------------------------------
-// Instalar pelo Wi-Fi  (Ajustes > Instalar pelo Wi-Fi)
+// Tools pelo Wi-Fi  (Ajustes > Tools pelo Wi-Fi)
 // ---------------------------------------------------------------------------
 // Sobe o kit_upload enquanto a tela está aberta: o navegador manda o .kit e o
 // PIN mostrado aqui. A tela segura o repouso (com o painel apagado o rádio cai,
@@ -2622,7 +2630,7 @@ static void open_upload_cb(lv_event_t *e)
     if (s_upload_screen) return;
 
     s_upload_screen = make_overlay(KIT_COLOR_BG);
-    make_titlebar(s_upload_screen, "INSTALAR", close_upload_cb);
+    make_titlebar(s_upload_screen, "TOOLS", close_upload_cb);
 
     kit_upload_set_removed_cb(tool_forget_flags);   // NVS: seguro fora da task LVGL
     if (kit_network_get_state() == KIT_NET_OFF || kit_upload_start() != KIT_OK) {

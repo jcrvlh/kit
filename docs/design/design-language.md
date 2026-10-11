@@ -13,7 +13,7 @@ O sistema vive em código:
 
 > Escopo atual: Introdução (onboarding do 1º boot), Home (slideshow de Tools),
 > Ajustes (Tela → Brilho / Repouso da tela · Som · Wi-Fi · Armazenamento ·
-> Modo pen drive · Instalar pelo Wi-Fi · Atualizar firmware · Bateria → nível / Desligar sozinho ·
+> Modo pen drive · Tools pelo Wi-Fi · Atualizar firmware · Bateria → nível / Desligar sozinho ·
 > Repetir introdução · Sobre · Restaurar padrão de fábrica), a linha **Testes**
 > (diagnóstico, dentro de Sobre) e
 > as Tools built-in **Dados** (`kit_dice`), **Garrafa** (`kit_bottle`),
@@ -393,7 +393,7 @@ distância da mesa, é sempre o protagonista, não a legenda.
 | **Introdução** | 4 telas no 1º boot: marca → o que é → o que tem dentro → pronto | Overlay preto: coluna central + botão-pílula fixo no rodapé | Abre com o SFX `WELCOME` · `COMEÇAR`/`VEM VER`/`CONTINUAR` avança · `COMEÇAR` verde no fim toca `ONBOARD_DONE`, grava a flag `onboarded` e vai pra Home · BOOT sai e grava a flag |
 | **Uma dica** (coach-mark) | Ensina o gesto sem botão da Home | Overlay preto sobre a Home: título + 1 linha (rastro de setas + frase) + `ENTENDI` no rodapé | Só aparece 1× logo após o `COMEÇAR` da Introdução · `ENTENDI` ou BOOT fecha |
 | **Home** | Launcher / slideshow de Tools | Barra de status (wordmark + ícone de Wi-Fi + bateria) + `lv_tileview` horizontal ("VER TODOS" + até 3 recentes) + pontos | Abre na Tool mais recente · arrasta na horizontal (→ direita cai na visão geral) · slide/card → Tool · Ajustes pelo card na seção SISTEMA de "VER TODOS" |
-| **Ajustes** | Lista de configurações | Titlebar + corpo rolável | Linhas → Tela / Som / Wi-Fi / Armazenamento / Modo pen drive / Instalar pelo Wi-Fi / Atualizar firmware / Bateria / Repetir introdução / Sobre o KIT / Restaurar padrão de fábrica |
+| **Ajustes** | Lista de configurações | Titlebar + corpo rolável | Linhas → Tela / Som / Wi-Fi / Armazenamento / Modo pen drive / Tools pelo Wi-Fi / Atualizar firmware / Bateria / Repetir introdução / Sobre o KIT / Restaurar padrão de fábrica |
 | **Restaurar** | Confirmação de restaurar padrão de fábrica | Titlebar `RESTAURAR` + aviso rolável + botões | `RESTAURAR AGORA` (vermelho) apaga a NVS inteira (ajustes + redes Wi-Fi + recordes) e reinicia · `CANCELAR` · Tools do cartão continuam |
 | **Tela** | Sub-lista | Titlebar + corpo rolável | Linhas → Brilho / Repouso da tela |
 | **Brilho** | Controle de brilho do AMOLED | Fixo | Slider 10–100 % · Titlebar ← ou `VOLTAR` |
@@ -402,7 +402,7 @@ distância da mesa, é sempre o protagonista, não a legenda.
 | **Wi-Fi** | Rádio, rede conectada, redes salvas | Titlebar + linha de switch + specs (rede / IP) + lista de redes + `CONFIGURAR REDE` | Sub-telas: **Configurar** (portal, titlebar `CONFIGURAR`) e **Esquecer** (confirmação) |
 | **Armazenamento** | Espaço da memória interna e do cartão | Titlebar + specs + botões | `FORMATAR CARTÃO` (→ sub-tela `FORMATAR`) / `PROCURAR CARTÃO` / `RECARREGAR TOOLS` |
 | **Modo pen drive** | Expõe o microSD ao PC via USB MSC | Titlebar `PEN DRIVE` + coluna central + `ATIVAR` / `SAIR` | `SAIR` reinicia o KIT (confirmação de "ejetou?" antes) |
-| **Instalar pelo Wi-Fi** | Recebe `.kit` pelo navegador na rede local | Titlebar `INSTALAR` + corpo rolável: IP em `kit_sans_28` amarelo, PIN em `kit_display_72` | Status em `kit_mono_16` (verde = instalada, vermelho = erro); sem Wi-Fi, texto + botão `WI-FI` |
+| **Tools pelo Wi-Fi** | Recebe `.kit` pelo navegador na rede local | Titlebar `TOOLS` + corpo rolável: IP em `kit_sans_28` amarelo, PIN em `kit_display_72` | Status em `kit_mono_16` (verde = instalada, vermelho = erro); sem Wi-Fi, texto + botão `WI-FI` |
 | **Atualizar firmware** | Verifica e aplica OTA | Titlebar `FIRMWARE` + specs (versão atual / disponível) + botão | Tela de progresso durante download/aplicação |
 | **Bateria** | Nível, estado e desligamento automático | Titlebar + specs (`NÍVEL` / `ESTADO`) + linha `Desligar sozinho` | — |
 | **Desligar sozinho** | Tempo sem uso até o aparelho desligar | Titlebar `DESLIGAR` + lista de opção | 2 min / 5 min / 10 min / 30 min / Nunca — não vale na tomada |
@@ -652,7 +652,7 @@ cartão) fica no **Manual do Usuário** — aqui só o esqueleto visual:
 * **Modo pen drive** (`PEN DRIVE`) — coluna central explicando o modo + botão
   `ATIVAR`; ativo, vira aviso + `SAIR` (com confirmação "ejetou no PC?"). `SAIR`
   reinicia o KIT — é a única saída (USB único, sem console enquanto monta).
-* **Instalar pelo Wi-Fi** (`INSTALAR`) — frase em `kit_sans_22`, IP em
+* **Tools pelo Wi-Fi** (`TOOLS`) — frase em `kit_sans_22`, IP em
   `kit_sans_28` amarelo e o PIN como protagonista em `kit_display_72`; a linha de
   status em `kit_mono_16` muda de cor (verde instalada, vermelho erro/travado).
   A página web servida pelo KIT segue a mesma linguagem: fundo preto, cada `.kit`
@@ -691,7 +691,7 @@ e a `RANDOM` sorteia um novo valor do TRNG. Sai pela API (`system->exit`) / BOOT
 ## 🚧 Pendências
 
 * **Telas de sistema entregues** desde a primeira redação: Wi-Fi (+ portal +
-  esquecer rede), Armazenamento (+ formatar), Modo pen drive, Instalar pelo Wi-Fi,
+  esquecer rede), Armazenamento (+ formatar), Modo pen drive, Tools pelo Wi-Fi,
   Atualizar firmware e Catálogo. Falta ainda uma **tela dedicada de erro de instalação** de Tool
   (hoje é _toast_). Os _alias_ de cor legados (`KIT_COLOR_ACCENT` etc.) foram
   removidos — todo o código usa os tokens da paleta nova.

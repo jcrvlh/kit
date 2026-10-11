@@ -80,7 +80,7 @@ extern "C" {
 //        Tool com rede (só pelo cartão até a assinatura Ed25519). Superfície
 //        nova pras Tools -> bump obrigatório.
 // 0.17.0: alinha com firmware/version.txt (nenhuma superfície nova) —
-//        Ajustes > Instalar pelo Wi-Fi (kit_upload) instala .kit pelo navegador
+//        Ajustes > Tools pelo Wi-Fi (kit_upload) instala/remove .kit pelo navegador
 #define KIT_VERSION_STRING "0.17.0"
 
 /**

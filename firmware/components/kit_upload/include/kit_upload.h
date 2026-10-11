@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 /**
- * Instalar Tool pelo Wi-Fi (Ajustes > Instalar pelo Wi-Fi).
+ * Tools pelo Wi-Fi (Ajustes > Tools pelo Wi-Fi).
  *
  * Com a tela aberta, o KIT sobe um servidor HTTP na rede em que já está
  * conectado. Do navegador (http://<ip do KIT>), a pessoa escolhe um ou mais
