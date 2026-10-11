@@ -41,6 +41,15 @@ const char *kit_tool_manager_current(void);   // id da Tool rodando, "" se nenhu
 // chamador já conferiu o SHA-256 do download).
 kit_err_t kit_tool_manager_install(const char *kit_path, const char *tool_id);
 
+// Instala um `.kit` cujo id ainda não se sabe (upload pelo Wi-Fi): extrai numa
+// pasta temporária, lê o "id" do manifest.json e só então troca a pasta
+// `/sdcard/tools/<id>`. Apaga o `.kit` no fim. Em KIT_OK, `out` traz o
+// registro do catálogo (nome/versão). Erros: KIT_ERR_STORAGE (pacote
+// corrompido / cartão), KIT_ERR_INVALID_ARG (manifest sem id válido),
+// KIT_ERR_NO_MEM (catálogo cheio), KIT_FAIL (Tool rodando),
+// KIT_ERR_NOT_SUPPORTED (Tool incompatível com este firmware — removida).
+kit_err_t kit_tool_manager_install_pkg(const char *kit_path, kit_tool_entry_t *out);
+
 // Remove `/sdcard/tools/<tool_id>` e recarrega o catálogo. Recusa se a Tool
 // estiver rodando.
 kit_err_t kit_tool_manager_uninstall(const char *tool_id);

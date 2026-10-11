@@ -886,6 +886,98 @@ kit_err_t kit_tool_manager_install(const char *kit_path, const char *tool_id)
     return KIT_OK;
 }
 
+// Lê só o "id" de um manifest.json. O id vira nome de pasta, então só aceita
+// [A-Za-z0-9._-] e nada começando com '.' (pasta oculta = ignorada no scan).
+static bool read_manifest_id(const char *dir, char *id, size_t n)
+{
+    char path[160];
+    snprintf(path, sizeof(path), "%s/manifest.json", dir);
+    FILE *f = fopen(path, "r");
+    if (!f) return false;
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    if (size <= 0 || size > 8192) { fclose(f); return false; }
+    char *buf = malloc((size_t)size + 1);
+    if (!buf) { fclose(f); return false; }
+    size_t rd = fread(buf, 1, (size_t)size, f);
+    fclose(f);
+    buf[rd] = '\0';
+
+    cJSON *root = cJSON_Parse(buf);
+    free(buf);
+    if (!root) return false;
+    cJSON *id_j = cJSON_GetObjectItemCaseSensitive(root, "id");
+    bool ok = cJSON_IsString(id_j) && id_j->valuestring[0] &&
+              id_j->valuestring[0] != '.' && strlen(id_j->valuestring) < n;
+    for (const char *c = ok ? id_j->valuestring : ""; ok && *c; c++) {
+        if (!isalnum((unsigned char)*c) && *c != '.' && *c != '_' && *c != '-') ok = false;
+    }
+    if (ok) strlcpy(id, id_j->valuestring, n);
+    cJSON_Delete(root);
+    return ok;
+}
+
+kit_err_t kit_tool_manager_install_pkg(const char *kit_path, kit_tool_entry_t *out)
+{
+    static const char STAGING[] = KIT_TOOL_SD_TOOLS_DIR "/.staging";
+    if (!kit_path) return KIT_ERR_INVALID_ARG;
+
+    rm_rf(STAGING);   // sobra de uma tentativa interrompida
+    kit_err_t r = kit_pkg_extract(kit_path, STAGING);
+    unlink(kit_path);
+    if (r != KIT_OK) {
+        ESP_LOGE(TAG, "Pacote enviado não extraiu");
+        rm_rf(STAGING);
+        return KIT_ERR_STORAGE;
+    }
+
+    char id[40];
+    if (!read_manifest_id(STAGING, id, sizeof(id))) {
+        ESP_LOGE(TAG, "Pacote enviado sem 'id' válido no manifest");
+        rm_rf(STAGING);
+        return KIT_ERR_INVALID_ARG;
+    }
+    if (strcmp(id, s_current_tool) == 0) {
+        rm_rf(STAGING);
+        return KIT_FAIL;
+    }
+
+    char dest[160];
+    snprintf(dest, sizeof(dest), "%s/%s", KIT_TOOL_SD_TOOLS_DIR, id);
+    struct stat st;
+    bool update = (stat(dest, &st) == 0);
+    if (!update && s_catalog_n >= KIT_TOOL_CATALOG_MAX) {
+        rm_rf(STAGING);
+        return KIT_ERR_NO_MEM;
+    }
+    if (update) {
+        ESP_LOGI(TAG, "Atualizando '%s' — removendo versão anterior", id);
+        rm_rf(dest);
+    }
+    if (rename(STAGING, dest) != 0) {
+        ESP_LOGE(TAG, "rename(%s -> %s) falhou: errno=%d", STAGING, dest, errno);
+        rm_rf(STAGING);
+        kit_tool_manager_reload_catalog();   // a versão anterior já saiu
+        return KIT_ERR_STORAGE;
+    }
+    ESP_LOGI(TAG, "Tool '%s' instalada por upload", id);
+    kit_tool_manager_reload_catalog();
+
+    // load_manifest descarta em silêncio o que não roda aqui (arch, runtime,
+    // SHA-256). Não deixa lixo no cartão: some com a pasta e avisa.
+    for (uint32_t i = 0; i < s_catalog_n; i++) {
+        if (strcmp(s_catalog[i].id, id) == 0) {
+            if (out) kit_tool_manager_get_entry(i, out);
+            return KIT_OK;
+        }
+    }
+    ESP_LOGW(TAG, "'%s' extraiu mas não entrou no catálogo — incompatível, removendo", id);
+    rm_rf(dest);
+    kit_tool_manager_reload_catalog();
+    return KIT_ERR_NOT_SUPPORTED;
+}
+
 kit_err_t kit_tool_manager_uninstall(const char *tool_id)
 {
     if (!tool_id || !tool_id[0]) return KIT_ERR_INVALID_ARG;
