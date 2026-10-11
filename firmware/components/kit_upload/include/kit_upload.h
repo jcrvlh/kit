@@ -14,7 +14,8 @@ extern "C" {
  * Com a tela aberta, o KIT sobe um servidor HTTP na rede em que já está
  * conectado. Do navegador (http://<ip do KIT>), a pessoa escolhe um ou mais
  * `.kit` e digita o PIN de 4 dígitos que aparece no display; o pacote é
- * gravado no cartão em pedaços e instalado pelo kit_tool_manager.
+ * gravado no cartão em pedaços e instalado pelo kit_tool_manager. Com o PIN,
+ * a página também lista as Tools do cartão e desinstala.
  *
  * Segurança: sem assinatura dos pacotes (ADR-0012), quem está na mesma rede
  * poderia empurrar código. Por isso o servidor só existe com a tela aberta,
@@ -36,7 +37,11 @@ typedef enum {
     KIT_UP_DONE,         // última instalação deu certo (mensagem = nome + versão)
     KIT_UP_ERROR,        // última tentativa falhou (mensagem = motivo)
     KIT_UP_LOCKED,       // PIN errado demais: envio travado até reabrir
+    KIT_UP_REMOVED,      // última ação foi desinstalar (mensagem = nome)
 } kit_upload_state_t;
+
+/** Chamado (na task do servidor) depois de desinstalar a Tool `id` pela página. */
+typedef void (*kit_upload_removed_cb_t)(const char *id);
 
 /** Sobe o servidor e sorteia um PIN novo. Requer o Wi-Fi ligado. */
 kit_err_t kit_upload_start(void);
@@ -47,6 +52,8 @@ kit_upload_state_t kit_upload_get_state(void);
 int         kit_upload_progress(void);    ///< 0..100 em RECEIVING
 const char *kit_upload_pin(void);         ///< "0427"
 const char *kit_upload_message(void);     ///< detalhe do último DONE/ERROR
+/** O launcher limpa as marcas da Tool (fixada/nova) que só ele conhece. */
+void        kit_upload_set_removed_cb(kit_upload_removed_cb_t cb);
 /** Sobe a cada pedido recebido — a UI usa pra adiar o tempo limite. */
 uint32_t    kit_upload_activity(void);
 

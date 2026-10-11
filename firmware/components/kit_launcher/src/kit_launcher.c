@@ -2576,6 +2576,10 @@ static void upload_poll_cb(lv_timer_t *t)
         lv_label_set_text(s_upload_status_lbl, kit_upload_message());
         color = KIT_COLOR_RED;
         break;
+    case KIT_UP_REMOVED:
+        lv_label_set_text_fmt(s_upload_status_lbl, "Removida: %s", kit_upload_message());
+        color = KIT_COLOR_TEXT;
+        break;
     case KIT_UP_LOCKED:
         lv_label_set_text(s_upload_status_lbl,
             "PIN errado 5 vezes. Volte e abra de novo pra gerar outro.");
@@ -2590,6 +2594,7 @@ static void upload_poll_cb(lv_timer_t *t)
 
     if ((int)st != s_upload_last_state) {
         if (st == KIT_UP_DONE) kit_audio_sfx_impl(KIT_SFX_CATALOG_DONE);
+        else if (st == KIT_UP_REMOVED) kit_audio_sfx_impl(KIT_SFX_CONFIRM);
         else if (st == KIT_UP_ERROR || st == KIT_UP_LOCKED) kit_audio_beep_impl(400, 60);
         s_upload_last_state = (int)st;
     }
@@ -2619,6 +2624,7 @@ static void open_upload_cb(lv_event_t *e)
     s_upload_screen = make_overlay(KIT_COLOR_BG);
     make_titlebar(s_upload_screen, "INSTALAR", close_upload_cb);
 
+    kit_upload_set_removed_cb(tool_forget_flags);   // NVS: seguro fora da task LVGL
     if (kit_network_get_state() == KIT_NET_OFF || kit_upload_start() != KIT_OK) {
         lv_obj_t *body = make_scroll_body(s_upload_screen, KIT_BTN_H + 28);
         lv_obj_t *tx = add_label(body,

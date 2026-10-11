@@ -657,7 +657,8 @@ cartão) fica no **Manual do Usuário** — aqui só o esqueleto visual:
   status em `kit_mono_16` muda de cor (verde instalada, vermelho erro/travado).
   A página web servida pelo KIT segue a mesma linguagem: fundo preto, cada `.kit`
   vira um card cheio na cor da Tool (forma + nome + tipo/versão em mono) com
-  `×` pra remover antes de enviar.
+  `×` pra remover antes de enviar; abaixo, "NO KIT" lista as Tools do cartão no
+  mesmo card, e o `×` pede confirmação (`REMOVER` / `NÃO`) antes de desinstalar.
 * **Atualizar firmware** (`FIRMWARE`) — `make_spec` com `VERSÃO ATUAL` e, quando
   há, a disponível; botão de ação; tela de progresso (`s_fwupdate_busy`) durante
   download e aplicação. Um _toast_ + um ponto no card `Ajustes` avisam quando a
