@@ -14,8 +14,8 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ### Adicionado
 - **Instalar Tools pelo Wi-Fi.** Em **Ajustes → Instalar pelo Wi-Fi**, o KIT
   mostra um endereço e um PIN. No navegador do computador ou do celular, na
-  mesma rede, é só abrir o endereço, digitar o PIN e escolher um ou mais
-  arquivos `.kit`: a Tool aparece na Home na hora, sem cabo e sem reiniciar.
+  mesma rede, é só abrir o endereço, digitar o PIN e arrastar (ou escolher)
+  um ou mais arquivos `.kit`: a Tool aparece na Home na hora, sem cabo e sem reiniciar.
   O envio só fica disponível com essa tela aberta, e errar o PIN cinco vezes
   bloqueia até abrir a tela de novo.
 
