@@ -7,7 +7,7 @@ extern "C" {
 #endif
 
 #define KIT_VERSION_MAJOR 0
-#define KIT_VERSION_MINOR 17
+#define KIT_VERSION_MINOR 18
 #define KIT_VERSION_PATCH 0
 // 0.2.0: kit_imu_api_t ganha register_tilt_callback
 // 0.3.0: runtime LVGL das Tools ganha lv_qrcode_* (QR pro gerador web)
@@ -81,7 +81,13 @@ extern "C" {
 //        nova pras Tools -> bump obrigatório.
 // 0.17.0: alinha com firmware/version.txt (nenhuma superfície nova) —
 //        Ajustes > Tools pelo Wi-Fi (kit_upload) instala/remove .kit pelo navegador
-#define KIT_VERSION_STRING "0.17.0"
+// 0.18.0: kit_api_table_t ganha wifi (kit_wifi_api_t: scan/cancel) — scan das
+//        redes 2.4 GHz em volta (BSSID, SSID, RSSI, canal, segurança), oculta
+//        incluída, até 32 APs, um scan por vez e no máximo 1 a cada 5 s; liga
+//        o rádio só durante o scan se o Wi-Fi estiver desligado. Só com a
+//        permissão "wifi_scan" (wifi = NULL sem ela); não exige "network" e o
+//        Catálogo aceita. Superfície nova pras Tools -> bump obrigatório.
+#define KIT_VERSION_STRING "0.18.0"
 
 /**
  * Inicializa todo o ambiente operacional do KIT Runtime e periféricos.

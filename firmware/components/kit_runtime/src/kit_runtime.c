@@ -19,6 +19,7 @@
 #include "kit_tool_loader.h"
 #include "kit_network.h"
 #include "kit_net_tool.h"
+#include "kit_wifi_tool.h"
 #include "kit_catalog.h"
 #include "kit_ota.h"
 #include "kit_launcher.h"
@@ -429,6 +430,7 @@ void kit_runtime_run(void)
         // Resposta de rede da Tool aberta (kit_api_table_t.net): entrega no
         // contexto do LVGL, logo depois de processar a tela.
         kit_net_tool_poll();
+        kit_wifi_tool_poll();             // idem, resultado do scan de Wi-Fi
 
         int64_t now = esp_timer_get_time();
 
@@ -541,6 +543,7 @@ void kit_runtime_set_in_tool(bool in_tool)
         kit_imu_clear_shake_callback();   // não deixa callback órfão de Tool externa
         kit_imu_clear_tilt_callback();
         kit_net_tool_end();               // descarta pedido de rede pendente
+        kit_wifi_tool_end();              // e o scan de Wi-Fi pendente
     }
 }
 

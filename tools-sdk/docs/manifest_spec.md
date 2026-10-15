@@ -53,7 +53,7 @@ Toda Tool para o KIT deve possuir um arquivo `manifest.json` na raiz do seu proj
 
 ## Permissões (Permissions)
 
-Declare em `permissions` tudo o que a Tool usa. Hoje o firmware só **aplica** a permissão `"network"` (sem ela, `ctx->api->net` é `NULL`); as demais ainda são declarativas e o ponteiro vem preenchido mesmo sem declarar. Declare assim mesmo: o KIT vai passar a exigir todas, e quem acessar um ponteiro `NULL` derruba a Tool.
+Declare em `permissions` tudo o que a Tool usa. Hoje o firmware só **aplica** as permissões `"network"` (sem ela, `ctx->api->net` é `NULL`) e `"wifi_scan"` (sem ela, `ctx->api->wifi` é `NULL`); as demais ainda são declarativas e o ponteiro vem preenchido mesmo sem declarar. Declare assim mesmo: o KIT vai passar a exigir todas, e quem acessar um ponteiro `NULL` derruba a Tool.
 
 Valores suportados em `permissions`:
 
@@ -67,6 +67,7 @@ Valores suportados em `permissions`:
 - `"system"`: Acesso a informações de versão e solicitação de saída da Tool.
 - `"imu"`: Acesso ao acelerômetro e callback de detecção de gestos como chacoalhar (*shake*).
 - `"network"` (runtime ≥ 0.16.0): HTTPS GET pelo `ctx->api->net`, só para os hosts listados em `network_domains`. Sem essa lista, a permissão não vale.
+- `"wifi_scan"` (runtime ≥ 0.18.0): scan das redes Wi-Fi em volta pelo `ctx->api->wifi` (BSSID, nome, sinal, canal, segurança). Só olha: não conecta nem dá acesso à internet. Não confundir com `"wifi"`, que é sinônimo antigo de `"network"`.
 
 ### `network_domains`
 

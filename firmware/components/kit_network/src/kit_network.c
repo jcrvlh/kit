@@ -11,6 +11,7 @@
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
 #include "nvs.h"
 
 #include "kit_time.h"   // kit_time_notify_online() ao obter IP (dispara SNTP)
@@ -261,6 +262,99 @@ kit_err_t kit_network_scan(kit_net_ap_t *out, size_t max, size_t *count)
     xSemaphoreTake(s_scan_lock, portMAX_DELAY);
     kit_err_t r = do_scan(out, max, count);
     xSemaphoreGive(s_scan_lock);
+    return r;
+}
+
+static kit_err_t ensure_stack(void);   // definida em "Ciclo de vida"
+
+static uint8_t auth_to_kit(wifi_auth_mode_t m)
+{
+    switch (m) {
+    case WIFI_AUTH_OPEN:
+    case WIFI_AUTH_OWE:                     return KIT_WIFI_AUTH_OPEN;
+    case WIFI_AUTH_WEP:                     return KIT_WIFI_AUTH_WEP;
+    case WIFI_AUTH_WPA_PSK:                 return KIT_WIFI_AUTH_WPA;
+    case WIFI_AUTH_WPA2_PSK:
+    case WIFI_AUTH_WPA_WPA2_PSK:            return KIT_WIFI_AUTH_WPA2;
+    case WIFI_AUTH_WPA3_PSK:
+    case WIFI_AUTH_WPA2_WPA3_PSK:
+    case WIFI_AUTH_WPA3_EXT_PSK:
+    case WIFI_AUTH_WPA3_EXT_PSK_MIXED_MODE: return KIT_WIFI_AUTH_WPA3;
+    case WIFI_AUTH_ENTERPRISE:
+    case WIFI_AUTH_WPA3_ENT_192:            return KIT_WIFI_AUTH_ENTERPRISE;
+    default:                                return KIT_WIFI_AUTH_OTHER;
+    }
+}
+
+// Teto de registros lidos do driver antes de ordenar e cortar em `max`: numa
+// rua cheia aparecem 40+ APs e o driver não garante a ordem por RSSI.
+#define KIT_NET_SCAN_RAW_MAX 64
+
+kit_err_t kit_network_scan_aps(kit_wifi_ap_t *out, size_t max, size_t *count)
+{
+    if (!out || !count || max == 0) return KIT_ERR_INVALID_ARG;
+    *count = 0;
+    if (!s_lock)     return KIT_FAIL;
+    if (s_suspended) return KIT_ERR_NOT_SUPPORTED;
+
+    xSemaphoreTake(s_scan_lock, portMAX_DELAY);
+
+    // Wi-Fi desligado pelo usuário: liga o STA só pra varrer. Sem
+    // s_want_connected, o worker ignora o STA_START e não associa em nada.
+    bool radio_only = false;
+    kit_err_t r = KIT_OK;
+    if (!s_want_connected) {
+        if (ensure_stack() != KIT_OK) {
+            r = KIT_ERR_NO_MEM;
+        } else if (esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK) {
+            r = KIT_FAIL;
+        } else {
+            esp_err_t err = esp_wifi_start();
+            if (err == ESP_OK || err == ESP_ERR_WIFI_NOT_STOPPED) radio_only = true;
+            else r = KIT_FAIL;
+        }
+    }
+
+    wifi_ap_record_t *recs = NULL;
+    uint16_t n = 0;
+    if (r == KIT_OK) {
+        wifi_scan_config_t cfg = { .show_hidden = true };
+        esp_err_t err = esp_wifi_scan_start(&cfg, true /* block */);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "scan (tool) falhou: %s", esp_err_to_name(err));
+            r = KIT_FAIL;
+        } else {
+            esp_wifi_scan_get_ap_num(&n);
+            if (n > KIT_NET_SCAN_RAW_MAX) n = KIT_NET_SCAN_RAW_MAX;
+            // PSRAM: o driver só copia pra cá, não faz DMA.
+            recs = n ? heap_caps_calloc(n, sizeof(wifi_ap_record_t), MALLOC_CAP_SPIRAM) : NULL;
+            if (n && !recs) r = KIT_ERR_NO_MEM;
+            if (recs) esp_wifi_scan_get_ap_records(&n, recs);
+            else      esp_wifi_clear_ap_list();
+        }
+    }
+
+    if (radio_only && !s_want_connected) esp_wifi_stop();
+    xSemaphoreGive(s_scan_lock);
+
+    if (recs) {
+        // Ordena por RSSI desc (inserção: n <= 64) e copia os `max` mais fortes.
+        for (int i = 1; i < n; i++) {
+            wifi_ap_record_t t = recs[i];
+            int j = i - 1;
+            while (j >= 0 && recs[j].rssi < t.rssi) { recs[j + 1] = recs[j]; j--; }
+            recs[j + 1] = t;
+        }
+        for (int i = 0; i < n && *count < max; i++) {
+            kit_wifi_ap_t *a = &out[(*count)++];
+            memcpy(a->bssid, recs[i].bssid, sizeof(a->bssid));
+            a->rssi    = recs[i].rssi;
+            a->channel = recs[i].primary;
+            a->auth    = auth_to_kit(recs[i].authmode);
+            strlcpy(a->ssid, (const char *)recs[i].ssid, sizeof(a->ssid));
+        }
+        free(recs);
+    }
     return r;
 }
 

@@ -111,8 +111,10 @@ def test_manifest_validation_all_valid_permissions():
     """Todas as permissões válidas aceitas."""
     manifest = _valid_manifest()
     manifest["permissions"] = [
-        "display", "input", "storage", "random", "time", "audio", "power", "imu", "network"
+        "display", "input", "storage", "random", "time", "audio", "power", "imu", "network",
+        "wifi_scan"
     ]
+    manifest["network_domains"] = ["api.exemplo.com"]   # "network" exige a lista
     valid, errors = validate_manifest_dict(manifest)
     assert valid is True
 

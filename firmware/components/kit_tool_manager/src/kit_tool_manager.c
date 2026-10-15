@@ -16,6 +16,7 @@
 #include "kit_pkg.h"
 #include "kit_network.h"
 #include "kit_net_tool.h"
+#include "kit_wifi_tool.h"
 #include "kit_input.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
@@ -53,6 +54,7 @@ typedef struct {
     char icon[16];        // nome do ícone da Home, "" = genérico
     bool is_game;         // manifest "kind":"game" -> mini-jogo
     bool wants_network;   // manifest "permissions" contém rede/wifi/internet
+    bool wants_wifi_scan; // manifest "permissions" contém "wifi_scan"
 } kit_tool_catalog_entry_t;
 
 static kit_tool_catalog_entry_t s_catalog[KIT_TOOL_CATALOG_MAX];
@@ -477,15 +479,17 @@ static void load_manifest(const char *dirname)
                   strcasecmp(kind_j->valuestring, "minigame") == 0 ||
                   strcasecmp(kind_j->valuestring, "minijogo") == 0);
     e->wants_network = false;
+    e->wants_wifi_scan = false;
     if (cJSON_IsArray(perms_j)) {
         cJSON *perm;
         cJSON_ArrayForEach(perm, perms_j) {
-            if (cJSON_IsString(perm) &&
-                (strcasecmp(perm->valuestring, "network")  == 0 ||
-                 strcasecmp(perm->valuestring, "wifi")     == 0 ||
-                 strcasecmp(perm->valuestring, "internet") == 0)) {
+            if (!cJSON_IsString(perm)) continue;
+            if (strcasecmp(perm->valuestring, "network")  == 0 ||
+                strcasecmp(perm->valuestring, "wifi")     == 0 ||
+                strcasecmp(perm->valuestring, "internet") == 0) {
                 e->wants_network = true;
-                break;
+            } else if (strcasecmp(perm->valuestring, "wifi_scan") == 0) {
+                e->wants_wifi_scan = true;
             }
         }
     }
@@ -600,7 +604,9 @@ static kit_err_t ext_tool_start_with_reclaim(const char *so_path,
     // (esp_wifi_deinit, ~40 KB) e tenta de novo; religa quando a Tool sair
     // (kit_tool_manager_stop_current) — ou agora mesmo, se nem assim abrir.
     bool net_up = kit_network_get_state() != KIT_NET_OFF;
-    bool tool_wants_net = entry && entry->wants_network;
+    // Tool que varre Wi-Fi também precisa da pilha: derrubar só adiaria o
+    // estouro de RAM pro primeiro scan.
+    bool tool_wants_net = entry && (entry->wants_network || entry->wants_wifi_scan);
     if (!net_up || tool_wants_net) {
         return first_err;   // nada a recuperar
     }
@@ -738,11 +744,14 @@ kit_err_t kit_tool_manager_start(const char *tool_id)
             ESP_LOGW(TAG, "Tool '%s' pede rede sem network_domains — sem rede", tool_id);
         }
         kit_net_tool_begin((const char (*)[KIT_NET_TOOL_DOMAIN_LEN])doms, n_doms);
+        // Scan de Wi-Fi só com "wifi_scan" no manifest (wifi = NULL sem ela).
+        bool wifi_scan = found && found->wants_wifi_scan;
+        kit_wifi_tool_begin();
 
         static kit_tool_ctx_t ext_ctx;
         ext_ctx.tool_id   = id_buf;
         ext_ctx.data_path = data_buf;
-        ext_ctx.api       = kit_api_get_table_for(n_doms > 0);
+        ext_ctx.api       = kit_api_get_table_for(n_doms > 0, wifi_scan);
 
         char so_path[96];
         if (found) {
@@ -779,6 +788,7 @@ void kit_tool_manager_stop_current(void)
     // código da Tool. Tool que esquecia o register_callback(NULL) travava o KIT
     // no primeiro toque depois de sair.
     kit_net_tool_end();
+    kit_wifi_tool_end();
     kit_input_clear_callback();
 
     if (strcmp(s_current_tool, "com.kit.dice") == 0) {

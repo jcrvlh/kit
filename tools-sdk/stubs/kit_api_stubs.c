@@ -406,6 +406,31 @@ static void stub_net_cancel(void)
 {
 }
 
+/* Scan de Wi-Fi: no desktop devolve sempre a mesma vizinhança de mentira
+ * (uma mesh de 2 nós, uma oculta, uma aberta, um hotspot com BSSID local),
+ * na hora — no KIT o callback chega ~2 s depois, pelo loop do Runtime. */
+static const kit_wifi_ap_t s_stub_aps[] = {
+    { {0x3C,0x84,0x6A,0x10,0x22,0x01}, -45, 6,  KIT_WIFI_AUTH_WPA2, "Mesh-Casa" },
+    { {0x3C,0x84,0x6A,0x10,0x22,0x02}, -61, 6,  KIT_WIFI_AUTH_WPA2, "Mesh-Casa" },
+    { {0xA4,0x2B,0xB0,0x5E,0x01,0x9C}, -58, 1,  KIT_WIFI_AUTH_WPA3, "Apto_302" },
+    { {0x9A,0x1F,0x33,0x70,0xC2,0x0E}, -66, 11, KIT_WIFI_AUTH_WPA2, "Celular do Rafa" },
+    { {0x00,0x1E,0x58,0xAA,0x41,0x07}, -72, 11, KIT_WIFI_AUTH_WPA2, "" },
+    { {0x6C,0x3B,0x6B,0x02,0x9D,0x51}, -81, 3,  KIT_WIFI_AUTH_OPEN, "Wifi_Livre_Praca" },
+};
+
+static kit_err_t stub_wifi_scan(kit_wifi_scan_cb_t cb, void *user_data)
+{
+    if (!cb) return KIT_ERR_INVALID_ARG;
+    size_t n = sizeof(s_stub_aps) / sizeof(s_stub_aps[0]);
+    printf("[STUB WIFI] scan -> %u AP(s) de mentira.\n", (unsigned)n);
+    cb(KIT_OK, s_stub_aps, n, user_data);
+    return KIT_OK;
+}
+
+static void stub_wifi_cancel(void)
+{
+}
+
 /* -----------------------------------------------------------------------
  * Montagem das Tabelas de API (Stubs)
  * ----------------------------------------------------------------------- */
@@ -477,6 +502,11 @@ static const kit_net_api_t s_stub_net = {
     .cancel    = stub_net_cancel,
 };
 
+static const kit_wifi_api_t s_stub_wifi = {
+    .scan   = stub_wifi_scan,
+    .cancel = stub_wifi_cancel,
+};
+
 static const kit_api_table_t s_stub_api_table = {
     .display = &s_stub_display,
     .input   = &s_stub_input,
@@ -488,6 +518,7 @@ static const kit_api_table_t s_stub_api_table = {
     .system  = &s_stub_system,
     .imu     = &s_stub_imu,
     .net     = &s_stub_net,
+    .wifi    = &s_stub_wifi,
 };
 
 /* -----------------------------------------------------------------------

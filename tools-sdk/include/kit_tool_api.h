@@ -672,6 +672,84 @@ typedef struct {
 } kit_net_api_t;
 
 /* -----------------------------------------------------------------------
+ * Scan de Wi-Fi
+ * ----------------------------------------------------------------------- */
+
+#define KIT_WIFI_SCAN_MAX         32    /**< Máximo de APs por scan. */
+#define KIT_WIFI_SCAN_MIN_GAP_MS  5000  /**< Intervalo mínimo entre scans. */
+#define KIT_WIFI_SSID_MAX         33    /**< 32 octetos de SSID + '\0'. */
+
+/** @brief Segurança de um AP (campo `auth` de @ref kit_wifi_ap_t). */
+typedef enum {
+    KIT_WIFI_AUTH_OPEN = 0,     /**< Aberta (inclui OWE). */
+    KIT_WIFI_AUTH_WEP,          /**< WEP. */
+    KIT_WIFI_AUTH_WPA,          /**< WPA. */
+    KIT_WIFI_AUTH_WPA2,         /**< WPA2 (inclui WPA/WPA2 misto). */
+    KIT_WIFI_AUTH_WPA3,         /**< WPA3 (inclui WPA2/WPA3 misto). */
+    KIT_WIFI_AUTH_ENTERPRISE,   /**< 802.1X (WPA2/WPA3 Enterprise). */
+    KIT_WIFI_AUTH_OTHER,        /**< WAPI, DPP e outros. */
+} kit_wifi_auth_t;
+
+/** @brief Um AP visto no scan. */
+typedef struct {
+    uint8_t bssid[6];                /**< Endereço do AP — único por rádio. */
+    int8_t  rssi;                    /**< Sinal em dBm (mais perto de 0 = mais forte). */
+    uint8_t channel;                 /**< Canal 2.4 GHz (1..13). */
+    uint8_t auth;                    /**< @ref kit_wifi_auth_t. */
+    char    ssid[KIT_WIFI_SSID_MAX]; /**< Nome da rede; "" = rede oculta. */
+} kit_wifi_ap_t;
+
+/**
+ * @brief Callback do scan (ver @ref kit_wifi_api_t).
+ *
+ * Roda no contexto da task LVGL — pode mexer na UI aqui dentro.
+ *
+ * @param result    KIT_OK; KIT_ERR_NO_MEM se a pilha Wi-Fi não subiu por
+ *                  falta de RAM; KIT_ERR_NOT_SUPPORTED se a tela entrou em
+ *                  repouso; KIT_FAIL se o rádio recusou agora (ex.: o KIT
+ *                  está associando a uma rede) — tente de novo.
+ * @param aps       APs vistos, mais forte primeiro. **Só vale durante a
+ *                  chamada** — copie o que precisar. NULL se result != KIT_OK.
+ * @param count     Quantos itens em `aps` (0..KIT_WIFI_SCAN_MAX).
+ * @param user_data Ponteiro opaco passado em `scan`.
+ */
+typedef void (*kit_wifi_scan_cb_t)(kit_err_t result, const kit_wifi_ap_t *aps,
+                                   size_t count, void *user_data);
+
+/**
+ * @brief API de Scan de Wi-Fi, requer `min_runtime` >= "0.18.0".
+ *
+ * Requer a permissão `"wifi_scan"` no manifest — sem ela, `ctx->api->wifi` é
+ * NULL. O KIT só **olha** as redes em volta: não conecta, não manda nada.
+ *
+ * Regras:
+ *  - um item por BSSID (uma mesh aparece várias vezes, com o mesmo SSID);
+ *    redes ocultas vêm com `ssid` vazio;
+ *  - mais forte primeiro, até KIT_WIFI_SCAN_MAX;
+ *  - um scan por vez, no máximo um a cada KIT_WIFI_SCAN_MIN_GAP_MS (contando
+ *    do início do anterior); cada scan leva ~2 s;
+ *  - funciona com o Wi-Fi do KIT desligado: o rádio liga só durante o scan;
+ *  - só com a Tool aberta: ao sair, o scan pendente é descartado.
+ *
+ * Dica: hotspot de celular costuma usar endereço "local" — bit 0x02 do
+ * primeiro byte do BSSID ligado.
+ */
+typedef struct {
+    /**
+     * Dispara o scan. O resultado chega em `cb`.
+     * @return KIT_OK se o scan foi aceito;
+     *         KIT_FAIL se já há um scan em andamento ou faz menos de
+     *         KIT_WIFI_SCAN_MIN_GAP_MS do anterior;
+     *         KIT_ERR_INVALID_ARG se `cb` é NULL;
+     *         KIT_ERR_NO_MEM se faltou RAM pra preparar o scan.
+     */
+    kit_err_t (*scan)(kit_wifi_scan_cb_t cb, void *user_data);
+
+    /** Descarta o scan em andamento: o callback dele não é mais chamado. */
+    void      (*cancel)(void);
+} kit_wifi_api_t;
+
+/* -----------------------------------------------------------------------
  * Tabela Consolidada de Export do KIT Runtime
  * ----------------------------------------------------------------------- */
 
@@ -698,6 +776,7 @@ typedef struct {
     const kit_system_api_t  *system;   /**< API do Sistema (sempre disponível). */
     const kit_imu_api_t     *imu;      /**< API do IMU/Shake (requer "imu"). */
     const kit_net_api_t     *net;      /**< API de Rede (requer "network" + "network_domains", runtime >= 0.16.0). */
+    const kit_wifi_api_t    *wifi;     /**< API de Scan de Wi-Fi (requer "wifi_scan", runtime >= 0.18.0). */
 } kit_api_table_t;
 
 /* -----------------------------------------------------------------------

@@ -9,6 +9,16 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.18.0] — 2026-10-15
+
+### Adicionado
+- **Redes Wi-Fi em volta para as Tools.** Quem desenvolve Tools agora pode ver
+  as redes Wi-Fi ao redor do KIT: nome, força do sinal, canal e tipo de
+  segurança, inclusive das redes ocultas. O KIT só olha: não conecta em
+  nenhuma rede e não manda nada pra internet. Funciona até com o Wi-Fi do KIT
+  desligado, ligando o rádio só pelo instante da busca. Essas Tools podem ser
+  instaladas normalmente pelo Catálogo.
+
 ## [0.17.0] — 2026-10-10
 
 ### Adicionado
