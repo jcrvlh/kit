@@ -238,6 +238,49 @@ typedef struct {
     void      (*cancel)(void);
 } kit_net_api_t;
 
+// --- Scan de Wi-Fi (>= runtime 0.18.0) -------------------------------------
+// Varre as redes 2.4 GHz em volta e devolve cada AP (um por BSSID, oculta
+// incluída), mais forte primeiro, até KIT_WIFI_SCAN_MAX. Só olha: não conecta
+// em nada. Com o Wi-Fi do KIT desligado o rádio liga só durante o scan. Um
+// scan por vez, no máximo um a cada KIT_WIFI_SCAN_MIN_GAP_MS (contando do
+// início do anterior). O callback roda no contexto do LVGL; aps só vale
+// durante a chamada. result: KIT_OK, KIT_ERR_NO_MEM (a pilha Wi-Fi não subiu
+// por falta de RAM), KIT_ERR_NOT_SUPPORTED (a tela entrou em repouso) ou
+// KIT_FAIL (o driver recusou, ex.: associando a uma rede agora — tente de novo).
+#define KIT_WIFI_SCAN_MAX         32
+#define KIT_WIFI_SCAN_MIN_GAP_MS  5000
+#define KIT_WIFI_SSID_MAX         33   // 32 octetos + NUL
+
+typedef enum {
+    KIT_WIFI_AUTH_OPEN = 0,     // aberta (inclui OWE)
+    KIT_WIFI_AUTH_WEP,
+    KIT_WIFI_AUTH_WPA,
+    KIT_WIFI_AUTH_WPA2,         // inclui WPA/WPA2 misto
+    KIT_WIFI_AUTH_WPA3,         // inclui WPA2/WPA3 misto
+    KIT_WIFI_AUTH_ENTERPRISE,   // 802.1X (WPA2/WPA3 Enterprise)
+    KIT_WIFI_AUTH_OTHER,        // WAPI, DPP, ...
+} kit_wifi_auth_t;
+
+typedef struct {
+    uint8_t bssid[6];                // endereço do AP: único por rádio
+    int8_t  rssi;                    // dBm (mais perto de 0 = mais forte)
+    uint8_t channel;                 // 1..13
+    uint8_t auth;                    // kit_wifi_auth_t
+    char    ssid[KIT_WIFI_SSID_MAX]; // "" = rede oculta
+} kit_wifi_ap_t;
+
+typedef void (*kit_wifi_scan_cb_t)(kit_err_t result, const kit_wifi_ap_t *aps,
+                                   size_t count, void *user_data);
+
+typedef struct {
+    // Dispara o scan (~2 s). KIT_OK = aceito (o callback vem depois);
+    // KIT_FAIL = ocupado (scan em andamento ou < KIT_WIFI_SCAN_MIN_GAP_MS do
+    // anterior); KIT_ERR_INVALID_ARG = cb NULL; KIT_ERR_NO_MEM = sem RAM.
+    kit_err_t (*scan)(kit_wifi_scan_cb_t cb, void *user_data);
+    // Descarta o scan em andamento: o callback não é mais chamado.
+    void      (*cancel)(void);
+} kit_wifi_api_t;
+
 // Export Table Consolidada
 typedef struct {
     const kit_display_api_t *display;
@@ -251,6 +294,8 @@ typedef struct {
     const kit_imu_api_t     *imu;
     // >= runtime 0.16.0. NULL se a Tool não declarou "network" + "network_domains".
     const kit_net_api_t     *net;
+    // >= runtime 0.18.0. NULL se a Tool não declarou "wifi_scan".
+    const kit_wifi_api_t    *wifi;
 } kit_api_table_t;
 
 // Contexto passado para cada Tool em tool_init
@@ -264,10 +309,12 @@ typedef struct {
 typedef kit_err_t (*kit_tool_init_fn)(kit_tool_ctx_t *ctx);
 typedef void (*kit_tool_destroy_fn)(void);
 
-// Obtenção da Export Table no Runtime. kit_api_get_table() não tem rede (net =
-// NULL); kit_api_get_table_for(true) é a mesma tabela com a rede ligada.
+// Obtenção da Export Table no Runtime. kit_api_get_table() não tem rede nem
+// scan (net = wifi = NULL); kit_api_get_table_for() é a mesma tabela com o que
+// o manifest da Tool liberou. Uma Tool externa por vez: a tabela devolvida
+// vale até a próxima chamada.
 const kit_api_table_t *kit_api_get_table(void);
-const kit_api_table_t *kit_api_get_table_for(bool with_network);
+const kit_api_table_t *kit_api_get_table_for(bool with_network, bool with_wifi_scan);
 
 #ifdef __cplusplus
 }

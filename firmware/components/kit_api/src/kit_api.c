@@ -118,6 +118,14 @@ static const kit_net_api_t s_net_api = {
     .cancel    = kit_net_tool_cancel,
 };
 
+extern kit_err_t kit_wifi_tool_scan(kit_wifi_scan_cb_t cb, void *user_data);
+extern void      kit_wifi_tool_cancel(void);
+
+static const kit_wifi_api_t s_wifi_api = {
+    .scan   = kit_wifi_tool_scan,
+    .cancel = kit_wifi_tool_cancel,
+};
+
 static const kit_api_table_t s_master_api_table = {
     .display = &s_display_api,
     .input   = &s_input_api,
@@ -129,29 +137,24 @@ static const kit_api_table_t s_master_api_table = {
     .system  = &s_system_api,
     .imu     = &s_imu_api,
     .net     = NULL,
+    .wifi    = NULL,
 };
 
-// Igual à mestra, com a rede. Só vai pra Tool que declarou "network" e
-// "network_domains" no manifest (kit_tool_manager).
-static const kit_api_table_t s_net_api_table = {
-    .display = &s_display_api,
-    .input   = &s_input_api,
-    .storage = &s_storage_api,
-    .random  = &s_random_api,
-    .time    = &s_time_api,
-    .audio   = &s_audio_api,
-    .power   = &s_power_api,
-    .system  = &s_system_api,
-    .imu     = &s_imu_api,
-    .net     = &s_net_api,
-};
+// Igual à mestra, com o que o manifest liberou: rede só com "network" +
+// "network_domains", scan só com "wifi_scan" (kit_tool_manager). Uma Tool
+// externa roda por vez, então uma cópia basta.
+static kit_api_table_t s_tool_api_table;
 
 const kit_api_table_t *kit_api_get_table(void)
 {
     return &s_master_api_table;
 }
 
-const kit_api_table_t *kit_api_get_table_for(bool with_network)
+const kit_api_table_t *kit_api_get_table_for(bool with_network, bool with_wifi_scan)
 {
-    return with_network ? &s_net_api_table : &s_master_api_table;
+    if (!with_network && !with_wifi_scan) return &s_master_api_table;
+    s_tool_api_table      = s_master_api_table;
+    s_tool_api_table.net  = with_network   ? &s_net_api  : NULL;
+    s_tool_api_table.wifi = with_wifi_scan ? &s_wifi_api : NULL;
+    return &s_tool_api_table;
 }

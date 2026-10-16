@@ -1,0 +1,24 @@
+{
+  "manifest_version": 1,
+  "id": "com.kit.hellowifi",
+  "name": "Olá Wi-Fi",
+  "version": "1.0.0",
+  "version_code": 1,
+  "min_runtime": "0.18.0",
+  "max_runtime": "1.0.0",
+  "author": "KIT Core Team",
+  "description": "Exemplo da API de scan: lista as redes Wi-Fi em volta, sem conectar.",
+  "icon": "icon.bin",
+  "accent": "#45A05B",
+  "home_icon": "card",
+  "entry_point": "tool.so",
+  "arch": "xtensa-esp32s3",
+  "permissions": [
+    "display",
+    "input",
+    "time",
+    "wifi_scan"
+  ],
+  "api_level": 1,
+  "assets": []
+}

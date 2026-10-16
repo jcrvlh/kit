@@ -20,6 +20,7 @@ VALID_PERMISSIONS = {
     "power",
     "imu",
     "network",
+    "wifi_scan",
 }
 
 ID_REGEX = re.compile(r"^[a-z0-9_]+(\.[a-z0-9_]+)+$")

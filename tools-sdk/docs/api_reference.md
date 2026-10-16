@@ -148,3 +148,43 @@ if (api->net && api->net->is_online()) {
 }
 ```
 
+
+---
+
+## 9. Wi-Fi Scan API (`ctx->api->wifi`)
+**Permissão necessária:** `"wifi_scan"` (runtime ≥ 0.18.0). Sem ela, `ctx->api->wifi` é `NULL`.
+
+O KIT só **olha** as redes 2.4 GHz em volta: não conecta em nenhuma e não manda nada pra fora. Funciona com o Wi-Fi do KIT desligado: o rádio liga só durante o scan e desliga em seguida.
+
+- `kit_err_t scan(kit_wifi_scan_cb_t cb, void *user_data)`: dispara um scan assíncrono (~2 s). Devolve `KIT_OK` se aceitou; `KIT_FAIL` se já há um scan em andamento ou faz menos de `KIT_WIFI_SCAN_MIN_GAP_MS` (5 s) do início do anterior; `KIT_ERR_INVALID_ARG` se `cb` é `NULL`.
+- `void cancel()`: descarta o scan em andamento; o callback dele não é mais chamado.
+
+O callback `void cb(kit_err_t result, const kit_wifi_ap_t *aps, size_t count, void *user_data)` roda no contexto do LVGL. `aps` vem do mais forte pro mais fraco, até `KIT_WIFI_SCAN_MAX` (32), e **só vale durante a chamada**: copie o que precisar. `result` é `KIT_OK`, `KIT_ERR_NO_MEM` (a pilha Wi-Fi não subiu por falta de RAM), `KIT_ERR_NOT_SUPPORTED` (a tela entrou em repouso) ou `KIT_FAIL` (o rádio recusou agora, por exemplo enquanto o KIT associa a uma rede; tente de novo).
+
+Cada `kit_wifi_ap_t` traz:
+
+| Campo | O que é |
+|---|---|
+| `bssid[6]` | Endereço do AP. É único por rádio: use como identidade da rede. |
+| `ssid` | Nome da rede. `""` = rede oculta. |
+| `rssi` | Sinal em dBm (`-40` forte, `-90` no limite). |
+| `channel` | Canal 2.4 GHz, `1` a `13`. |
+| `auth` | `KIT_WIFI_AUTH_OPEN`, `_WEP`, `_WPA`, `_WPA2`, `_WPA3`, `_ENTERPRISE` ou `_OTHER`. Modos mistos contam como o mais novo (WPA2/WPA3 = `WPA3`). |
+
+Uma mesh aparece uma vez por nó, com o mesmo `ssid` e BSSIDs diferentes. Hotspot de celular costuma usar endereço "local": `bssid[0] & 0x02` ligado.
+
+Ao sair da Tool, o scan pendente é descartado. A permissão não exige `"network"`, e Tools com só `"wifi_scan"` entram normalmente pelo Catálogo do aparelho.
+
+Exemplo completo: [`tools-sdk/examples/hello_wifi`](../examples/hello_wifi/).
+
+```c
+static void on_scan(kit_err_t r, const kit_wifi_ap_t *aps, size_t n, void *ud)
+{
+    if (r != KIT_OK) return;
+    for (size_t i = 0; i < n; i++) {
+        /* aps[i].bssid, aps[i].ssid, aps[i].rssi... (copie: só vale aqui) */
+    }
+}
+
+if (api->wifi) api->wifi->scan(on_scan, NULL);
+```

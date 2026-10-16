@@ -82,7 +82,10 @@ há socket (`lwip_*`) nem thread (`pthread_*`): o override do `elf_loader` tira
 esses símbolos da tabela original (runtime ≥ 0.15.0 — ver
 `firmware/components/espressif__elf_loader/README.KIT.md`). A UI de toque
 e o resto do hardware vêm pela `kit_api_table_t`
-(`ctx->api->input->register_callback`, etc.), não pelo LVGL direto.
+(`ctx->api->input->register_callback`, etc.), não pelo LVGL direto. Rede e
+rádio também: HTTPS GET por `ctx->api->net` (runtime ≥ 0.16.0, permissão
+`"network"`) e scan de Wi-Fi por `ctx->api->wifi` (runtime ≥ 0.18.0, permissão
+`"wifi_scan"`) — ver `api_reference.md`.
 
 **Sistema de arquivos do cartão** (runtime ≥ 0.8.0 — a Soundbox varre
 `/sdcard/soundbox/<banco>/` atrás de `*.wav` + `banco.json`): `opendir` ·

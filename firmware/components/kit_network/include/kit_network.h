@@ -107,6 +107,16 @@ int8_t    kit_network_get_rssi(void);                   ///< 0 se desconectado
  */
 kit_err_t kit_network_scan(kit_net_ap_t *out, size_t max, size_t *count);
 
+/**
+ * Scan "cru" pro kit_wifi_tool (kit_api_table_t.wifi): um item por BSSID,
+ * redes ocultas incluídas (ssid ""), ordenado por RSSI desc, até `max`.
+ * Não exige o Wi-Fi ligado: com o rádio desligado, liga o STA só durante a
+ * varredura (sem associar em nada) e desliga de novo. Bloqueante (~2 s).
+ * KIT_ERR_NOT_SUPPORTED com a tela em repouso; KIT_ERR_NO_MEM se a pilha
+ * Wi-Fi não subiu.
+ */
+kit_err_t kit_network_scan_aps(kit_wifi_ap_t *out, size_t max, size_t *count);
+
 // -- Redes memorizadas (NVS "kit_net") -----------------------------------
 
 /**
